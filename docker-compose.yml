@@ -1,0 +1,17 @@
+services:
+  valo-dash:
+    build: .
+    container_name: valo-dash
+    ports:
+      - "4321:3000"
+    env_file:
+      - .env
+    environment:
+      TZ: America/Bogota
+      CACHE_DIR: /app/data/cache
+    volumes:
+      - valo-cache:/app/data/cache
+    restart: unless-stopped
+
+volumes:
+  valo-cache:
