@@ -80,3 +80,8 @@ export interface ValStatus {
   ok: boolean;
   error?: { code: string; message: string };
 }
+
+export interface AgentIconInfo {
+  name: string;
+  icon: string | null;
+}
