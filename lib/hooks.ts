@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { ValStatus, ValSummary } from './types';
+import type { ValStatus, ValSummary, AgentIconInfo } from './types';
 import type { MatchDetail } from './matchDetail';
 
 export type ValWindowMode =
@@ -38,6 +38,25 @@ export function useValStatus() {
     },
     staleTime: 5 * 60 * 1000,
   });
+}
+
+export function useAgentIcons() {
+  return useQuery<AgentIconInfo[]>({
+    queryKey: ['val-agents'],
+    queryFn: async () => {
+      const res = await fetch('/api/valorant/agents');
+      if (!res.ok) throw new Error('No se pudo cargar el catálogo de agentes');
+      return res.json();
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+export function agentIconLookup(list: AgentIconInfo[] | undefined): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const a of list ?? []) map.set(a.name.toLowerCase(), a.icon);
+  return map;
 }
 
 export function useMatchDetail(matchId: string | null, playerId?: string) {

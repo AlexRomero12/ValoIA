@@ -2,14 +2,16 @@
 
 Dashboard personal de rendimiento para VALORANT + Aim Lab. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) y Aimlabs GraphQL, con cache persistente, Docker y soporte para los 4 perfiles del equipo.
 
-> Estado actual: **v1.0.0** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado actual: **v1.1.0** — ver [CHANGELOG.md](./CHANGELOG.md)
 
 ## Estructura
 
 ```
-app/                  Páginas (/, /valorant) + API routes
+app/                  Páginas (/, /valorant, /comparativo) + API routes
 components/           TopBar, KpiGrid, WrPanel, TierChart, MatchesTable, MatchDetailModal
+components/compare/   Filtros, ranking, trend, heatmap y tabla jugador × agente
 lib/                  Clientes Henrik/Riot/Aimlabs, agregación, cache L1+L2, hooks
+docs/                 Planes de diseño de vistas
 public/               Estáticos
 ```
 
@@ -24,6 +26,13 @@ public/               Estáticos
 - **Filtros por click**: click en mapa/agente filtra la tabla (combinables, chips para limpiar)
 - **Detalle de partida** (click en fila): scoreboard completo de los 10 jugadores con economía, timeline ronda por ronda con motivo (⚔ eliminación · 💥 detonación · ✂ defusa · ⏱ tiempo), duelos de apertura y quién te eliminó
 - Filtro por **temporada** o ventanas de 7/14/30/90 días
+
+### Página Comparar (`/comparativo`)
+- Los **4 perfiles del cuarteto lado a lado**: ranking ordenable (WR, K/D, ACS, ADR, HS%, RR neto) con columnas clickeables
+- **Evolución comparada** en un solo gráfico: WR/ACS/K/D/ELO por día o semana
+- **Heatmap jugador × agente** y tabla analítica estilo VLR con mini-barras por celda (modo todos / mejores combos)
+- Filtros combinables: ventana (temporada o 7/14/30/90 días), rango de fechas custom, mapa y **filtro de agentes por iconitos**
+- Filtro de mínimo de partidas y leyenda de cobertura de datos
 
 ### Página Aim Lab (`/`)
 - Sesión del día por escenario con gráfico de barras (color = precisión)
@@ -101,6 +110,7 @@ O ejecutar `iniciar.bat` en Windows (Docker primero, fallback local).
 | `GET /api/data?days=&refresh=` | Dataset Aim Lab (días, PBs, focus) |
 | `GET /api/valorant/summary?season=current\|days=N&player=id&refresh=` | Resumen ranked agregado |
 | `GET /api/valorant/match?id=&player=` | Detalle completo de una partida cacheada |
+| `GET /api/valorant/agents` | Catálogo de agentes con iconos (cache 24 h) |
 | `GET /api/valorant/status?player=` | Estado de proveedor/key/cuenta |
 
 ## Notas

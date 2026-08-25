@@ -2,6 +2,23 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.1.0] — 2026-08-25
+
+Nueva vista Comparar: los 4 perfiles del cuarteto lado a lado.
+
+### Added
+- Página `/comparativo` con nav "Comparar" en la TopBar
+- Ranking del equipo ordenable por columna (WR, K/D, ACS, ADR, HS%, RR neto) con umbral de mínimo de partidas
+- Evolución comparada de WR/ACS/K/D/ELO en un solo gráfico, con granularidad por día o semana
+- Heatmap jugador × agente y tabla analítica estilo VLR (mini-barras en celdas, modo todos/mejores combos)
+- Filtro de agentes por iconitos (iconos oficiales de valorant-api.com), combinable con mapa y rango de fechas custom
+- Rango de fechas custom dentro de la ventana consultada, con leyenda de cobertura de datos
+- Endpoint `GET /api/valorant/agents` (catálogo de agentes, cache 24 h) y hook `useAgentIcons`
+- Plan de diseño de la vista en `docs/plan-vista-agentes.md`
+
+### Fixed
+- Leyenda de cobertura de datos encimada sobre los iconos de agentes (margen negativo → separación propia)
+
 ## [1.0.0] — 2026-08-25
 
 Migración completa a Next.js y consolidación de todas las features del dash.
@@ -42,5 +59,6 @@ Migración completa a Next.js y consolidación de todas las features del dash.
 - Integraciones Aimlabs GraphQL + Hevy
 - Cache en memoria y catálogo de escenarios con ranks Voltaic
 
+[1.1.0]: https://github.com/AlexRomero12/ValoIA/releases/tag/v1.1.0
 [1.0.0]: https://github.com/AlexRomero12/ValoIA/releases/tag/v1.0.0
 [0.1.0]: https://github.com/AlexRomero12/ValoIA/releases/tag/v0.1.0
