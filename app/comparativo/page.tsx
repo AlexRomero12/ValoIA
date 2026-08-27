@@ -9,6 +9,7 @@ import { TrendCompare } from '@/components/compare/TrendCompare';
 import { AgentHeatmap } from '@/components/compare/AgentHeatmap';
 import { AgentStatsTable } from '@/components/compare/AgentStatsTable';
 import { useCooldown } from '@/lib/useCooldown';
+import { DEFAULT_LIMIT, nextLimit, MAX_LIMIT } from '@/lib/hooks';
 import { getTeam } from '@/lib/team';
 import {
   applyFilters,
@@ -32,21 +33,30 @@ const COLORS: Record<string, string> = {
 
 type WinValue = WindowValue;
 
+const POLL_MS = 4_000;
+const POLL_TIMEOUT_MS = 120_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function ComparativoPage() {
   const [win, setWin] = useState<WinValue>('season');
   const [filters, setFilters] = useState<CompareFilters>(DEFAULT_FILTERS);
   const [gran, setGran] = useState<Granularity>('week');
   const [metric, setMetric] = useState<MetricKey>('wr');
   const [sortKey, setSortKey] = useState<SortKey>('wr');
+  const [want, setWant] = useState<number>(DEFAULT_LIMIT);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const cooldown = useCooldown(60);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const cooldown = useCooldown(15);
 
   const queries = useQueries({
     queries: TEAM.map((m) => ({
-      queryKey: ['compare', m.id, win],
+      queryKey: ['compare', m.id, win, want],
       queryFn: async () => {
         const qs = win === 'season' ? 'season=current' : `days=${win}`;
-        const res = await fetch(`/api/valorant/summary?${qs}&limit=40&player=${encodeURIComponent(m.id)}`);
+        const res = await fetch(`/api/valorant/summary?${qs}&limit=${want}&player=${encodeURIComponent(m.id)}`);
         const json = await res.json();
         if (!res.ok || json.error) throw Object.assign(new Error(json.error || 'Error de red'), { code: json.code });
         return json as ValSummary;
@@ -58,20 +68,45 @@ export default function ComparativoPage() {
   const refresh = async () => {
     if (isRefreshing || cooldown.locked) return;
     setIsRefreshing(true);
+    setRefreshError(null);
+    const before = queries.map((q) => (q.data as ValSummary | undefined)?.window.syncedAt ?? null);
     try {
       await Promise.all(
         TEAM.map((m) =>
           fetch(
-            `/api/valorant/summary?${win === 'season' ? 'season=current' : `days=${win}`}&limit=40&player=${m.id}&refresh=1`,
+            `/api/valorant/refresh?player=${encodeURIComponent(m.id)}&scope=all&limit=${want}`,
+            { method: 'POST' },
           ),
         ),
       );
-      await Promise.all(queries.map((q) => q.refetch()));
+      const deadline = Date.now() + POLL_TIMEOUT_MS;
+      let done = false;
+      while (!done && Date.now() < deadline) {
+        await sleep(POLL_MS);
+        const results = await Promise.all(queries.map((q) => q.refetch()));
+        const synced = results.map((r) => (r.data as ValSummary | undefined)?.window.syncedAt ?? null);
+        done = synced.every((s, i) => s == null || s !== before[i]);
+        if (done) break;
+      }
+      if (!done) {
+        setRefreshError('El servidor no confirmó la actualización a tiempo (si nada cambió, está bien).');
+      }
+    } catch {
+      setRefreshError('No se pudo iniciar la actualización del equipo.');
     } finally {
       setIsRefreshing(false);
       cooldown.trigger();
     }
   };
+
+  const allLoaded = queries.every((q) => q.data);
+  const canLoadMore =
+    allLoaded && queries[0].data != null &&
+    queries.every((q) => {
+      const d = q.data as ValSummary | undefined;
+      return d != null && d.window.fetchedMatches >= want;
+    }) &&
+    (queries[0].data as ValSummary).window.fetchedMatches < MAX_LIMIT && nextLimit(want) != null;
 
   const entries = useMemo(() => {
     return TEAM.map((m, i) => {
@@ -168,6 +203,10 @@ export default function ComparativoPage() {
         activePage="comparar"
       />
 
+      {refreshError && (
+        <div className="banner warn">{refreshError}</div>
+      )}
+
       <div className="controls" style={{ marginTop: 20 }}>
         {entries.map((e, i) => (
           <span key={e.member.id} className={`mini-card${e.isLoading ? ' skel' : ''}`}>
@@ -202,6 +241,14 @@ export default function ComparativoPage() {
         <p className="window-info" style={{ margin: '10px 0 0', paddingLeft: 4 }}>
           cobertura de datos desde {oldestTs.toLocaleDateString('es')} — el rango custom filtra dentro de lo consultado
         </p>
+      )}
+
+      {canLoadMore && (
+        <div className="filter-bar" style={{ marginTop: 10 }}>
+          <button className="f-chip" onClick={() => setWant((w) => nextLimit(w) ?? w)}>
+            Cargar más partidas del equipo ({want} → {nextLimit(want)})
+          </button>
+        </div>
       )}
 
       <div className="panel">

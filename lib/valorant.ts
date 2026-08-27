@@ -3,10 +3,11 @@ import { cached, cacheSet } from './cache';
 import {
   HENRIK_CONFIG,
   getHenrikAccount,
-  getHenrikMatches,
+  getMatchesBucket,
   getHenrikMmrHistory,
   henrikMatchTimestamp,
   henrikRoundsPlayed,
+  BUCKET_LIMIT,
   HenrikError,
   type HenrikMatchPlayer,
 } from './henrik';
@@ -276,6 +277,10 @@ export interface MatchSummary {
   acs: number;
   adr: number;
   hsPct: number;
+  score?: number;
+  damageDealt?: number;
+  headshots?: number;
+  shots?: number;
   tier: number;
   tierChange: number;
   durationMin: number;
@@ -338,7 +343,7 @@ function finishGroup(g: GroupStat) {
 export interface ValSummary {
   generatedAt: string;
   account: ValAccount;
-  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; seasonShort?: string | null; rrTotal?: number | null; eloTotal?: number | null };
+  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; seasonShort?: string | null; rrTotal?: number | null; eloTotal?: number | null; syncedAt?: string | null };
   kpis: ReturnType<typeof finishGroup> & { wins: number; losses: number };
   currentTier: number;
   startTier: number;
@@ -394,13 +399,10 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const mapIconByName = new Map(Object.values(dicts.maps).map((e) => [e.name.toLowerCase(), e.icon]));
 
   // En modo temporada pedimos más historial para cubrir el acto completo.
-  // Key Basic = 30 req/min (el cliente hace throttle a 24/min + pausas entre páginas).
-  const fetchLimit = Math.min(opts.maxFetch ?? (seasonMode ? 40 : 20), 40);
-  const matches = await cached(
-    `henrik:matches:${account.puuid}:${fetchLimit}`,
-    15 * 60 * 1000,
-    () => getHenrikMatches(fetchLimit, 'competitive', member.name, member.tag),
-  );
+  // El bucket hace sync incremental: con todo llegado, un refresh cuesta 1 request.
+  const want = Math.min(opts.maxFetch ?? (seasonMode ? BUCKET_LIMIT : 20), BUCKET_LIMIT);
+  const bucket = await getMatchesBucket(member.name, member.tag, want);
+  const matches = bucket.matches;
 
   let seasonShort: string | null = null;
   if (seasonMode) {
@@ -524,6 +526,10 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       acs: Math.round((s.score ?? 0) / rds),
       adr: Math.round(dmgDealt / rds),
       hsPct: shots ? Math.round((hs / shots) * 1000) / 10 : 0,
+      score: s.score ?? 0,
+      damageDealt: dmgDealt,
+      headshots: hs,
+      shots,
       tier,
       tierChange,
       durationMin: lengthMin,
@@ -556,6 +562,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       seasonShort,
       rrTotal,
       eloTotal,
+      syncedAt: new Date(bucket.updatedAt).toISOString(),
     },
     kpis: { ...kpis, wins: group.wins, losses: group.matches - group.wins },
     currentTier: lastMatch?.tier ?? 0,
@@ -670,6 +677,10 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
       acs: rounds ? Math.round((s.score ?? 0) / rounds) : 0,
       adr: rounds ? Math.round(dmgDealt / rounds) : 0,
       hsPct: shots ? Math.round((hs / shots) * 1000) / 10 : 0,
+      score: s.score ?? 0,
+      damageDealt: dmgDealt,
+      headshots: hs,
+      shots,
       tier,
       tierChange,
       durationMin: lengthMin,

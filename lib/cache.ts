@@ -8,9 +8,11 @@ import { env } from './env';
  *  - L2: archivos JSON en disco (persiste entre reinicios del proceso/contenedor)
  *
  * API:
- *  - cached(key, ttlMs, loader)  -> devuelve valor cacheado o ejecuta loader una sola vez
- *  - cacheSet(key, value, ttlMs) -> escritura directa
- *  - invalidatePrefix(prefix)    -> borra claves que empiecen con el prefijo
+ *  - cached(key, ttlMs, loader, validate?) -> devuelve valor cacheado o ejecuta loader una sola vez
+ *  - revalidate(key, ttlMs, loader)        -> fuerza la recarga (ignora TTL) y sobrescribe el valor
+ *  - peek(key)                             -> lectura sin expirar (stale si expiró), null si no existe
+ *  - cacheSet(key, value, ttlMs)           -> escritura directa
+ *  - invalidatePrefix(prefix)              -> borra claves que empiecen con el prefijo
  *  - invalidateAll()
  */
 
@@ -39,9 +41,15 @@ function ensureDir(): void {
   }
 }
 
+/** Normaliza una clave a nombre de archivo seguro (sin ':' ni separadores). */
+function sanitizeKey(key: string): string {
+  return key.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 function fileFor(key: string): string {
-  const safe = key.replace(/[^a-zA-Z0-9:_-]/g, '_');
-  return path.join(CACHE_DIR, `${safe}.json`);
+  // Los ':' (y cualquier otro carácter raro) van a '_': en Windows los ':' en
+  // nombre de archivo son inválidos/ADS y rompían la capa de disco (L2).
+  return path.join(CACHE_DIR, `${sanitizeKey(key)}.json`);
 }
 
 function readDisk(key: string): Entry | null {
@@ -59,26 +67,31 @@ function readDisk(key: string): Entry | null {
 
 let writeQueue = Promise.resolve();
 
+let warnedDiskError = false;
+
 function writeDisk(key: string, entry: Entry): void {
   ensureDir();
   if (!dirReady) return;
   // Escrituras serializadas para no pisar archivos con writes concurrentes.
   writeQueue = writeQueue
     .then(() => fs.promises.writeFile(fileFor(key), JSON.stringify(entry), 'utf8'))
-    .catch(() => {
-      /* disco lleno/permisos: ignoramos, la memoria sigue válida */
+    .catch((e) => {
+      if (!warnedDiskError) {
+        warnedDiskError = true;
+        console.error(`[cache] falló la escritura en disco: ${e instanceof Error ? e.message : String(e)}`);
+      }
     });
 }
 
-export async function cached<T>(key: string, ttlMs: number, loader: () => Promise<T>): Promise<T> {
+export async function cached<T>(key: string, ttlMs: number, loader: () => Promise<T>, validate?: (value: T) => boolean): Promise<T> {
   // L1 memoria
   const hit = mem.get(key);
   const now = Date.now();
-  if (hit && hit.expires > now) return hit.value as T;
+  if (hit && hit.expires > now && (!validate || validate(hit.value as T))) return hit.value as T;
 
   // L2 disco
   const diskEntry = readDisk(key);
-  if (diskEntry && diskEntry.expires > now) {
+  if (diskEntry && diskEntry.expires > now && (!validate || validate(diskEntry.value as T))) {
     mem.set(key, diskEntry);
     return diskEntry.value as T;
   }
@@ -111,6 +124,40 @@ export function cacheSet(key: string, value: unknown, ttlMs: number): void {
   writeDisk(key, entry);
 }
 
+/** Lectura sin respetar la expiración (stale si venció); null si nunca existió. */
+export function peek<T>(key: string): T | null {
+  const hit = mem.get(key);
+  if (hit) return hit.value as T;
+  const disk = readDisk(key);
+  return disk ? (disk.value as T) : null;
+}
+
+/**
+ * Recarga forzada de una clave ignorando el TTL (patrón SWR server-side).
+ * Comparte dedupe con cached(): si hay una carga/recarga en vuelo, espera esa.
+ */
+export async function revalidate<T>(key: string, ttlMs: number, loader: () => Promise<T>): Promise<T> {
+  const pending = inFlight.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const job = loader()
+    .then((value) => {
+      const entry: Entry =
+        ttlMs >= Number.MAX_SAFE_INTEGER
+          ? { expires: Number.MAX_SAFE_INTEGER, value }
+          : { expires: Date.now() + ttlMs, value };
+      mem.set(key, entry);
+      writeDisk(key, entry);
+      return value;
+    })
+    .finally(() => {
+      inFlight.delete(key);
+    });
+
+  inFlight.set(key, job);
+  return job as Promise<T>;
+}
+
 export function findCachedValues<T>(prefix: string): T[] {
   const now = Date.now();
   const out: T[] = [];
@@ -119,7 +166,7 @@ export function findCachedValues<T>(prefix: string): T[] {
   }
   ensureDir();
   if (!dirReady) return out;
-  const safePrefix = prefix.replace(/[^a-zA-Z0-9:_-]/g, '_');
+  const safePrefix = sanitizeKey(prefix);
   let files: string[] = [];
   try {
     files = fs.readdirSync(CACHE_DIR);
@@ -166,7 +213,7 @@ export function invalidatePrefix(prefix: string): void {
   } catch {
     return;
   }
-  const safePrefix = prefix.replace(/[^a-zA-Z0-9:_-]/g, '_');
+  const safePrefix = sanitizeKey(prefix);
   for (const f of files) {
     if (f.endsWith('.json') && f.startsWith(safePrefix)) {
       try {

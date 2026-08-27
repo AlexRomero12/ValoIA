@@ -42,6 +42,11 @@ export interface MatchRow {
   acs: number;
   adr: number;
   hsPct: number;
+  /** Totales crudos para agregar por día con precisión (opcional, proveedor Henrik/Riot) */
+  score?: number;
+  damageDealt?: number;
+  headshots?: number;
+  shots?: number;
   tier: number;
   tierChange: number;
   durationMin: number;
@@ -64,6 +69,8 @@ export interface ValSummary {
     seasonShort?: string | null;
     rrTotal?: number | null;
     eloTotal?: number | null;
+    /** Bucket Henrik: fecha ISO de la última sincronización contra la API */
+    syncedAt?: string | null;
   };
   kpis: ValKpis;
   currentTier: number;

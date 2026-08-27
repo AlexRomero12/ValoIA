@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getValSummary } from '@/lib/valorant';
-import { invalidatePrefix } from '@/lib/cache';
+import { refreshPlayer } from '@/lib/refresh';
 import { isValidPlayer } from '@/lib/team';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,6 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const rawDays = Number(sp.get('days') ?? '');
   const days = Number.isFinite(rawDays) && rawDays >= 1 && rawDays <= 365 ? Math.floor(rawDays) : 30;
-  const refresh = sp.get('refresh') === '1';
   const seasonParam = sp.get('season')?.trim();
   const season = seasonParam && seasonParam.length > 0 ? seasonParam : undefined;
   const rawLimit = Number(sp.get('limit') ?? '');
@@ -21,10 +20,10 @@ export async function GET(req: NextRequest) {
   const playerId = playerParam || undefined;
 
   try {
-    if (refresh) {
-      invalidatePrefix(`henrik:matches:`);
-      invalidatePrefix('val:matchlist:');
-      invalidatePrefix('henrik:mmr-history:');
+    // Compat: refresh=1 en GET = revalidación síncrona (los clientes nuevos
+    // usan POST /api/valorant/refresh y esperan la señal de syncedAt).
+    if (sp.get('refresh') === '1') {
+      await refreshPlayer(playerId, 'all', limit ?? 20);
     }
     const summary = await getValSummary({ days, season, maxFetch: limit, playerId });
     return Response.json(summary, { headers: { 'Cache-Control': 'no-store' } });
