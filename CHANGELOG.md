@@ -2,6 +2,37 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.3.0] — 2026-08-27
+
+Historial de partidas paginado y agrupado por día, con análisis diario.
+
+### Added
+- Historial agrupado por día: fila resumen por fecha (partidas, W-L, K/D, ACS, ADR y RR neto del día) que se expande para ver sus partidas
+- **Análisis del día** al hacer click en la fecha: modal con WR/K/D/ACS/ADR/HS% exactos (agregados desde totales crudos, no promedios simples), RR neto, racha mayor, mejor/peor partida por ACS y desglose por agente y mapa
+- Paginación por días en el historial (5 días por página) con controles Anterior/Siguiente
+- `lib/dayAnalysis.ts`: agrupación y agregación diaria client-side ($0 requests)
+- Campos crudos en cada partida (`score`, `damageDealt`, `headshots`, `shots`) para agregados exactos
+
+## [1.2.0] — 2026-08-27
+
+Optimización de carga bajo rate limit (sync incremental + SWR + cron opcional).
+
+### Added
+- Bucket de partidas por jugador (`henrik:matches:v2:{name}:{tag}`): sync incremental que compara `match_id`s; un refresh sin novedades cuesta **1 request** en vez de re-descargar todo el historial
+- Endpoint `POST /api/valorant/refresh?player=&scope=all|matches|mmr&limit=`: dispara la revalidación en segundo plano (fire-and-forget) y responde al instante `{started: true}`
+- Refresco SWR en el cliente: el botón Actualizar no bloquea; sondea el summary interno comparando `window.syncedAt` ($0 requests de Henrik) hasta que el servidor confirma
+- Lazy-load de historial: primera carga con 10 partidas + botón "Cargar más partidas" (10 → 20 → 40) en Ranked y Comparar
+- Cron opcional en `instrumentation.ts` (`VAL_BACKGROUND_REFRESH=1`, intervalo `VAL_REFRESH_INTERVAL_MIN`): mantiene los buckets calientes para que abrir el dashboard cueste $0 requests
+- Ventanas/filtros/selector de jugador ya no disparan fetch extra: todo se calcula localmente desde el bucket
+
+### Changed
+- El refresh ya NO invalida la caché de todos los jugadores (antes `refresh=1` borraba `henrik:matches:*` completo); ahora la revalidación es quirúrgica por jugador
+- Throttle Henrik: espaciado mínimo de 1.8 s entre requests además del límite de 24/min (el limiter penaliza ráfagas cortas)
+- Cooldown del botón Actualizar reducido a 15 s (el coste real por refresh bajó de ~24 requests a ~3)
+
+### Fixed
+- Caché L2 disco rota en Windows: los `:` en las claves generaban nombres de archivo inválidos (NTFS/ADS) y ninguna entrada persistía; ahora se sanitizan a `_` y las escrituras fallidas se registran en el log
+
 ## [1.1.0] — 2026-08-25
 
 Nueva vista Comparar: los 4 perfiles del cuarteto lado a lado.

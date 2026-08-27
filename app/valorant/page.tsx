@@ -6,7 +6,7 @@ import { KpiGrid } from '@/components/KpiGrid';
 import { WrPanel } from '@/components/WrPanel';
 import { TierChart } from '@/components/TierChart';
 import { MatchesTable } from '@/components/MatchesTable';
-import { useValSummary, useValStatus, type ValWindowMode } from '@/lib/hooks';
+import { useValSummary, useValStatus, useBackgroundRefresh, summaryUrl, nextLimit, DEFAULT_LIMIT, type ValWindowMode } from '@/lib/hooks';
 import { useCooldown } from '@/lib/useCooldown';
 import { tierName } from '@/lib/metas';
 import { getTeam, resolvePlayer } from '@/lib/team';
@@ -17,28 +17,30 @@ const TEAM = getTeam();
 export default function ValorantPage() {
   const [win, setWin] = useState<WindowValue>('season');
   const [playerId, setPlayerId] = useState('alex');
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [want, setWant] = useState<number>(DEFAULT_LIMIT);
   const cooldown = useCooldown(60);
 
   const member = resolvePlayer(playerId);
   const mode: ValWindowMode = win === 'season' ? { kind: 'season' } : { kind: 'days', days: Number(win) };
-  const query = useValSummary(mode, playerId, false);
+  const query = useValSummary(mode, playerId, want);
   const statusQ = useValStatus();
 
   const data = query.data;
   const error = query.error as (Error & { code?: string }) | null;
 
-  const refresh = async () => {
-    if (isRefreshing || cooldown.locked) return;
-    setIsRefreshing(true);
-    try {
-      await fetch(summaryUrlRefresh(mode, playerId));
+  const bgRefresh = useBackgroundRefresh({
+    summaryUrl: summaryUrl(mode, playerId, want),
+    getSyncedAt: () => data?.window.syncedAt,
+    refetch: async () => {
       await query.refetch();
       await statusQ.refetch();
-    } finally {
-      setIsRefreshing(false);
-      cooldown.trigger();
-    }
+    },
+  });
+
+  const canLoadMore = data != null && data.window.fetchedMatches >= want && data.window.fetchedMatches < 40;
+  const loadMore = () => {
+    const next = nextLimit(want);
+    if (next != null) setWant(next);
   };
 
   const updated = data ? `actualizado ${new Date(data.generatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null;
@@ -66,9 +68,9 @@ export default function ValorantPage() {
         subtitle={['Ranked', 'Report']}
         chip={<RankChip label={error ? '—' : rankLabel} />}
         updated={updated}
-        onRefresh={refresh}
-        loading={isRefreshing}
-        disabled={cooldown.locked}
+        onRefresh={bgRefresh.trigger}
+        loading={bgRefresh.refreshing}
+        disabled={bgRefresh.locked || cooldown.locked}
         activePage="ranked"
       />
 
@@ -76,6 +78,10 @@ export default function ValorantPage() {
         <div className={`banner ${error.code === 'KEY_MISSING' || error.code === 'KEY_EXPIRED' || error.code === 'KEY_INVALID' ? 'warn' : 'error'}`}>
           {error.message}
         </div>
+      )}
+
+      {bgRefresh.lastError && (
+        <div className="banner warn">{bgRefresh.lastError}</div>
       )}
 
       {data && (
@@ -117,14 +123,9 @@ export default function ValorantPage() {
             <TierChart matchesAsc={[...data.matches].reverse()} />
           </div>
 
-          <MatchesTable matches={data.matches} playerId={playerId} />
+          <MatchesTable matches={data.matches} playerId={playerId} canLoadMore={canLoadMore} onLoadMore={loadMore} />
         </>
       )}
     </div>
   );
-}
-
-function summaryUrlRefresh(mode: ValWindowMode, playerId: string): string {
-  const qs = mode.kind === 'season' ? 'season=current&limit=40' : `days=${mode.days}`;
-  return `/api/valorant/summary?${qs}&player=${encodeURIComponent(playerId)}&refresh=1`;
 }

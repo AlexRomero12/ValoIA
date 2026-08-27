@@ -9,6 +9,10 @@ services:
     environment:
       TZ: America/Bogota
       CACHE_DIR: /app/data/cache
+      # Refresco en background (opcional): mantiene los buckets calientes.
+      # También puedes definirlos en .env (se pasan completo vía env_file).
+      # VAL_BACKGROUND_REFRESH: "1"
+      # VAL_REFRESH_INTERVAL_MIN: "15"
     volumes:
       - valo-cache:/app/data/cache
     restart: unless-stopped

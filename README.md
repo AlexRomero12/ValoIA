@@ -40,8 +40,11 @@ public/               Estáticos
 
 ### Transversal
 - Cache L1 memoria + L2 disco persistente (sobrevive reinicios)
-- Throttle 24 req/min + pausas entre páginas (respeta límite de Henrik Basic: 30/min)
-- Cooldown de 60s en Actualizar
+- Bucket de partidas por jugador con **sync incremental**: un refresh sin novedades cuesta 1 request; el historial se pagina solo al profundizar ("Cargar más": 10 → 20 → 40)
+- Refresco SWR: Actualizar dispara la revalidación en segundo plano (`POST /api/valorant/refresh`) y la UI sondea `window.syncedAt` sin gastar cuota
+- Throttle 24 req/min + espaciado mínimo de 1.8 s (respeta límite de Henrik Basic: 30/min)
+- Cron opcional (`VAL_BACKGROUND_REFRESH=1`, ver `.env.example`): sincroniza los 4 jugadores en background para que abrir el dashboard cueste $0 requests
+- Cooldown de 15s en Actualizar
 - Zona horaria America/Bogota en contenedor
 
 ## Stack
@@ -108,7 +111,8 @@ O ejecutar `iniciar.bat` en Windows (Docker primero, fallback local).
 | Endpoint | Descripción |
 |---|---|
 | `GET /api/data?days=&refresh=` | Dataset Aim Lab (días, PBs, focus) |
-| `GET /api/valorant/summary?season=current\|days=N&player=id&refresh=` | Resumen ranked agregado |
+| `GET /api/valorant/summary?season=current\|days=N&player=id&limit=` | Resumen ranked agregado (`limit` = profundidad 1-40, default 10) |
+| `POST /api/valorant/refresh?player=&scope=all\|matches\|mmr&limit=` | Revalidación en background del bucket/MMR/cuenta; responde `{started:true}` al instante |
 | `GET /api/valorant/match?id=&player=` | Detalle completo de una partida cacheada |
 | `GET /api/valorant/agents` | Catálogo de agentes con iconos (cache 24 h) |
 | `GET /api/valorant/status?player=` | Estado de proveedor/key/cuenta |

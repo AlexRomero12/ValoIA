@@ -446,6 +446,51 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .player-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .player-chips .player-on { border-color: var(--red); color: #fff; background: rgba(255,70,85,0.15); font-weight: 700; }
 
+/* ---------- Días dentro de la tabla de partidas ---------- */
+.matches .day-row > td { padding: 0; border-bottom: 1px solid var(--line-strong); }
+.day-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: rgba(236, 232, 225, 0.04);
+  color: var(--bone);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.day-head:hover { background: rgba(255, 70, 85, 0.08); box-shadow: inset 2px 0 0 var(--red); }
+.day-chevron {
+  display: inline-block;
+  width: 18px;
+  color: var(--red);
+  font-size: 13px;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+.day-chevron.on { transform: rotate(90deg); }
+.day-label { font-weight: 800; font-size: 12.5px; text-transform: capitalize; letter-spacing: 0.03em; }
+.day-meta { color: var(--mute); font-size: 11.5px; letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-meta b { font-weight: 700; }
+.day-meta .d-win { color: var(--win); }
+.day-meta .d-loss { color: var(--loss); }
+.day-rr { margin-left: auto; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; flex: none; }
+.day-rr.up { color: var(--win); }
+.day-rr.down { color: var(--loss); }
+
+.page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+.page-info { color: var(--faint); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.f-chip:disabled { opacity: 0.35; cursor: default; }
+.f-chip:disabled:hover { border-color: var(--line-strong); color: var(--bone); }
+
 .empty {
   margin: 0;
   color: var(--mute);
@@ -505,6 +550,28 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
   text-transform: uppercase;
   color: var(--mute);
 }
+
+/* ---------- Modal análisis del día ---------- */
+.dd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.dd-kpi {
+  border: 1px solid var(--line);
+  background: var(--steel-2);
+  padding: 10px 14px;
+}
+.dd-kpi .label {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dd-kpi .value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.dd-kpi.win .value { color: var(--win); }
+.dd-kpi.loss .value { color: var(--loss); }
+.dd-matchline { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--bone); flex-wrap: wrap; }
+.dd-matchline .res-badge { min-width: auto; padding: 2px 8px; }
+.dd-mini td:first-child, .dd-matches td:first-child { white-space: nowrap; }
+.dd-mini th.num, .dd-mini td.num { text-align: left; }
 
 .round-strip { display: flex; gap: 4px; flex-wrap: wrap; }
 .round-cell {

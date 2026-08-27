@@ -1,5 +1,5 @@
 import { env } from './env';
-import { cached } from './cache';
+import { cached, peek } from './cache';
 
 const BASE = 'https://api.henrikdev.xyz';
 
@@ -24,6 +24,7 @@ export class HenrikError extends Error {
 // Throttle: la key Basic permite 30 req/min — operamos con margen.
 const MINUTE_MS = 60_000;
 const MAX_REQ_PER_MINUTE = 24;
+const MIN_GAP_MS = 1_800;
 const requestTimes: number[] = [];
 
 async function throttle(): Promise<void> {
@@ -34,6 +35,15 @@ async function throttle(): Promise<void> {
   if (requestTimes.length >= MAX_REQ_PER_MINUTE) {
     const waitMs = MINUTE_MS - (now - requestTimes[0]) + 300;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  // Sin ráfagas: espaciado mínimo entre requests (el limiter de Henrik también
+  // penaliza bursts cortos, p. ej. 4 requests seguidos en ~5 s ya dió 429).
+  const last = requestTimes[requestTimes.length - 1];
+  if (last != null) {
+    const elapsed = Date.now() - last;
+    if (elapsed < MIN_GAP_MS) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_GAP_MS - elapsed + 150));
+    }
   }
   requestTimes.push(Date.now());
 }
@@ -105,16 +115,24 @@ export interface HenrikAccount {
   last_update?: string;
 }
 
+/** Key de caché de la cuenta (compartida con getHenrikAccount). */
+export function henrikAccountKey(nameArg: string, tagArg: string): string {
+  return `henrik:account:${encodeURIComponent(nameArg)}:${encodeURIComponent(tagArg)}`;
+}
+
+/** Solo fetch bruto (sin caché), para revalidaciones del bucket/refresh. */
+export async function fetchHenrikAccountRaw(nameArg: string, tagArg: string): Promise<{ puuid?: string; name?: string; tag?: string; region?: string; account_level?: number; card?: { small?: string; large?: string }; last_update?: string }> {
+  const name = encodeURIComponent(nameArg);
+  const tag = encodeURIComponent(tagArg);
+  const json = await henrikFetch(`/valorant/v2/account/${name}/${tag}`);
+  return json?.data;
+}
+
 export async function getHenrikAccount(
   nameArg = HENRIK_CONFIG.name(),
   tagArg = HENRIK_CONFIG.tag(),
 ): Promise<HenrikAccount> {
-  const name = encodeURIComponent(nameArg);
-  const tag = encodeURIComponent(tagArg);
-  const json = await cached(`henrik:account:${name}:${tag}`, 60 * 60 * 1000, () =>
-    henrikFetch(`/valorant/v2/account/${name}/${tag}`),
-  );
-  const data = json?.data;
+  const data = await cached(henrikAccountKey(nameArg, tagArg), 60 * 60 * 1000, () => fetchHenrikAccountRaw(nameArg, tagArg));
   if (!data?.puuid) throw new HenrikError('NOT_FOUND', `Cuenta ${nameArg}#${tagArg} no encontrada`);
   return {
     puuid: data.puuid,
@@ -230,70 +248,162 @@ export interface HenrikMmrHistoryEntry {
   date?: string;
 }
 
+/** Key de caché del historial MMR (compartida con getHenrikMmrHistory). */
+export function henrikMmrKey(nameArg: string, tagArg: string): string {
+  return `henrik:mmr-history:${encodeURIComponent(nameArg)}:${encodeURIComponent(tagArg)}`;
+}
 
-export interface HenrikMmrHistoryEntry {
-  match_id?: string;
-  tier?: { id?: number; name?: string };
-  map?: { id?: string; name?: string };
-  season?: { id?: string; short?: string };
-  rr?: number;
-  last_change?: number;
-  elo?: number;
-  refunded_rr?: number;
-  was_derank_protected?: boolean;
-  date?: string;
+/** Solo fetch bruto (sin caché), para revalidaciones del bucket/refresh. */
+export async function fetchHenrikMmrHistoryRaw(nameArg: string, tagArg: string): Promise<HenrikMmrHistoryEntry[]> {
+  const name = encodeURIComponent(nameArg);
+  const tag = encodeURIComponent(tagArg);
+  const affinity = HENRIK_CONFIG.region();
+  const platform = HENRIK_CONFIG.platform();
+  const json = await henrikFetch(`/valorant/v2/mmr-history/${affinity}/${platform}/${name}/${tag}`);
+  return json?.data?.history ?? [];
 }
 
 export async function getHenrikMmrHistory(
   nameArg = HENRIK_CONFIG.name(),
   tagArg = HENRIK_CONFIG.tag(),
 ): Promise<HenrikMmrHistoryEntry[]> {
-  const name = encodeURIComponent(nameArg);
-  const tag = encodeURIComponent(tagArg);
-  const affinity = HENRIK_CONFIG.region();
-  const platform = HENRIK_CONFIG.platform();
-  const json = await cached(`henrik:mmr-history:${name}:${tag}`, 10 * 60 * 1000, async () =>
-    henrikFetch(`/valorant/v2/mmr-history/${affinity}/${platform}/${name}/${tag}`),
-  );
-  return json?.data?.history ?? [];
+  return cached(henrikMmrKey(nameArg, tagArg), 10 * 60 * 1000, () => fetchHenrikMmrHistoryRaw(nameArg, tagArg));
+}
+
+// ---------- Bucket de partidas por jugador (sync incremental) ----------
+
+/**
+ * Un bucket por jugador guarda las partidas competitivas descargadas.
+ * El sync es incremental: se pide la página más reciente y, si no hay partidas
+ * nuevas o el cache ya cubre el objetivo (`want`), no se piden más páginas.
+ *
+ * Clave de caché: henrik:matches:v2:{name}:{tag} -> MatchesBucket (persistente en disco)
+ */
+
+export const BUCKET_LIMIT = 40;
+export const BUCKET_TTL_MS = 15 * 60 * 1000;
+const BUCKET_PREFIX = 'henrik:matches:v2';
+
+export interface MatchesBucket {
+  /** ms epoch de la última sincronización exitosa */
+  updatedAt: number;
+  /** hasta BUCKET_LIMIT partidas competitivas, más recientes primero */
+  matches: HenrikMatch[];
+}
+
+function bucketKey(nameEncoded: string, tagEncoded: string): string {
+  return `${BUCKET_PREFIX}:${nameEncoded}:${tagEncoded}`;
+}
+
+function matchId(m: HenrikMatch): string {
+  return m.metadata?.match_id ?? '';
+}
+
+async function fetchMatchesPage(
+  affinity: string,
+  platform: string,
+  name: string,
+  tag: string,
+  mode: string,
+  start: number,
+  size: number,
+): Promise<HenrikMatch[]> {
+  const qs = new URLSearchParams({ mode, size: String(size), start: String(start) });
+  const json = (await henrikFetch(
+    `/valorant/v4/matches/${affinity}/${platform}/${name}/${tag}?${qs}`,
+  )) as { status?: number; data?: HenrikMatch[] };
+  return json?.data ?? [];
 }
 
 const PAGE_SIZE = 10;
-const PAGE_DELAY_MS = 1_600;
 
-export async function getHenrikMatches(
-  limit = 20,
+/**
+ * Descarga y mergea páginas nuevas en el bucket (sin pasar por cached():
+ * la decisión de "cuánto profundizar" la toman getMatchesBucket/revalidate).
+ * Reutiliza el contenido previo (aunque esté stale) como base para el diff.
+ *
+ * Coste típico por ciclo:
+ *  - Sin novedades y ya cubría el objetivo -> 1 request (página 0, frescura).
+ *  - Con novedades -> página 0 (+ páginas siguientes solo si hace falta profundizar).
+ */
+export async function syncMatchesBucket(
+  nameArg: string,
+  tagArg: string,
+  want: number,
   mode = 'competitive',
-  nameArg = HENRIK_CONFIG.name(),
-  tagArg = HENRIK_CONFIG.tag(),
-): Promise<HenrikMatch[]> {
+): Promise<MatchesBucket> {
   const name = encodeURIComponent(nameArg);
   const tag = encodeURIComponent(tagArg);
+  const key = bucketKey(name, tag);
   const affinity = HENRIK_CONFIG.region();
   const platform = HENRIK_CONFIG.platform();
+  const target = Math.max(1, Math.min(want, BUCKET_LIMIT));
 
-  const all: HenrikMatch[] = [];
-  for (let start = 0; start < limit; start += PAGE_SIZE) {
-    const size = Math.min(PAGE_SIZE, limit - all.length);
+  const base = peek<MatchesBucket>(key);
+  const allOld: HenrikMatch[] = base?.matches ?? [];
+  const baseLen = allOld.length;
+  // Partidas nuevas: `fresh` = página 0 (las más recientes) y
+  // `deep` = páginas profundas (más antiguas que `.matches` del bucket).
+  const fresh: HenrikMatch[] = [];
+  const deep: HenrikMatch[] = [];
+  const seen = new Set<string>();
+  for (const m of allOld) {
+    const id = matchId(m);
+    if (id) seen.add(id);
+  }
+
+  const pagesNeeded = Math.ceil(target / PAGE_SIZE);
+  for (let p = 0; p < pagesNeeded; p++) {
+    const start = p * PAGE_SIZE;
+    const size = Math.min(PAGE_SIZE, target - start);
     if (size <= 0) break;
-    if (all.length > 0) {
-      // Espaciado entre páginas para respetar el rate limit (Basic: 30 req/min)
-      await new Promise((resolve) => setTimeout(resolve, PAGE_DELAY_MS));
-    }
-    const qs = new URLSearchParams({ mode, size: String(size), start: String(start) });
+
+    // Páginas ya cubiertas por el bucket previo: se saltan (la página 0 se
+    // descarga siempre para detectar partidas nuevas).
+    if (p !== 0 && start + size <= baseLen) continue;
+
+    let batch: HenrikMatch[];
     try {
-      const json = (await henrikFetch(
-        `/valorant/v4/matches/${affinity}/${platform}/${name}/${tag}?${qs}`,
-      )) as { status?: number; data?: HenrikMatch[] };
-      const batch = json?.data ?? [];
-      if (!batch.length) break;
-      all.push(...batch);
-      if (batch.length < size) break;
+      batch = await fetchMatchesPage(affinity, platform, name, tag, mode, start, size);
     } catch (err) {
-      // Con datos parciales en mano, preferimos devolverlos antes que fallar todo.
-      if (err instanceof HenrikError && err.code === 'RATE_LIMITED' && all.length > 0) break;
+      // Con datos en mano, preferimos devolverlos antes que fallar todo.
+      if (err instanceof HenrikError && err.code === 'RATE_LIMITED' && (fresh.length + deep.length) > 0) break;
       throw err;
     }
+    if (!batch.length) break;
+
+    for (const m of batch) {
+      const id = matchId(m);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      (p === 0 ? fresh : deep).push(m);
+    }
+    // La API devolvió menos de lo pedido => no hay más historial.
+    if (batch.length < size) break;
   }
-  return all;
+
+  // Orden final (más reciente primero): nuevas frescas de la página 0 +
+  // bucket previo (ya ordenado) + nuevas profundas (más antiguas que el bucket).
+  const freshIds = new Set(fresh.map(matchId));
+  const baseDeduped = allOld.filter((m) => !freshIds.has(matchId(m)));
+  const all = [...fresh, ...baseDeduped, ...deep].slice(0, BUCKET_LIMIT);
+
+  return { updatedAt: Date.now(), matches: all };
+}
+
+/**
+ * Bucket de partidas competitivas de un jugador.
+ * - Sirve del caché mientras esté fresco (15 min).
+ * - Si el caché no cubre el `want` actual, lo amplía incrementalmente.
+ */
+export async function getMatchesBucket(nameArg: string, tagArg: string, want: number): Promise<MatchesBucket> {
+  const name = encodeURIComponent(nameArg);
+  const tag = encodeURIComponent(tagArg);
+  const key = bucketKey(name, tag);
+  return cached(
+    key,
+    BUCKET_TTL_MS,
+    () => syncMatchesBucket(nameArg, tagArg, want),
+    (v) => Array.isArray((v as MatchesBucket)?.matches) && (v as MatchesBucket).matches.length >= want,
+  );
 }
