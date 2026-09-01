@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { refreshPlayer, type RefreshScope } from '@/lib/refresh';
-import { isValidPlayer } from '@/lib/team';
+import { isValidPlayer, resolvePlayer, memberAccounts } from '@/lib/team';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,9 +20,20 @@ export async function POST(req: NextRequest) {
   const rawLimit = Number(sp.get('limit') ?? '');
   const limit = Number.isFinite(rawLimit) && rawLimit >= 1 && rawLimit <= 40 ? Math.floor(rawLimit) : undefined;
 
+  // Cuenta alternativa (jugadores multi-cuenta): `account` = índice en memberAccounts().
+  let account: { name: string; tag: string } | undefined;
+  const rawAccount = sp.get('account');
+  if (rawAccount != null) {
+    const accs = memberAccounts(resolvePlayer(playerParam || undefined));
+    const idx = Number(rawAccount);
+    if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) {
+      account = { name: accs[idx].name, tag: accs[idx].tag };
+    }
+  }
+
   // Fire-and-forget: la revalidación corre tras responder. Errores se reflejan
   // en el sondeo del cliente ("sin cambios" si el servidor falló antes de subir).
-  void refreshPlayer(playerParam || undefined, scope, limit).catch((err: unknown) => {
+  void refreshPlayer(playerParam || undefined, scope, limit, account).catch((err: unknown) => {
     console.error(`[refresh] ${playerParam ?? 'default'} -> ${err instanceof Error ? err.message : String(err)}`);
   });
 

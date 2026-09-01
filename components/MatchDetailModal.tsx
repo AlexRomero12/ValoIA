@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useMatchDetail } from '@/lib/hooks';
-import { tierName } from '@/lib/metas';
+import { TierIcon } from '@/components/TierIcon';
 import type { MatchRow } from '@/lib/types';
 import type { DetailPlayer } from '@/lib/matchDetail';
 
@@ -17,9 +17,6 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
   const query = useMatchDetail(match.matchId, playerId);
   const detail = query.data;
   const error = query.error as (Error & { code?: string }) | null;
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,7 +34,8 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
     };
   }, []);
 
-  if (!mounted) return null;
+  // El modal solo se monta tras un click del usuario (client-side): document existe.
+  if (typeof document === 'undefined') return null;
 
   const myTeamId = detail?.players.find((x) => x.isMe)?.teamId;
   const myPlayers = detail?.players.filter((p) => p.teamId === myTeamId) ?? [];
@@ -59,7 +57,7 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
               <span className={`res-badge ${match.won ? 'w' : 'l'}`}>{match.won ? 'Victoria' : 'Derrota'}</span>
             </h3>
             <span className="md-sub">
-              {new Date(match.timestamp).toLocaleString('es')} · {match.roundsWon}–{match.roundsLost} · {tierName(match.tier)} ·{' '}
+              {new Date(match.timestamp).toLocaleString('es')} · {match.roundsWon}–{match.roundsLost} · <TierIcon tier={match.tier} size={20} /> ·{' '}
               {detail ? `${detail.meta.durationMin} min${detail.meta.seasonShort ? ` · ${detail.meta.seasonShort}` : ''}` : ''}
             </span>
           </div>
@@ -122,14 +120,21 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
                 <div className="combat-box">
                   <div className="cb-title">Quién te eliminó</div>
                   {detail.combat.topKillers.length ? (
-                    <div className="killer-list">
-                      {detail.combat.topKillers.map((k) => (
-                        <div key={k.name} className="killer-row">
-                          <span className="k-name">{k.name}</span>
-                          <span className="k-times">×{k.times}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <>
+                      <div className="killer-list">
+                        {detail.combat.topKillers.map((k) => (
+                          <div key={k.name} className="killer-row">
+                            <span className="k-name">{k.name}</span>
+                            <span className="k-times">×{k.times}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {detail.combat.otherDeaths > 0 && (
+                        <p className="cb-note">
+                          y {detail.combat.otherDeaths} más de {detail.combat.otherKillers} jugador{detail.combat.otherKillers !== 1 ? 'es' : ''}
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="empty" style={{ padding: '8px 0' }}>Nadie te eliminó más de una vez.</p>
                   )}
@@ -168,7 +173,7 @@ function Scoreboard({ title, players }: { title: string; players: DetailPlayer[]
                 <tr key={p.name + p.tag} className={p.isMe ? 'me-row' : ''}>
                   <td>{p.name}<span className="muted-tag">#{p.tag}</span></td>
                   <td>{p.agentName}</td>
-                  <td className="num">{tierName(p.tier)}</td>
+                  <td className="num"><TierIcon tier={p.tier} size={18} /></td>
                   <td className="num">{p.kills}/{p.deaths}/{p.assists}</td>
                   <td className="num">{p.acs}</td>
                   <td className="num">{p.adr}</td>

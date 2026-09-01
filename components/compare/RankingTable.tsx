@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { tierName, wrColor } from '@/lib/metas';
+import { wrColor } from '@/lib/metas';
+import { TierIcon } from '@/components/TierIcon';
 import type { PlayerStats } from '@/lib/compare';
 import type { MetricKey } from '@/lib/compare';
 
@@ -11,6 +12,7 @@ export interface RankRow {
   color: string;
   tier: number;
   elo: number | null;
+  rr: number | null;
   loading: false;
   stats: PlayerStats;
 }
@@ -89,7 +91,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                   <b>{r.label}</b>
                 </span>
               </td>
-              <td className="muted-cell">{tierName(r.tier)}{r.elo != null ? ` · ${r.elo}` : ''}</td>
+              <td className="muted-cell"><TierIcon tier={r.tier} size={20} />{r.rr != null ? <span className="rr-cell rr-up"> {r.rr} RR</span> : ''}</td>
               {COLUMNS.map((c) => {
                 const isBest = bestId(rows, c.key, c.better) === r.id;
                 const val = metricValue(r, c.key);

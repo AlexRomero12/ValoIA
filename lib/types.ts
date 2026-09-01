@@ -56,6 +56,26 @@ export interface MatchRow {
   eloDelta?: number | null;
   agentIcon?: string | null;
   mapIcon?: string | null;
+  /** Rol del agente (Duelist/Initiator/Controller/Sentinel) */
+  agentRole?: string | null;
+}
+
+export interface ArsenalRow {
+  weapon: string;
+  /** Categoría del arma (Rifle, Sniper, Melee...) según valorant-api.com */
+  type: string | null;
+  icon: string | null;
+  kills: number;
+  deaths: number;
+  kd: number;
+  /** Primeras sangre del jugador con esta arma (primer kill del round) */
+  firstBloods: number;
+}
+
+export interface ValArsenal {
+  rows: ArsenalRow[];
+  totalKills: number;
+  totalFirstBloods: number;
 }
 
 export interface ValSummary {
@@ -66,6 +86,8 @@ export interface ValSummary {
     since: string;
     fetchedMatches: number;
     consideredMatches: number;
+    /** Partidas en el archivo acumulativo (histórico completo sincronizado) */
+    archivedMatches?: number;
     seasonShort?: string | null;
     rrTotal?: number | null;
     eloTotal?: number | null;
@@ -76,9 +98,13 @@ export interface ValSummary {
   currentTier: number;
   startTier: number;
   currentElo?: number | null;
+  /** Puntos de rango (RR dentro del tier actual, 0-100). Solo proveedor Henrik. */
+  currentRR?: number | null;
   byAgent: (GroupRow & { agent: string })[];
   byMap: (GroupRow & { map: string })[];
   matches: MatchRow[];
+  /** Solo proveedor Henrik: uso de armas derivado del kill feed */
+  arsenal?: ValArsenal;
 }
 
 export interface ValStatus {

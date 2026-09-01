@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DayStats } from '@/lib/dayAnalysis';
 import { esc } from '@/lib/metas';
@@ -11,7 +11,10 @@ interface DayDetailModalProps {
   onClose: () => void;
 }
 
+type MiniFilter = { kind: 'agent' | 'map'; value: string } | null;
+
 export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
+  const [filter, setFilter] = useState<MiniFilter>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -30,6 +33,9 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
 
   const rrCls = day.rrTotal != null && day.rrTotal < 0 ? 'down' : 'up';
   const streak = streakInfo(day.rows);
+  const shown = filter ? day.rows.filter((m) => (filter.kind === 'agent' ? m.agent : m.map) === filter.value) : day.rows;
+  const toggleMini = (kind: 'agent' | 'map', value: string) =>
+    setFilter((cur) => (cur && cur.kind === kind && cur.value === value ? null : { kind, value }));
 
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -101,6 +107,8 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                 adr: a.adr,
                 hsPct: a.hsPct,
               }))}
+              active={filter?.kind === 'agent' ? filter.value : null}
+              onToggle={(v) => toggleMini('agent', v)}
             />
           </section>
         )}
@@ -121,22 +129,31 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                 adr: mp.adr,
                 hsPct: mp.hsPct,
               }))}
+              active={filter?.kind === 'map' ? filter.value : null}
+              onToggle={(v) => toggleMini('map', v)}
             />
           </section>
         )}
 
         <section className="md-section">
-          <h4>Partidas ({day.matches})</h4>
+          <h4>Partidas{filter ? ` (${shown.length}/${day.matches})` : ` (${day.matches})`}</h4>
+          {filter && (
+            <div className="filter-bar">
+              <button className="f-chip" onClick={() => setFilter(null)}>
+                {filter.kind === 'agent' ? 'Agente' : 'Mapa'}: <b>{esc(filter.value)}</b> ✕
+              </button>
+            </div>
+          )}
           <div className="table-scroll">
             <table className="score-table dd-matches">
               <thead>
                 <tr>
-                  <th>Hora</th><th>Mapa</th><th>Agente</th><th>Resultado</th><th>Marcador</th>
-                  <th>K/D/A</th><th>ACS</th><th>RR</th>
+                  <th>Hora</th><th>Mapa</th><th>Agente</th><th>Resultado</th><th className="num">Marcador</th>
+                  <th className="num">K/D/A</th><th className="num">ACS</th><th className="num">RR</th>
                 </tr>
               </thead>
               <tbody>
-                {[...day.rows].reverse().map((m) => (
+                {[...shown].reverse().map((m) => (
                   <tr key={m.matchId}>
                     <td>{new Date(m.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</td>
                     <td>{esc(m.map)}</td>
@@ -194,7 +211,7 @@ interface MiniRow {
   hsPct: number;
 }
 
-function MiniTable({ rows }: { rows: MiniRow[] }) {
+function MiniTable({ rows, active, onToggle }: { rows: MiniRow[]; active: string | null; onToggle: (value: string) => void }) {
   return (
     <div className="table-scroll">
       <table className="score-table dd-mini">
@@ -205,8 +222,8 @@ function MiniTable({ rows }: { rows: MiniRow[] }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.key}>
-              <td>
+            <tr key={r.key} className={active === r.label ? 'row-on' : undefined}>
+              <td className="dd-filter" title="Filtrar las partidas del día" onClick={() => onToggle(r.label)}>
                 <span className="icon-cell">
                   {r.icon ? <img className="agent-icon" src={r.icon} alt="" loading="lazy" /> : null}
                   {esc(r.label)}

@@ -16,13 +16,15 @@ interface MatchesTableProps {
   canLoadMore?: boolean;
   /** Solicita más historial (crece limit 10 -> 20 -> 40) */
   onLoadMore?: () => void;
+  /** Filtros activos, controlados desde el padre (también los paneles de winrate filtran) */
+  fMap: string | null;
+  fAgent: string | null;
+  onFilter: (kind: 'map' | 'agent', value: string | null) => void;
 }
 
-export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore }: MatchesTableProps) {
-  const [fMap, setFMap] = useState<string | null>(null);
-  const [fAgent, setFAgent] = useState<string | null>(null);
+export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap, fAgent, onFilter }: MatchesTableProps) {
   const [selected, setSelected] = useState<MatchRow | null>(null);
-  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [openDays, setOpenDays] = useState<string[]>([]);
   const [analysisDay, setAnalysisDay] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
@@ -33,10 +35,11 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore }: Mat
   const activePage = Math.min(page, totalPages - 1);
   const pageDays = days.slice(activePage * DAYS_PER_PAGE, activePage * DAYS_PER_PAGE + DAYS_PER_PAGE);
 
-  const toggle = (kind: 'map' | 'agent', value: string) => {
-    if (kind === 'map') setFMap(fMap === value ? null : value);
-    else setFAgent(fAgent === value ? null : value);
-  };
+  const toggle = (kind: 'map' | 'agent', value: string) =>
+    onFilter(kind, (kind === 'map' ? fMap : fAgent) === value ? null : value);
+
+  const toggleDay = (key: string) =>
+    setOpenDays((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
 
   return (
     <div className="panel">
@@ -46,19 +49,19 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore }: Mat
         <div className="filter-bar">
           <span>Filtro:</span>
           {fMap && (
-            <button className="f-chip" onClick={() => setFMap(null)}>
+            <button className="f-chip" onClick={() => onFilter('map', null)}>
               Mapa: <b>{esc(fMap)}</b> ✕
             </button>
           )}
           {fAgent && (
-            <button className="f-chip" onClick={() => setFAgent(null)}>
+            <button className="f-chip" onClick={() => onFilter('agent', null)}>
               Agente: <b>{esc(fAgent)}</b> ✕
             </button>
           )}
           {fMap && fAgent && (
             <button
               className="f-chip"
-              onClick={() => { setFMap(null); setFAgent(null); }}
+              onClick={() => { onFilter('map', null); onFilter('agent', null); }}
             >
               Limpiar todo ✕
             </button>
@@ -88,7 +91,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore }: Mat
             ) : (
               pageDays.flatMap((g) => {
                 const st = dayStats(g);
-                const expanded = openDay === g.key;
+                const expanded = openDays.includes(g.key);
                 const head = (
                   <tr key={`day-${g.key}`} className="day-row">
                     <td colSpan={11}>
@@ -103,7 +106,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore }: Mat
                           aria-label={expanded ? 'Contraer día' : 'Expandir día'}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setOpenDay(expanded ? null : g.key);
+                            toggleDay(g.key);
                           }}
                         >
                           ▸
@@ -155,6 +158,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore }: Mat
       {selected && <MatchDetailModal match={selected} playerId={playerId} onClose={() => setSelected(null)} />}
       {analysisDay && (
         <DayDetailModal
+          key={analysisDay}
           day={dayStats(days.find((g) => g.key === analysisDay)!)}
           onClose={() => setAnalysisDay(null)}
         />

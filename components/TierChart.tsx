@@ -1,6 +1,7 @@
 'use client';
 
 import { tierName } from '@/lib/metas';
+import { useTierIcons } from '@/lib/hooks';
 import type { MatchRow } from '@/lib/types';
 
 interface TierChartProps {
@@ -8,6 +9,7 @@ interface TierChartProps {
 }
 
 export function TierChart({ matchesAsc }: TierChartProps) {
+  const tierIcons = useTierIcons().data ?? {};
   if (!matchesAsc.length) return <p className="empty">Sin competitivas en esta ventana.</p>;
 
   const FLOOR = 15;
@@ -28,9 +30,15 @@ export function TierChart({ matchesAsc }: TierChartProps) {
       <g key={t}>
         <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#20303f" strokeWidth={major ? 1.3 : 0.7} opacity={major ? 1 : 0.6} />
         {tierName(t) !== '—' && (
-          <text x={PL - 12} y={y + 3.5} fontSize="10" fill={major ? '#93a4b3' : '#5d7080'} textAnchor="end">
-            {tierName(t)}
-          </text>
+          tierIcons[String(t)] ? (
+            <image key={t} x={PL - 30} y={y - 9} width="20" height="20" href={tierIcons[String(t)]}>
+              <title>{tierName(t)}</title>
+            </image>
+          ) : (
+            <text x={PL - 12} y={y + 3.5} fontSize="10" fill={major ? '#93a4b3' : '#5d7080'} textAnchor="end">
+              {tierName(t)}
+            </text>
+          )
         )}
       </g>,
     );
