@@ -10,10 +10,11 @@ import { AgentHeatmap } from '@/components/compare/AgentHeatmap';
 import { AgentStatsTable } from '@/components/compare/AgentStatsTable';
 import { useCooldown } from '@/lib/useCooldown';
 import { DEFAULT_LIMIT, nextLimit, MAX_LIMIT } from '@/lib/hooks';
-import { getTeam } from '@/lib/team';
+import { getTeam, memberAccounts } from '@/lib/team';
 import {
   applyFilters,
   buildTimeline,
+  mergeAccountSummaries,
   statsFromMatches,
   unionOf,
   type CompareFilters,
@@ -24,6 +25,17 @@ import {
 import type { ValSummary } from '@/lib/types';
 
 const TEAM = getTeam();
+// Cuentas por miembro (principal + alternativas) para la mezcla de stats.
+const ACCOUNTS = TEAM.map((m) => memberAccounts(m));
+const QUERY_RANGES = (() => {
+  const ranges: { start: number; count: number }[] = [];
+  let s = 0;
+  for (const accs of ACCOUNTS) {
+    ranges.push({ start: s, count: accs.length });
+    s += accs.length;
+  }
+  return ranges;
+})();
 const COLORS: Record<string, string> = {
   alex: '#ff4655',
   nomirc: '#35b6ff',
@@ -52,17 +64,21 @@ export default function ComparativoPage() {
   const cooldown = useCooldown(15);
 
   const queries = useQueries({
-    queries: TEAM.map((m) => ({
-      queryKey: ['compare', m.id, win, want],
-      queryFn: async () => {
-        const qs = win === 'season' ? 'season=current' : `days=${win}`;
-        const res = await fetch(`/api/valorant/summary?${qs}&limit=${want}&player=${encodeURIComponent(m.id)}`);
-        const json = await res.json();
-        if (!res.ok || json.error) throw Object.assign(new Error(json.error || 'Error de red'), { code: json.code });
-        return json as ValSummary;
-      },
-      staleTime: 10 * 60 * 1000,
-    })),
+    queries: ACCOUNTS.flatMap((accs, mi) =>
+      accs.map((_, ai) => ({
+        queryKey: ['compare', TEAM[mi].id, ai, win, want],
+        queryFn: async () => {
+          const qs = win === 'season' ? 'season=current' : `days=${win}`;
+          const res = await fetch(
+            `/api/valorant/summary?${qs}&limit=${want}&player=${encodeURIComponent(TEAM[mi].id)}&account=${ai}`,
+          );
+          const json = await res.json();
+          if (!res.ok || json.error) throw Object.assign(new Error(json.error || 'Error de red'), { code: json.code });
+          return json as ValSummary;
+        },
+        staleTime: 10 * 60 * 1000,
+      })),
+    ),
   });
 
   const refresh = async () => {
@@ -72,10 +88,12 @@ export default function ComparativoPage() {
     const before = queries.map((q) => (q.data as ValSummary | undefined)?.window.syncedAt ?? null);
     try {
       await Promise.all(
-        TEAM.map((m) =>
-          fetch(
-            `/api/valorant/refresh?player=${encodeURIComponent(m.id)}&scope=all&limit=${want}`,
-            { method: 'POST' },
+        ACCOUNTS.flatMap((accs, mi) =>
+          accs.map((_, ai) =>
+            fetch(
+              `/api/valorant/refresh?player=${encodeURIComponent(TEAM[mi].id)}&scope=all&limit=${want}&account=${ai}`,
+              { method: 'POST' },
+            ),
           ),
         ),
       );
@@ -109,9 +127,17 @@ export default function ComparativoPage() {
     (queries[0].data as ValSummary).window.fetchedMatches < MAX_LIMIT && nextLimit(want) != null;
 
   const entries = useMemo(() => {
-    return TEAM.map((m, i) => {
-      const q = queries[i];
-      return { member: m, data: q.data as ValSummary | undefined, error: q.error, isLoading: q.isLoading };
+    return TEAM.map((m, mi) => {
+      const { start, count } = QUERY_RANGES[mi];
+      const qs = queries.slice(start, start + count);
+      const merged = mergeAccountSummaries(qs.map((q) => q.data));
+      return {
+        member: m,
+        accounts: count,
+        data: merged,
+        error: qs.find((q) => q.error)?.error,
+        isLoading: qs.some((q) => q.isLoading),
+      };
     });
   }, [queries]);
 
@@ -145,6 +171,7 @@ export default function ComparativoPage() {
             color: COLORS[e.member.id] ?? '#93a4b3',
             tier: e.data.currentTier,
             elo: e.data.currentElo ?? null,
+            rr: e.data.currentRR ?? null,
             loading: false,
             stats,
             matchesCount: stats.games,
@@ -209,9 +236,17 @@ export default function ComparativoPage() {
 
       <div className="controls" style={{ marginTop: 20 }}>
         {entries.map((e, i) => (
-          <span key={e.member.id} className={`mini-card${e.isLoading ? ' skel' : ''}`}>
+          <span
+            key={e.member.id}
+            className={`mini-card${e.isLoading ? ' skel' : ''}`}
+            title={
+              e.accounts > 1
+                ? ACCOUNTS[i].map((a, ai) => `cuenta ${ai + 1}: ${a.name}#${a.tag}`).join(' · ')
+                : undefined
+            }
+          >
             <span className="p-dot" style={{ background: COLORS[e.member.id] }} />
-            <b>{TEAM[i].label}</b>
+            <b>{TEAM[i].label}{e.accounts > 1 ? ` · ${e.accounts} cuentas` : ''}</b>
             {e.data ? (
               <span className="mini-stats">
                 {statsFromMatches(filteredPerPlayer[i]).games}p · WR{' '}
@@ -223,6 +258,19 @@ export default function ComparativoPage() {
           </span>
         ))}
       </div>
+
+      {ACCOUNTS.some((accs) => accs.length > 1) && (
+        <p className="window-info" style={{ margin: '8px 0 0', paddingLeft: 4 }}>
+          stats mezcladas por jugador:{' '}
+          {ACCOUNTS.map((accs, i) =>
+            accs.length > 1
+              ? `${TEAM[i].label} (${accs.map((a) => `${a.name}#${a.tag}`).join(' + ')})`
+              : null,
+          )
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
 
       <FiltersBar
         win={win}

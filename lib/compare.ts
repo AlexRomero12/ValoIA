@@ -1,4 +1,4 @@
-import type { MatchRow } from './types';
+import type { MatchRow, ValSummary } from './types';
 
 export interface CompareFilters {
   agents: string[];
@@ -163,4 +163,76 @@ export function unionOf(msLists: MatchRow[][], pick: (m: MatchRow) => string): s
   const set = new Set<string>();
   for (const list of msLists) for (const m of list) set.add(pick(m));
   return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Mezcla los summaries de las cuentas de un jugador (multi-cuenta):
+ *  - Partidas unidas y deduplicadas por matchId (si dos cuentas jugaron el mismo
+ *    game el mismo partido no se cuenta doble).
+ *  - Rango (tier/elo) de la cuenta que esté mejor clasificada, sin reescalar el
+ *    elo de una cuenta contra otra (cada una conserva su propio número).
+ */
+export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): ValSummary | undefined {
+  const ok = summaries.filter((s): s is ValSummary => s != null);
+  if (ok.length === 0) return undefined;
+  if (ok.length === 1) return ok[0];
+
+  const seen = new Set<string>();
+  const matches: MatchRow[] = [];
+  for (const s of ok) {
+    for (const m of s.matches) {
+      const id = m.matchId;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      matches.push(m);
+    }
+  }
+  matches.sort((a, b) => b.timestamp - a.timestamp);
+
+  let best = ok[0];
+  for (const s of ok.slice(1)) {
+    if ((s.currentElo ?? -1) > (best.currentElo ?? -1)) best = s;
+  }
+
+  const st = statsFromMatches(matches);
+  const fetchedMatches = ok.reduce((a, s) => a + (s.window?.fetchedMatches ?? 0), 0);
+  const archivedMatches = ok.reduce((a, s) => a + (s.window?.archivedMatches ?? 0), 0);
+  const syncedAt = ok.reduce<string | null>(
+    (a, s) => ((s.window?.syncedAt ?? '') > (a ?? '') ? (s.window.syncedAt ?? null) : a),
+    null,
+  );
+  const since = ok.reduce((a, s) => ((s.window?.since ?? '') < (a ?? '') ? s.window.since : a), ok[0].window.since);
+
+  return {
+    generatedAt: ok[0].generatedAt,
+    account: best.account,
+    window: {
+      days: ok[0].window?.days ?? 0,
+      since: since ?? '',
+      fetchedMatches,
+      consideredMatches: matches.length,
+      archivedMatches,
+      seasonShort: ok[0].window?.seasonShort ?? null,
+      rrTotal: null,
+      eloTotal: null,
+      syncedAt,
+    },
+    kpis: {
+      matches: st.games,
+      wins: st.wins,
+      losses: st.losses,
+      wr: st.wr,
+      kd: st.kd,
+      acs: st.acs,
+      adr: st.adr,
+      hsPct: st.hsPct,
+    },
+    currentTier: best.currentTier,
+    startTier: best.startTier,
+    currentElo: best.currentElo,
+    currentRR: best.currentRR,
+    byAgent: [],
+    byMap: [],
+    matches,
+  };
 }

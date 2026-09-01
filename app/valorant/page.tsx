@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { TopBar, RankChip } from '@/components/TopBar';
+import { TierIcon } from '@/components/TierIcon';
 import { KpiGrid } from '@/components/KpiGrid';
 import { WrPanel } from '@/components/WrPanel';
+import { ArsenalPanel } from '@/components/ArsenalPanel';
 import { TierChart } from '@/components/TierChart';
 import { MatchesTable } from '@/components/MatchesTable';
 import { useValSummary, useValStatus, useBackgroundRefresh, summaryUrl, nextLimit, DEFAULT_LIMIT, type ValWindowMode } from '@/lib/hooks';
@@ -18,6 +20,8 @@ export default function ValorantPage() {
   const [win, setWin] = useState<WindowValue>('season');
   const [playerId, setPlayerId] = useState('alex');
   const [want, setWant] = useState<number>(DEFAULT_LIMIT);
+  const [fMap, setFMap] = useState<string | null>(null);
+  const [fAgent, setFAgent] = useState<string | null>(null);
   const cooldown = useCooldown(60);
 
   const member = resolvePlayer(playerId);
@@ -60,13 +64,34 @@ export default function ValorantPage() {
   const agentRows = (data?.byAgent ?? []).map((a) => ({ ...a, name: a.agent }));
   const mapRows = (data?.byMap ?? []).map((m) => ({ ...m, name: m.map }));
 
+  const onFilter = (kind: 'map' | 'agent', value: string | null) => (kind === 'map' ? setFMap : setFAgent)(value);
+  const toggleFilter = (kind: 'map' | 'agent', value: string) =>
+    onFilter(kind, (kind === 'map' ? fMap : fAgent) === value ? null : value);
+
   return (
     <div className="wrap">
       <TopBar
         accent="red"
         title="Ranked"
         subtitle={['Ranked', 'Report']}
-        chip={<RankChip label={error ? '—' : rankLabel} />}
+        chip={
+          <RankChip title={rankLabel}>
+            {error || !data ? (
+              '—'
+            ) : (
+              <>
+                <TierIcon tier={data.currentTier ?? 0} size={18} />
+                <span>{who}</span>
+                {data.currentRR != null ? <span>· {data.currentRR} RR</span> : null}
+                {data.startTier > 0 && data.currentTier !== data.startTier ? (
+                  <span className="chip-since">
+                    desde <TierIcon tier={data.startTier} size={15} />
+                  </span>
+                ) : null}
+              </>
+            )}
+          </RankChip>
+        }
         updated={updated}
         onRefresh={bgRefresh.trigger}
         loading={bgRefresh.refreshing}
@@ -114,16 +139,26 @@ export default function ValorantPage() {
           <KpiGrid kpis={data.kpis} accent="#ff4655" />
 
           <div className="two-col" style={{ ['--accent-row' as string]: '#ff4655' }}>
-            <WrPanel label="Agente" rows={agentRows} icons={agentIcons} />
-            <WrPanel label="Mapa" rows={mapRows} icons={mapIcons} />
+            <WrPanel label="Agente" rows={agentRows} icons={agentIcons} active={fAgent} onPick={(name) => toggleFilter('agent', name)} />
+            <WrPanel label="Mapa" rows={mapRows} icons={mapIcons} active={fMap} onPick={(name) => toggleFilter('map', name)} />
           </div>
+
+          <ArsenalPanel arsenal={data.arsenal} />
 
           <div className="panel">
             <h2>Trend de rango</h2>
             <TierChart matchesAsc={[...data.matches].reverse()} />
           </div>
 
-          <MatchesTable matches={data.matches} playerId={playerId} canLoadMore={canLoadMore} onLoadMore={loadMore} />
+          <MatchesTable
+            matches={data.matches}
+            playerId={playerId}
+            fMap={fMap}
+            fAgent={fAgent}
+            onFilter={onFilter}
+            canLoadMore={canLoadMore}
+            onLoadMore={loadMore}
+          />
         </>
       )}
     </div>

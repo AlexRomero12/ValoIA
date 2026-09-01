@@ -12,7 +12,7 @@ interface TopBarProps {
   onRefresh: () => void;
   loading?: boolean;
   disabled?: boolean;
-  activePage: 'aim' | 'ranked' | 'comparar';
+  activePage: 'aim' | 'ranked' | 'comparar' | 'team' | 'tienda';
 }
 
 export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, loading, disabled, activePage }: TopBarProps) {
@@ -47,15 +47,17 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
         <Link href="/" className={activePage === 'aim' ? 'active' : ''}>Aim Lab</Link>
         <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''}>Ranked</Link>
         <Link href="/comparativo" className={activePage === 'comparar' ? 'active' : ''}>Comparar</Link>
+        <Link href="/team" className={activePage === 'team' ? 'active' : ''}>Team</Link>
+        <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>
       </nav>
     </>
   );
 }
 
-export function RankChip({ label }: { label: string }) {
+export function RankChip({ children, title }: { children: React.ReactNode; title?: string }) {
   return (
-    <span className="chip-red">
-      <span>{label}</span>
+    <span className="chip-red" title={title}>
+      {children}
     </span>
   );
 }

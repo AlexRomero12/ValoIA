@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scripts de soporte del host (riot-proxy es Node plano con require)
+    "tools/**",
   ]),
 ]);
 

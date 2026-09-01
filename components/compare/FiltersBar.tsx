@@ -18,7 +18,7 @@ interface FiltersBarProps {
   onMetric: (m: MetricKey) => void;
 }
 
-export type WindowValue = 'season' | '7' | '14' | '30' | '90';
+export type WindowValue = 'season' | '7' | '14' | '30' | '90' | '365';
 
 const METRICS: { key: MetricKey; label: string }[] = [
   { key: 'wr', label: 'WR%' },

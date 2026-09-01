@@ -1,14 +1,16 @@
 import { env } from './env';
 import { cached, cacheSet } from './cache';
+import { getArchiveMatches } from './archive';
 import {
   HENRIK_CONFIG,
   getHenrikAccount,
   getMatchesBucket,
   getHenrikMmrHistory,
+  henrikMatchId,
   henrikMatchTimestamp,
   henrikRoundsPlayed,
   BUCKET_LIMIT,
-  HenrikError,
+  type HenrikMatch,
   type HenrikMatchPlayer,
 } from './henrik';
 import { resolvePlayer } from './team';
@@ -175,32 +177,43 @@ export async function getMatch(matchId: string): Promise<ValMatch> {
 interface ContentEntry {
   name: string;
   icon: string | null;
+  /** Rol del agente (Duelist/Initiator/Controller/Sentinel) — solo agentes */
+  role?: string | null;
 }
 
 interface ContentDicts {
   agents: Record<string, ContentEntry>;
   maps: Record<string, ContentEntry>;
+  weapons: Record<string, ContentEntry & { category: string | null }>;
 }
 
 let contentPromise: Promise<ContentDicts> | null = null;
 
 async function loadContent(): Promise<ContentDicts> {
-  const fallback: ContentDicts = { agents: {}, maps: {} };
+  const fallback: ContentDicts = { agents: {}, maps: {}, weapons: {} };
   try {
-    const [agentsRes, mapsRes] = await Promise.all([
+    const [agentsRes, mapsRes, weaponsRes] = await Promise.all([
       fetch('https://valorant-api.com/v1/agents?isPlayableCharacter=true', { signal: AbortSignal.timeout(15_000) }),
       fetch('https://valorant-api.com/v1/maps', { signal: AbortSignal.timeout(15_000) }),
+      fetch('https://valorant-api.com/v1/weapons', { signal: AbortSignal.timeout(15_000) }),
     ]);
     const agents = agentsRes.ok
-      ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null }[] }
+      ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null; role?: { displayName?: string } | null }[] }
       : null;
     const maps = mapsRes.ok
       ? (await mapsRes.json()) as { data?: { uuid?: string; displayName?: string; mapUrl?: string; displayIcon?: string | null }[] }
       : null;
-    const dict: ContentDicts = { agents: {}, maps: {} };
+    const weapons = weaponsRes.ok
+      ? (await weaponsRes.json()) as { data?: { displayName?: string; displayIcon?: string | null; category?: string }[] }
+      : null;
+    const dict: ContentDicts = { agents: {}, maps: {}, weapons: {} };
     for (const a of agents?.data ?? []) {
       if (a.uuid && a.displayName) {
-        dict.agents[a.uuid.toLowerCase()] = { name: a.displayName, icon: a.displayIcon ?? null };
+        dict.agents[a.uuid.toLowerCase()] = {
+          name: a.displayName,
+          icon: a.displayIcon ?? null,
+          role: a.role?.displayName ?? null,
+        };
       }
     }
     for (const m of maps?.data ?? []) {
@@ -211,6 +224,15 @@ async function loadContent(): Promise<ContentDicts> {
         };
       }
     }
+    for (const w of weapons?.data ?? []) {
+      if (w.displayName) {
+        dict.weapons[w.displayName.toLowerCase()] = {
+          name: w.displayName,
+          icon: w.displayIcon ?? null,
+          category: typeof w.category === 'string' ? (w.category.split('::').pop() ?? null) : null,
+        };
+      }
+    }
     return dict;
   } catch {
     return fallback;
@@ -218,7 +240,9 @@ async function loadContent(): Promise<ContentDicts> {
 }
 
 export function getContent(): Promise<ContentDicts> {
-  if (!contentPromise) contentPromise = cached('val:content', 24 * 60 * 60 * 1000, loadContent);
+  // v2: el dict ahora incluye armas; la clave nueva evita servir desde el cache
+  // una entrada vieja sin `weapons` (cacheada 24 h antes de este cambio).
+  if (!contentPromise) contentPromise = cached('val:content:v3', 24 * 60 * 60 * 1000, loadContent);
   return contentPromise;
 }
 
@@ -261,6 +285,24 @@ export function tierName(tier: number | null | undefined): string {
 
 // ---------- Agregación ----------
 
+export interface ArsenalRow {
+  weapon: string;
+  /** Categoría del arma (Rifle, Sniper, Melee...) según valorant-api.com */
+  type: string | null;
+  icon: string | null;
+  kills: number;
+  deaths: number;
+  kd: number;
+  /** Primeras sangre del jugador con esta arma (primer kill del round) */
+  firstBloods: number;
+}
+
+export interface ValArsenal {
+  rows: ArsenalRow[];
+  totalKills: number;
+  totalFirstBloods: number;
+}
+
 export interface MatchSummary {
   matchId: string;
   date: string;
@@ -290,6 +332,8 @@ export interface MatchSummary {
   eloDelta?: number | null;
   agentIcon?: string | null;
   mapIcon?: string | null;
+  /** Rol del agente, cuando el catálogo de contenido lo tiene */
+  agentRole?: string | null;
 }
 
 interface GroupStat {
@@ -343,14 +387,17 @@ function finishGroup(g: GroupStat) {
 export interface ValSummary {
   generatedAt: string;
   account: ValAccount;
-  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; seasonShort?: string | null; rrTotal?: number | null; eloTotal?: number | null; syncedAt?: string | null };
+  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; eloTotal?: number | null; syncedAt?: string | null };
   kpis: ReturnType<typeof finishGroup> & { wins: number; losses: number };
   currentTier: number;
   startTier: number;
   currentElo?: number | null;
+  currentRR?: number | null;
   byAgent: (ReturnType<typeof finishGroup> & { agent: string })[];
   byMap: (ReturnType<typeof finishGroup> & { map: string })[];
   matches: MatchSummary[];
+  /** Solo proveedor Henrik: uso de armas derivado del kill feed de las partidas en ventana */
+  arsenal?: ValArsenal;
 }
 
 export interface AggregateOptions {
@@ -361,6 +408,9 @@ export interface AggregateOptions {
   season?: string;
   /** id del miembro del equipo (lib/team.ts); default = alex */
   playerId?: string;
+  /** Cuenta específica de un miembro multi-cuenta; default = su cuenta principal */
+  accountName?: string;
+  accountTag?: string;
 }
 
 export type Provider = 'henrik' | 'riot';
@@ -391,18 +441,34 @@ const henrikTimestamp = henrikMatchTimestamp;
 
 async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> {
   const member = resolvePlayer(opts.playerId);
-  const account = await getHenrikAccount(member.name, member.tag);
+  const acctName = opts.accountName ?? member.name;
+  const acctTag = opts.accountTag ?? member.tag;
+  const account = await getHenrikAccount(acctName, acctTag);
   const sinceMs = Date.now() - opts.days * 24 * 60 * 60 * 1000;
   const seasonMode = Boolean(opts.season);
   const dicts = await getContent();
   const agentIconByName = new Map(Object.values(dicts.agents).map((e) => [e.name.toLowerCase(), e.icon]));
+  const agentRoleByName = new Map(Object.values(dicts.agents).map((e) => [e.name.toLowerCase(), e.role ?? null]));
   const mapIconByName = new Map(Object.values(dicts.maps).map((e) => [e.name.toLowerCase(), e.icon]));
 
   // En modo temporada pedimos más historial para cubrir el acto completo.
   // El bucket hace sync incremental: con todo llegado, un refresh cuesta 1 request.
   const want = Math.min(opts.maxFetch ?? (seasonMode ? BUCKET_LIMIT : 20), BUCKET_LIMIT);
-  const bucket = await getMatchesBucket(member.name, member.tag, want);
-  const matches = bucket.matches;
+  const bucket = await getMatchesBucket(acctName, acctTag, want);
+
+  // Archivo acumulativo (estilo tracker.gg): el bucket solo cubre 40 partidas,
+  // pero el archivo guarda todo lo sincronizado históricamente. La unión
+  // garantiza que las agregaciones de temporada/ventanas largas no queden
+  // recortadas cuando el jugador pasa de 40 partidas en el período.
+  const archived = getArchiveMatches(acctName, acctTag);
+  const seenIds = new Set<string>();
+  const matches: HenrikMatch[] = [];
+  for (const m of [...bucket.matches, ...archived]) {
+    const id = henrikMatchId(m);
+    if (!id || seenIds.has(id)) continue;
+    seenIds.add(id);
+    matches.push(m);
+  }
 
   let seasonShort: string | null = null;
   if (seasonMode) {
@@ -470,7 +536,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   let prevTier: number | null = null;
   let prevElo: number | null = null;
 
-  const mmrHistory = await getHenrikMmrHistory(member.name, member.tag).catch(
+  const mmrHistory = await getHenrikMmrHistory(acctName, acctTag).catch(
     () => [] as Awaited<ReturnType<typeof getHenrikMmrHistory>>,
   );
   const rrByMatch = new Map(mmrHistory.filter((h) => h.match_id).map((h) => [h.match_id!, h]));
@@ -539,6 +605,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       eloDelta,
       agentIcon: agentIconByName.get(agent.toLowerCase()) ?? null,
       mapIcon: mapIconByName.get(map.toLowerCase()) ?? null,
+      agentRole: agentRoleByName.get(agent.toLowerCase()) ?? null,
     });
   }
 
@@ -551,6 +618,49 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const lastElo = lastMatch?.elo ?? null;
   const eloTotal = firstElo != null && lastElo != null ? lastElo - firstElo : null;
 
+  // ---------- Arsenal: uso de armas desde el kill feed ($0 requests) ----------
+  const killsBy = new Map<string, number>();
+  const deathsBy = new Map<string, number>();
+  const fbBy = new Map<string, number>();
+  for (const m of inWindow) {
+    const seenRounds = new Set<number>();
+    for (const k of m.kills ?? []) {
+      const w = k.weapon?.name;
+      if (!w) continue;
+      if (k.killer?.puuid === account.puuid) killsBy.set(w, (killsBy.get(w) ?? 0) + 1);
+      if (k.victim?.puuid === account.puuid) deathsBy.set(w, (deathsBy.get(w) ?? 0) + 1);
+      // Primera sangre: primer kill del round (mismo patrón que el detalle de partida)
+      const r = k.round ?? -1;
+      if (!seenRounds.has(r)) {
+        seenRounds.add(r);
+        if (k.killer?.puuid === account.puuid) fbBy.set(w, (fbBy.get(w) ?? 0) + 1);
+      }
+    }
+  }
+  const totalFeedKills = [...killsBy.values()].reduce((a, b) => a + b, 0);
+  const totalFirstBloods = [...fbBy.values()].reduce((a, b) => a + b, 0);
+  const arsenal: ValArsenal = {
+    rows: [...new Set([...killsBy.keys(), ...deathsBy.keys()])]
+      .filter((w) => (killsBy.get(w) ?? 0) > 0)
+      .map((weapon) => {
+        const kills = killsBy.get(weapon) ?? 0;
+        const deaths = deathsBy.get(weapon) ?? 0;
+        const info = dicts.weapons?.[weapon.toLowerCase()];
+        return {
+          weapon,
+          type: info?.category ?? null,
+          icon: info?.icon ?? null,
+          kills,
+          deaths,
+          kd: deaths ? kills / deaths : kills,
+          firstBloods: fbBy.get(weapon) ?? 0,
+        };
+      })
+      .sort((a, b) => b.kills - a.kills || b.deaths - a.deaths),
+    totalKills: totalFeedKills,
+    totalFirstBloods,
+  };
+
   return {
     generatedAt: new Date().toISOString(),
     account: { puuid: account.puuid, gameName: account.name, tagLine: account.tag },
@@ -559,6 +669,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       since: new Date(sinceMs).toISOString(),
       fetchedMatches: matches.length,
       consideredMatches: summaries.length,
+      archivedMatches: archived.length,
       seasonShort,
       rrTotal,
       eloTotal,
@@ -568,6 +679,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     currentTier: lastMatch?.tier ?? 0,
     startTier: firstMatch?.tier ?? 0,
     currentElo: lastMatch?.elo ?? null,
+    currentRR: lastMatch?.rr ?? null,
     byAgent: [...agentGroups.entries()]
       .map(([agent, g]) => ({ agent, ...finish(g) }))
       .sort((a, b) => b.matches - a.matches),
@@ -575,6 +687,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       .map(([map, g]) => ({ map, ...finish(g) }))
       .sort((a, b) => b.matches - a.matches),
     matches: summaries,
+    arsenal,
   };
 }
 
@@ -686,6 +799,7 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
       durationMin: lengthMin,
       agentIcon,
       mapIcon,
+      agentRole: agentEntry?.role ?? null,
     });
   }
 

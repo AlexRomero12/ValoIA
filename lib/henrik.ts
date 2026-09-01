@@ -21,10 +21,11 @@ export class HenrikError extends Error {
   }
 }
 
-// Throttle: la key Basic permite 30 req/min — operamos con margen.
+// Throttle: la key Basic tiene ~20 req/min (teóricamente 30, en la práctica
+// los bursts de 4 en 5 s ya devuelven 429). Operamos con margen: 18/min.
 const MINUTE_MS = 60_000;
-const MAX_REQ_PER_MINUTE = 24;
-const MIN_GAP_MS = 1_800;
+const MAX_REQ_PER_MINUTE = 18;
+const MIN_GAP_MS = 3_400;
 const requestTimes: number[] = [];
 
 async function throttle(): Promise<void> {
@@ -55,7 +56,7 @@ async function rawFetch(path: string, authHeader: Record<string, string>): Promi
   });
 }
 
-async function henrikFetch(path: string): Promise<any> {
+async function henrikFetch<T>(path: string): Promise<T> {
   const key = HENRIK_CONFIG.apiKey();
   if (!key) {
     throw new HenrikError(
@@ -102,7 +103,7 @@ async function henrikFetch(path: string): Promise<any> {
   if (!res.ok) {
     throw new HenrikError('HTTP', `henrikdev HTTP ${res.status}`, res.status);
   }
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 export interface HenrikAccount {
@@ -120,12 +121,22 @@ export function henrikAccountKey(nameArg: string, tagArg: string): string {
   return `henrik:account:${encodeURIComponent(nameArg)}:${encodeURIComponent(tagArg)}`;
 }
 
+type HenrikAccountData = {
+  puuid?: string;
+  name?: string;
+  tag?: string;
+  region?: string;
+  account_level?: number;
+  card?: { small?: string; large?: string };
+  last_update?: string;
+};
+
 /** Solo fetch bruto (sin caché), para revalidaciones del bucket/refresh. */
-export async function fetchHenrikAccountRaw(nameArg: string, tagArg: string): Promise<{ puuid?: string; name?: string; tag?: string; region?: string; account_level?: number; card?: { small?: string; large?: string }; last_update?: string }> {
+export async function fetchHenrikAccountRaw(nameArg: string, tagArg: string): Promise<HenrikAccountData> {
   const name = encodeURIComponent(nameArg);
   const tag = encodeURIComponent(tagArg);
-  const json = await henrikFetch(`/valorant/v2/account/${name}/${tag}`);
-  return json?.data;
+  const json = await henrikFetch<{ data?: HenrikAccountData }>(`/valorant/v2/account/${name}/${tag}`);
+  return json?.data ?? {};
 }
 
 export async function getHenrikAccount(
@@ -259,7 +270,9 @@ export async function fetchHenrikMmrHistoryRaw(nameArg: string, tagArg: string):
   const tag = encodeURIComponent(tagArg);
   const affinity = HENRIK_CONFIG.region();
   const platform = HENRIK_CONFIG.platform();
-  const json = await henrikFetch(`/valorant/v2/mmr-history/${affinity}/${platform}/${name}/${tag}`);
+  const json = await henrikFetch<{ data?: { history?: HenrikMmrHistoryEntry[] } }>(
+    `/valorant/v2/mmr-history/${affinity}/${platform}/${name}/${tag}`,
+  );
   return json?.data?.history ?? [];
 }
 
@@ -295,11 +308,14 @@ function bucketKey(nameEncoded: string, tagEncoded: string): string {
   return `${BUCKET_PREFIX}:${nameEncoded}:${tagEncoded}`;
 }
 
-function matchId(m: HenrikMatch): string {
+/** Identificador único de partida (clave de dedupe global del bucket/archivo). */
+export function henrikMatchId(m: HenrikMatch): string {
   return m.metadata?.match_id ?? '';
 }
 
-async function fetchMatchesPage(
+const matchId = henrikMatchId;
+
+export async function fetchMatchesPage(
   affinity: string,
   platform: string,
   name: string,
@@ -309,13 +325,13 @@ async function fetchMatchesPage(
   size: number,
 ): Promise<HenrikMatch[]> {
   const qs = new URLSearchParams({ mode, size: String(size), start: String(start) });
-  const json = (await henrikFetch(
+  const json = await henrikFetch<{ status?: number; data?: HenrikMatch[] }>(
     `/valorant/v4/matches/${affinity}/${platform}/${name}/${tag}?${qs}`,
-  )) as { status?: number; data?: HenrikMatch[] };
+  );
   return json?.data ?? [];
 }
 
-const PAGE_SIZE = 10;
+export const PAGE_SIZE = 10;
 
 /**
  * Descarga y mergea páginas nuevas en el bucket (sin pasar por cached():
@@ -387,6 +403,19 @@ export async function syncMatchesBucket(
   const freshIds = new Set(fresh.map(matchId));
   const baseDeduped = allOld.filter((m) => !freshIds.has(matchId(m)));
   const all = [...fresh, ...baseDeduped, ...deep].slice(0, BUCKET_LIMIT);
+
+  // Archivo acumulativo (estilo tracker.gg): toda partida nueva descargada
+  // se guarda para siempre, aunque luego salga del bucket de 40. Best-effort:
+  // un fallo del archivo no debe romper el sync del bucket.
+  const newOnes = [...fresh, ...deep];
+  if (newOnes.length) {
+    try {
+      const { mergeIntoArchive } = await import('./archive');
+      mergeIntoArchive(nameArg, tagArg, newOnes);
+    } catch (err) {
+      console.error(`[archive] no se pudo archivar ${nameArg}#${tagArg}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   return { updatedAt: Date.now(), matches: all };
 }

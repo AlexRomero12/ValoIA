@@ -9,13 +9,35 @@ services:
     environment:
       TZ: America/Bogota
       CACHE_DIR: /app/data/cache
+      # Archivo acumulativo de partidas: persistente, inmune al borrado del cache.
+      ARCHIVE_DIR: /app/data/archive
+      # Datos persistentes de la app (favoritas, suscripciones push, tokens RSO):
+      # mismos valores de durabilidad que el archive.
+      DATA_DIR: /app/data
+      # API local del Riot Client: el contenedor accede al host de Windows.
+      STORE_LOCAL_HOST: host.docker.internal
+      # Lockfile del cliente de VALORANT (solo existe con el juego abierto;
+      # sus tokens son los únicos válidos para el storefront) y del Riot Client.
+      RIOT_LOCKFILE: /riot-game-config/lockfile
+      RIOT_GAME_LOCKFILE: /riot-game-config/lockfile
+      # El cliente de Valorant solo acepta conexiones desde 127.0.0.1 del host,
+      # así que tools/riot-proxy.js (corre en Windows) hace de puente en 56080.
+      RIOT_LOCAL_PORT: "56080"
       # Refresco en background (opcional): mantiene los buckets calientes.
       # También puedes definirlos en .env (se pasan completo vía env_file).
       # VAL_BACKGROUND_REFRESH: "1"
       # VAL_REFRESH_INTERVAL_MIN: "15"
     volumes:
       - valo-cache:/app/data/cache
+      - valo-archive:/app/data/archive
+      - valo-data:/app/data
+      # Acceso de solo lectura a los Config del cliente de Valorant y del Riot
+      # Client del host (Windows): sus lockfiles dan puerto+password de la API local.
+      - ${LOCALAPPDATA}/Riot Games/Valorant/Config:/riot-game-config:ro
+      - ${LOCALAPPDATA}/Riot Games/Riot Client/Config:/riot-client-config:ro
     restart: unless-stopped
 
 volumes:
   valo-cache:
+  valo-archive:
+  valo-data:

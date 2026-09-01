@@ -160,3 +160,17 @@ export function useMatchDetail(matchId: string | null, playerId?: string) {
     gcTime: 30 * 60 * 1000,
   });
 }
+
+export function useTierIcons() {
+  return useQuery<Record<string, string>>({
+    queryKey: ['val-tier-icons'],
+    queryFn: async () => {
+      const res = await fetch('/api/valorant/tiers');
+      if (!res.ok) throw new Error('No se pudieron cargar los iconos de rango');
+      const json = (await res.json()) as { icons?: Record<string, string> };
+      return json.icons ?? {};
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 7 * 24 * 60 * 60 * 1000,
+  });
+}

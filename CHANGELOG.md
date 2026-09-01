@@ -2,6 +2,69 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.6.0] — 2026-09-01
+
+### Added
+- **Página Tienda (`/tienda`)**: tienda diaria (4 skins + bundle destacado con precio/descuento/tiempo restante), skins favoritas persistentes y notificaciones Web Push cuando una favorita aparece en la tienda
+- **Fuentes de la tienda** (`lib/riotClient.ts`): HenrikDev eliminó la tienda individual en su API v4, así que se consulta a Riot directamente — (1) **API local del cliente de Valorant** vía lockfile (`%LocalAppData%\Riot Games\Valorant\Config\lockfile`, `STORE_LOCAL_HOST`/`RIOT_LOCKFILE`/`RIOT_LOCAL_PORT`), $0 y sin credenciales (requiere el juego abierto); (2) **respaldo RSO por Cookie Reauth**: se pega la cookie `ssid` de tu sesión en auth.riotgames.com (F12 → Application → Cookies) y el server renueva los tokens solo cada hora con ella (`data/rso.json`). El login programático user/pass quedó bloqueado por Riot (hCaptcha obligatorio en el flujo RSO)
+- **Previsualización de skins** (`components/store/SkinPreview.tsx`): lightbox con el render a tamaño grande desde el explorador, las tarjetas de la tienda, los items del bundle y las favoritas; incluye **variantes de color (chromas)** con miniaturas para cambiar el color en vivo (`GET /api/store/chromas?id=`, índice `chromasByLevelId` en el catálogo)
+- **Iconos de rango** (`components/TierIcon.tsx` + `GET /api/valorant/tiers`): badges oficiales por tier (valorant-api `/v1/competitivetiers`, cache 7 días) con el nombre como tooltip — en el chip de Ranked, el eje Y del gráfico de tendencia, el header y scoreboard del detalle de partida, y la tabla del Comparativo
+- **RR en vez de MMR**: el chip de Ranked y la tabla del Comparativo muestran los puntos dentro del rango (`currentRR`, de `mmr-history[].rr`) en vez del elo crudo; el detalle queda en el tooltip
+- **Catálogo de skins** (`lib/skins.ts`): skinlevels + armas de valorant-api.com, índice uuid→nombre/icono/arma cacheado 7 días, búsqueda por nombre (excluye niveles de evolución no comprables)
+- **Favoritas persistentes** (`lib/favorites.ts`): `data/favorites.json` con snapshot denormalizado (nombre/icono/arma) — externo al cache, inmune a `invalidateAll` y al borrado de `.cache/`; volumen Docker `valo-data`
+- **Web Push** (`lib/push.ts` + `public/sw.js` + `app/api/push/subscribe`): VAPID keys en `.env`, suscripciones en `data/push-subscriptions.json`, badge "¡EN TIENDA!" + precio sobre favoritas disponibles y marca "notificada" del día; botón **Enviar prueba** (`POST /api/push/test`) para verificar el pipeline sin esperar la rotación
+- **Vigilancia en el cron** (`lib/storeWatch.ts` + `instrumentation.ts`): cada 60 min refresca el storefront y notifica por push cada favorita nueva en tienda (dedupe diario en `data/store-notified.json`, sin spam)
+- `GET /api/store/status` (tienda + bundle + favoritas + estado RSO/push; `?refresh=1` fuerza revalidación), `GET /api/store/catalog?q=|weapon=`, `GET /api/store/weapons`, `GET /api/store/chromas`, `POST /api/store/favorites`, `POST /api/store/auth` (login/2FA/cookie), `POST|DELETE /api/push/subscribe`
+- Docker: volumen `valo-data` + montajes de solo lectura a los Config del cliente de Valorant y del Riot Client del host para los lockfiles
+
+### Changed
+- `TopBar` con enlace **Tienda**; `docker-compose.yml` añade `STORE_LOCAL_HOST=host.docker.internal`, `RIOT_LOCKFILE`, `RIOT_GAME_LOCKFILE` y `RIOT_LOCAL_PORT=56080`
+- **Explorador de arsenal** en Favoritas: modal con categorías de arma (normalizadas: Pistols→Sidearms, Sniper Rifles→Snipers, Heavy Weapons→Machine Guns, EEquippableCategory::Melee→Melee), fila de armas con icono oficial y contador de skins, y grid de TODAS las skins base (excluye niveles de evolución y variantes `(…)`) con estrella de favorita; `GET /api/store/weapons` + `GET /api/store/catalog?weapon=`
+- Vía local de la tienda: usa el lockfile del cliente de **Valorant** (el Riot Client da tokens sin permisos del storefront, HTTP 404) y `tools/riot-proxy.js` como puente en el host (la API local solo acepta 127.0.0.1); `RIOT_LOCAL_PORT=56080`
+- **Multi-cuenta en Comparar**: `TeamMember.accounts` en `lib/team.ts` para mezclar las stats de un jugador que usa varias cuentas Riot (prueba: Juan = ツJuanツ#lol + ツJuan#Rol + Patricklol444#NA1)
+- `GET /api/valorant/summary|refresh` aceptan `account=<índice>` para consultar una cuenta concreta de un miembro; `mergeAccountSummaries` (lib/compare) une partidas deduplicadas por matchId y elige el rango de la cuenta mejor clasificada
+- **Pestaña Team (`/team`)**: composición recomendada por mapa (estilo vlr.gg) — para cada mapa, qué agente juega cada jugador con su WR (fuente del dato marcada: mapa/global), rol del agente, uso pro del agente en el mapa, backups por jugador y WR del equipo en ese mapa. Ventanas temporada/7/14/30/90 días. Motor en `lib/comp.ts` con reglas: máx 2 jugadores por rol, nunca dos roles duplicados a la vez y prioridad a la meta profesional
+- **Meta pro**: `lib/proneta.ts` con el pick rate por agente y mapa de VCT 2026 Americas Stage 2 (vlr.gg). Los agentes con uso pro ≥10% se premian (y se marca el % en la tarjeta); los que no se juegan pro en el mapa se penalizan −20 y solo salen si no hay opción mejor. Solo se muestran mapas en rotación (`ROTATION_MAPS`: Abyss, Ascent, Haven, Lotus, Split, Summit, Sunset)
+- **Metodología de asignación (rol primero)**: los 4 roles se reparten entre los jugadores según su rol declarado (Alex duelista, NoMicr sentinel, Gengar controller, Juan iniciador — con flex cuando los datos no lo soportan) y dentro del rol se elige el mejor agente por WR×mapa+meta
+- **Recencia**: WR ponderada por fecha (media-vida 90 días) — lo que juegas ahora pesa más que el histórico viejo; **propiedad**: el jugador que más volumen tiene de un agente lo conserva (ej. Juan→Sova → "él es nuestro mejor Sova")
+- **Preferencias manuales** (`TeamMember.prefs`): agente favorito por mapa que gana al score automático (ej. Alex: Chamber en Haven/Sunset; Split: Sage/Raze/Jett). Si la preferencia de un mapa apunta a un solo rol (Chamber→Sentinel), el rol queda bloqueado para ese jugador; con varios roles queda flexible con bonus
+- El reparto por roles se compara contra la búsqueda libre (flex) y gana la mejor suma — nunca se fuerza un relleno de 0 partidas si existe una comp real mejor
+- El ranking de agentes usa WR con contracción por muestra (WR2p ≈ 80% realista) para no dejar que una racha pequeña domine, y presta al 35% el WR del agente en otros mapas cuando la muestra del mapa es chica
+- Roles de agentes: el catálogo de contenido (`getContent`) ahora trae el rol de cada agente y los `MatchRow` llevan `agentRole` (fallback por nombre en `lib/roles.ts`)
+
+### Fixed
+- **Storefront 404**: Riot migró el endpoint a **V3** — `POST store/v3/storefront/{puuid}` con body `{}` (el v2 GET responde 404 para todos); diagnosticado vía issue #61/PR #62 de techchrism/valorant-api-docs
+- **Descuento del bundle**: Riot envía `discountPercent` como fracción (0.2 = 20%); el badge ahora muestra `-20%` y no `-0.2%`
+- **Cache de tienda**: conectar la cookie RSO o ganar tokens nuevos invalida el cache del storefront; el botón Actualizar de la página fuerza revalidación real (`?refresh=1`)
+- Lint del repo en **0 errores** (`henrikFetch` tipado genérico, patrón `mounted` de React 19 corregido en MatchDetailModal, `tools/` excluido del lint)
+
+## [1.5.0] — 2026-08-28
+
+Filtros desde los paneles de winrate y Arsenal (uso de armas por perfil).
+
+### Added
+- **Arsenal · Uso de armas** por perfil (`components/ArsenalPanel.tsx`): kills por arma con barra de uso, K/D por arma y "con qué te matan" (muertes por arma). Derivado del kill feed del archivo acumulativo + bucket ($0 requests), filtrado por la misma ventana/temporada/jugador del resto del dash
+- Íconos y categorías de armas en el catálogo de contenido (`getContent` ahora también carga `/v1/weapons` de valorant-api.com)
+- **Los paneles de Winrate (two-col) filtran Partidas recientes**: click en un agente/mapa del panel aplica el filtro a la tabla (toggle), con fila resaltada. El estado de filtro se elevó a la página y `MatchesTable` pasa a ser controlado (`fMap`/`fAgent`/`onFilter`)
+- `ValSummary.arsenal` (`ArsenalRow[]` kills/deaths/kd por arma) — omitido en el proveedor Riot
+
+## [1.4.0] — 2026-08-28
+
+Archivo acumulativo de partidas (modelo tracker.gg): el histórico ya no se pierde cuando el bucket rota a las 40.
+
+### Added
+- `lib/archive.ts`: archivo append-only por jugador con TTL infinito — una partida archivada nunca se pierde, aunque salga de la ventana de 40 de la API. Índice compacto por jugador (total, rango de fechas, marcador de backfill) con reconstrucción automática desde disco
+- **Store externo al cache**: el archivo vive en `data/archive/` (configurable con `ARCHIVE_DIR`), inmune a `invalidateAll()`, al borrado de `.cache/` y a rebuilds de Docker (volumen dedicado `valo-archive` en docker-compose). `data/` ya estaba en `.gitignore`
+- **Backfill profundo** `POST /api/valorant/backfill?player=&mode=season|all&maxPages=&force=`: pagina el historial competitivo más allá del bucket (default 40 páginas ≈ 400 partidas, tope 150) y archiva todo. Progreso persiste página a página (un corte por rate limit no pierde trabajo); una pasada cubierta no se repite salvo `force=1`
+- **Backfill una vez**: cada sync del bucket (página 0 y páginas profundas) archiva automáticamente las partidas nuevas — costo $0 requests extra; el cron alimenta el archivo solo
+- `GET /api/valorant/backfill?player=`: cobertura del archivo por jugador (total, más antigua, más nueva, último backfill)
+- Agregaciones season/days sobre **bucket ∪ archivo** (`getValSummaryHenrik`): jugar 100+ partidas en el acto ya no recorta KPIs, WR por agente/mapa ni el comparativo
+- `window.archivedMatches` en el summary: partidas en el archivo del jugador
+
+### Changed
+- Detalle de partida (`getMatchDetail`): ahora busca primero en el archivo acumulativo antes que en los buckets — abrir el detalle de una partida vieja archivada cuesta $0 requests
+- Mensaje `NOT_CACHED` del detalle ahora sugiere el backfill para partidas muy antiguas
+
 ## [1.3.0] — 2026-08-27
 
 Historial de partidas paginado y agrupado por día, con análisis diario.

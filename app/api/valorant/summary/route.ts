@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getValSummary } from '@/lib/valorant';
 import { refreshPlayer } from '@/lib/refresh';
-import { isValidPlayer } from '@/lib/team';
+import { isValidPlayer, resolvePlayer, memberAccounts } from '@/lib/team';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,13 +19,26 @@ export async function GET(req: NextRequest) {
   }
   const playerId = playerParam || undefined;
 
+  // Cuenta alternativa (jugadores multi-cuenta): `account` = índice en memberAccounts().
+  let accountName: string | undefined;
+  let accountTag: string | undefined;
+  const rawAccount = sp.get('account');
+  if (rawAccount != null) {
+    const accs = memberAccounts(resolvePlayer(playerId));
+    const idx = Number(rawAccount);
+    if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) {
+      accountName = accs[idx].name;
+      accountTag = accs[idx].tag;
+    }
+  }
+
   try {
     // Compat: refresh=1 en GET = revalidación síncrona (los clientes nuevos
     // usan POST /api/valorant/refresh y esperan la señal de syncedAt).
     if (sp.get('refresh') === '1') {
-      await refreshPlayer(playerId, 'all', limit ?? 20);
+      await refreshPlayer(playerId, 'all', limit ?? 20, accountName ? { name: accountName, tag: accountTag! } : undefined);
     }
-    const summary = await getValSummary({ days, season, maxFetch: limit, playerId });
+    const summary = await getValSummary({ days, season, maxFetch: limit, playerId, accountName, accountTag });
     return Response.json(summary, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     const code = (err as { code?: string })?.code ?? 'HTTP';

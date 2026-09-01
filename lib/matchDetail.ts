@@ -1,5 +1,6 @@
 import { getContent } from './valorant';
 import { findCachedValues, cacheSet } from './cache';
+import { getArchiveMatchById } from './archive';
 import { getHenrikAccount } from './henrik';
 import { getTeam, resolvePlayer } from './team';
 import type { HenrikMatch } from './henrik';
@@ -54,13 +55,15 @@ export interface MatchDetail {
     firstBloods: number;
     firstDeaths: number;
     topKillers: { name: string; times: number; weapon: string }[];
+    otherKillers: number;
+    otherDeaths: number;
   };
 }
 
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
 
 export async function getMatchDetail(matchId: string, playerId?: string | null): Promise<MatchDetail> {
-  const cacheKey = `val:detail:${resolvePlayer(playerId).id}:${matchId}`;
+  const cacheKey = `val:detail:v2:${resolvePlayer(playerId).id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 
@@ -75,6 +78,14 @@ export async function getMatchDetail(matchId: string, playerId?: string | null):
   for (const member of orderedMembers) {
     const acc = await getHenrikAccount(member.name, member.tag).catch(() => null);
     if (!acc?.puuid) continue;
+    // 1) Archivo acumulativo: cubre partidas fuera del bucket de 40 ($0 requests)
+    const archived = getArchiveMatchById(member.name, member.tag, matchId);
+    if (archived) {
+      match = archived;
+      ownerPuuid = acc.puuid;
+      break;
+    }
+    // 2) Buckets cacheados (ventana fresca)
     const found = findCachedValues<HenrikMatch[]>(`henrik:matches:${acc.puuid}`)
       .flat()
       .find((m) => m.metadata?.match_id === matchId);
@@ -86,7 +97,9 @@ export async function getMatchDetail(matchId: string, playerId?: string | null):
   }
   if (!match) {
     throw Object.assign(
-      new Error('Partida fuera del cache actual — amplía la ventana o pulsa Actualizar para recargarla.'),
+      new Error(
+        'Partida fuera del cache — amplía la ventana o pulsa Actualizar para recargarla. Para partidas muy antiguas, lanza un backfill del historial (POST /api/valorant/backfill).',
+      ),
       { code: 'NOT_CACHED' },
     );
   }
@@ -144,10 +157,12 @@ export async function getMatchDetail(matchId: string, playerId?: string | null):
       });
     }
   }
-  const topKillers = [...killerCount.entries()]
+  const ranked = [...killerCount.entries()]
     .map(([name, v]) => ({ name, times: v.times, weapon: v.weapon }))
-    .sort((a, b) => b.times - a.times)
-    .slice(0, 3);
+    .sort((a, b) => b.times - a.times);
+  const topKillers = ranked.slice(0, 3);
+  const otherKillers = ranked.length - topKillers.length;
+  const otherDeaths = ranked.slice(3).reduce((a, k) => a + k.times, 0);
 
   const rounds: RoundCell[] = (match.rounds ?? []).map((r, idx) => ({
     n: (r.id ?? idx) + 1,
@@ -175,7 +190,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null):
     },
     players,
     rounds,
-    combat: { firstBloods: fb, firstDeaths: fd, topKillers },
+    combat: { firstBloods: fb, firstDeaths: fd, topKillers, otherKillers, otherDeaths },
   };
 
   cacheSet(cacheKey, dto, DETAIL_TTL);

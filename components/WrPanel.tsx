@@ -15,9 +15,11 @@ interface WrPanelProps {
   rows: WrRow[];
   icons: Map<string, string | null>;
   onPick?: (name: string) => void;
+  /** Fila seleccionada (resaltada) cuando el panel filtra la tabla de partidas */
+  active?: string | null;
 }
 
-export function WrPanel({ title, label, rows, icons, onPick }: WrPanelProps) {
+export function WrPanel({ title, label, rows, icons, onPick, active }: WrPanelProps) {
   const sorted = [...rows].sort((a, b) => b.matches - a.matches || b.wr - a.wr);
   const kind = label === 'Agente' ? 'agent-icon' : 'map-icon';
   const nameOf = (r: WrRow) => r.name ?? '';
@@ -36,8 +38,8 @@ export function WrPanel({ title, label, rows, icons, onPick }: WrPanelProps) {
             return (
               <div
                 key={name}
-                className="wr-row"
-                title={`${name} — ${r.wins}V-${losses}D`}
+                className={`wr-row${onPick ? ' pickable' : ''}${active === name ? ' on' : ''}`}
+                title={`${name} — ${r.wins}V-${losses}D${onPick ? ' · click para filtrar Partidas recientes' : ''}`}
                 onClick={onPick ? () => onPick(name) : undefined}
               >
                 <span className="wr-name">
