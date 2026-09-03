@@ -12,9 +12,13 @@ export interface TrendSeries {
 interface TrendCompareProps {
   series: TrendSeries[];
   fmt: (v: number) => string;
+  /** Piso del eje Y (la línea se recorta debajo de él). */
+  minValue?: number;
+  /** Valores explícitos para las líneas de cuadrícula del eje Y. */
+  ticks?: number[];
 }
 
-export function TrendCompare({ series, fmt }: TrendCompareProps) {
+export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps) {
   const active = series.filter((s) => s.points.length > 0);
   if (!active.length) return <p className="empty">Sin datos suficientes para la evolución con estos filtros.</p>;
 
@@ -34,10 +38,9 @@ export function TrendCompare({ series, fmt }: TrendCompareProps) {
 
   const values: number[] = [];
   for (const s of active) for (const p of s.points) if (p.value != null) values.push(p.value);
-  let min = Math.min(...values);
   let max = Math.max(...values);
-  const pad = Math.max((max - min) * 0.15, max * 0.05, 1);
-  min = Math.max(0, min - pad);
+  const pad = Math.max((max - (minValue ?? Math.min(...values))) * 0.15, max * 0.05, 1);
+  const min = minValue ?? Math.max(0, Math.min(...values) - pad);
   max = max + pad;
 
   const W = 940, H = 280, PL = 56, PR = 16, PT = 16, PB = 36;
@@ -45,7 +48,7 @@ export function TrendCompare({ series, fmt }: TrendCompareProps) {
   const xAt = (i: number) => PL + (labels.length === 1 ? cw / 2 : (i / (labels.length - 1)) * cw);
   const yAt = (v: number) => PT + ch - ((v - min) / Math.max(1e-9, max - min)) * ch;
 
-  const gridVals = [0, 1, 2, 3, 4].map((g) => min + ((max - min) * g) / 4);
+  const gridVals = (ticks && ticks.length ? ticks.filter((t) => t >= min && t <= max) : [0, 1, 2, 3, 4].map((g) => min + ((max - min) * g) / 4));
   const labelStep = Math.ceil(labels.length / 10);
 
   return (

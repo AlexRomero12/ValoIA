@@ -86,7 +86,7 @@ export function statsFromMatches(ms: MatchRow[]): PlayerStats {
 }
 
 export type Granularity = 'day' | 'week';
-export type MetricKey = 'wr' | 'acs' | 'kd' | 'elo';
+export type MetricKey = 'wr' | 'acs' | 'kd' | 'rank';
 
 export interface BucketPoint {
   key: string;
@@ -94,6 +94,39 @@ export interface BucketPoint {
   value: number | null;
   games: number;
 }
+
+// ---------- Rango (tier + RR) como métrica ----------
+
+const TIER_SHORT: Record<number, string> = {
+  0: 'UR', 3: 'I1', 4: 'I2', 5: 'I3',
+  6: 'B1', 7: 'B2', 8: 'B3',
+  9: 'S1', 10: 'S2', 11: 'S3',
+  12: 'G1', 13: 'G2', 14: 'G3',
+  15: 'P1', 16: 'P2', 17: 'P3',
+  18: 'D1', 19: 'D2', 20: 'D3',
+  21: 'A1', 22: 'A2', 23: 'A3',
+  24: 'IM1', 25: 'IM2', 26: 'IM3',
+  27: 'RAD',
+};
+
+/** Nombre corto de un tier (17 → "P3", 18 → "D1"). */
+export function tierShort(tier: number): string {
+  return TIER_SHORT[tier] ?? `T${tier}`;
+}
+
+/**
+ * Puntos de rango de una partida: tier * 100 + RR dentro del tier
+ * (P3 = 1700-1799, D1 = 1800-1899, D2 = 1900-1999…). Continuo entre tiers:
+ * subir de P3 100 RR = caer en D1 0 RR. null si no hay tier (Unrated).
+ */
+export function rankPointsOf(m: MatchRow): number | null {
+  if (typeof m.tier !== 'number' || m.tier <= 0) return null;
+  const rr = typeof m.rr === 'number' && Number.isFinite(m.rr) ? m.rr : 0;
+  return m.tier * 100 + Math.max(0, Math.min(100, rr));
+}
+
+/** Piso del eje Y de la métrica de rango: Platinum 3 (no mostrar rangos más bajos). */
+export const RANK_AXIS_MIN = 17 * 100;
 
 function mondayOf(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -123,8 +156,8 @@ interface Acc {
   deaths: number;
   acsW: number;
   rounds: number;
-  eloVal: number | null;
-  eloTs: number;
+  rankVal: number | null;
+  rankTs: number;
 }
 
 export function buildTimeline(
@@ -137,7 +170,7 @@ export function buildTimeline(
     const { key, label } = keyFor(m.timestamp, gran);
     let a = accs.get(key);
     if (!a) {
-      a = { key, label, games: 0, wins: 0, draws: 0, kills: 0, deaths: 0, acsW: 0, rounds: 0, eloVal: null, eloTs: -Infinity };
+      a = { key, label, games: 0, wins: 0, draws: 0, kills: 0, deaths: 0, acsW: 0, rounds: 0, rankVal: null, rankTs: -Infinity };
       accs.set(key, a);
     }
     a.games += 1;
@@ -147,9 +180,10 @@ export function buildTimeline(
     a.deaths += m.deaths;
     a.acsW += m.acs * Math.max(1, m.rounds);
     a.rounds += Math.max(1, m.rounds);
-    if (typeof m.elo === 'number' && Number.isFinite(m.elo) && m.timestamp >= a.eloTs) {
-      a.eloTs = m.timestamp;
-      a.eloVal = m.elo;
+    const rank = rankPointsOf(m);
+    if (rank != null && m.timestamp >= a.rankTs) {
+      a.rankTs = m.timestamp;
+      a.rankVal = rank;
     }
   }
 
@@ -159,7 +193,7 @@ export function buildTimeline(
       let value: number | null = null;
       if (metric === 'wr') value = a.games - a.draws ? (a.wins / (a.games - a.draws)) * 100 : null;
       else if (metric === 'acs') value = a.rounds ? a.acsW / a.rounds : null;
-      else if (metric === 'elo') value = a.eloVal;
+      else if (metric === 'rank') value = a.rankVal;
       else value = a.deaths ? a.kills / a.deaths : a.games ? 0 : null;
       return { key: a.key, label: a.label, value, games: a.games };
     });
