@@ -24,7 +24,7 @@ const METRICS: { key: MetricKey; label: string }[] = [
   { key: 'wr', label: 'WR%' },
   { key: 'acs', label: 'ACS' },
   { key: 'kd', label: 'K/D' },
-  { key: 'elo', label: 'ELO' },
+  { key: 'rank', label: 'RANGO' },
 ];
 
 export function FiltersBar(p: FiltersBarProps) {

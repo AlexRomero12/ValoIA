@@ -33,7 +33,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 
 ### Página Comparar (`/comparativo`)
 - Los **4 perfiles del cuarteto lado a lado**: ranking ordenable (WR, K/D, ACS, ADR, HS%, RR neto) con columnas clickeables
-- **Evolución comparada** en un solo gráfico: WR/ACS/K/D/ELO por día o semana
+- **Evolución comparada** en un solo gráfico: WR/ACS/K/D/**RANGO** por día o semana — la métrica RANGO muestra el tier + RR (ej. "D1 · 20") con el eje Y iniciando en Platinum 3 para no perder detalle
 - **Heatmap jugador × agente** y tabla analítica estilo VLR con mini-barras por celda (modo todos / mejores combos); columna de rango con **badge del tier + RR**
 - Filtros combinables: ventana (temporada o 7/14/30/90 días), rango de fechas custom, mapa y **filtro de agentes por iconitos**
 - Filtro de mínimo de partidas y leyenda de cobertura de datos

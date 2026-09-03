@@ -2,6 +2,11 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.7.1] — 2026-09-02
+
+### Changed
+- **Métrica RANGO en la evolución del Comparativo** (antes "ELO"): ahora grafica **tier + RR** (puntos de rango = tier × 100 + RR, continuo entre tiers) y formatea cada punto como "D1 · 20" en vez del MMR crudo. El **eje Y inicia en Platinum 3** con una línea de cuadrícula por tier (P3/D1/D2/D3…) para no perder detalle con rangos bajos vacíos. Motor en `lib/compare.ts` (`rankPointsOf`, `tierShort`, `RANK_AXIS_MIN`)
+
 ## [1.7.0] — 2026-09-02
 
 Auditoría de sesión (reglas de parada y pool con costo en RR) + empates corregidos en todo el dash.

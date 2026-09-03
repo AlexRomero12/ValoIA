@@ -17,6 +17,8 @@ import {
   mergeAccountSummaries,
   statsFromMatches,
   unionOf,
+  tierShort,
+  RANK_AXIS_MIN,
   type CompareFilters,
   type Granularity,
   type MetricKey,
@@ -200,7 +202,26 @@ export default function ComparativoPage() {
     [entries, filteredPerPlayer, filters.minGames, gran, metric],
   );
 
-  const fmtMetric = (v: number) => (metric === 'kd' ? v.toFixed(2) : metric === 'wr' ? `${v.toFixed(0)}%` : String(Math.round(v)));
+  // Líneas de cuadrícula de la métrica de rango: un tier por línea, desde P3.
+  const rankTicks = useMemo(() => {
+    const vs = trendSeries.flatMap((s) => s.points.map((p) => p.value ?? 0));
+    const top = vs.length ? Math.max(...vs) : RANK_AXIS_MIN;
+    const ticks: number[] = [];
+    for (let t = RANK_AXIS_MIN; t <= top + 100; t += 100) ticks.push(t);
+    return ticks;
+  }, [trendSeries]);
+
+  const fmtMetric = (v: number) => {
+    if (metric === 'kd') return v.toFixed(2);
+    if (metric === 'wr') return `${v.toFixed(0)}%`;
+    if (metric === 'rank') {
+      const tier = Math.floor(v / 100);
+      const rr = Math.round(v % 100);
+      const name = tierShort(tier);
+      return rr > 0 ? `${name} · ${rr}` : name;
+    }
+    return String(Math.round(v));
+  };
 
   const oldestTs = useMemo(() => {
     let min = Infinity;
@@ -305,8 +326,13 @@ export default function ComparativoPage() {
       </div>
 
       <div className="panel">
-        <h2>Evolución por {gran === 'day' ? 'día' : 'semana'} · métrica {metric.toUpperCase()}</h2>
-        <TrendCompare series={trendSeries} fmt={fmtMetric} />
+        <h2>Evolución por {gran === 'day' ? 'día' : 'semana'} · métrica {metric === 'rank' ? 'RANGO' : metric.toUpperCase()}</h2>
+        <TrendCompare
+          series={trendSeries}
+          fmt={fmtMetric}
+          minValue={metric === 'rank' ? RANK_AXIS_MIN : undefined}
+          ticks={metric === 'rank' ? rankTicks : undefined}
+        />
       </div>
 
       <div className="panel">
