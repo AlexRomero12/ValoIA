@@ -41,6 +41,7 @@ interface SubAgg {
   icon?: string | null;
   games: number;
   wins: number;
+  draws: number;
   kills: number;
   deaths: number;
   score: number;
@@ -51,7 +52,7 @@ interface SubAgg {
 }
 
 function newSub(name: string, icon?: string | null): SubAgg {
-  return { name, icon, games: 0, wins: 0, kills: 0, deaths: 0, score: 0, rounds: 0, damage: 0, headshots: 0, shots: 0 };
+  return { name, icon, games: 0, wins: 0, draws: 0, kills: 0, deaths: 0, score: 0, rounds: 0, damage: 0, headshots: 0, shots: 0 };
 }
 
 function finishSub(s: SubAgg) {
@@ -60,7 +61,7 @@ function finishSub(s: SubAgg) {
     icon: s.icon,
     games: s.games,
     wins: s.wins,
-    losses: s.games - s.wins,
+    losses: s.games - s.wins - s.draws,
     kd: s.deaths ? s.kills / s.deaths : s.kills > 0 ? s.kills : 0,
     acs: s.rounds ? Math.round(s.score / s.rounds) : 0,
     adr: s.rounds ? Math.round(s.damage / s.rounds) : 0,
@@ -75,6 +76,8 @@ export interface DayStats {
   matches: number;
   wins: number;
   losses: number;
+  /** Empates (marcador igualado): no cuentan ni como victoria ni como derrota */
+  draws: number;
   wr: number;
   kd: number;
   acs: number;
@@ -92,6 +95,7 @@ export interface DayStats {
 
 export function dayStats(group: DayGroup): DayStats {
   let wins = 0;
+  let draws = 0;
   let kills = 0;
   let deaths = 0;
   let score = 0;
@@ -106,7 +110,10 @@ export function dayStats(group: DayGroup): DayStats {
   const maps = new Map<string, SubAgg>();
 
   for (const m of group.matches) {
-    if (m.won) wins += 1;
+    // Empate = marcador igualado (p. ej. 14-14): no cuenta como derrota.
+    const isDraw = m.roundsWon === m.roundsLost;
+    if (isDraw) draws += 1;
+    else if (m.won) wins += 1;
     kills += m.kills;
     deaths += m.deaths;
     score += m.score ?? m.acs * m.rounds;
@@ -121,7 +128,8 @@ export function dayStats(group: DayGroup): DayStats {
     const mp = maps.get(m.map) ?? newSub(m.map, m.mapIcon ?? null);
     for (const agg of [a, mp]) {
       agg.games += 1;
-      if (m.won) agg.wins += 1;
+      if (isDraw) agg.draws += 1;
+      else if (m.won) agg.wins += 1;
       agg.kills += m.kills;
       agg.deaths += m.deaths;
       agg.score += m.score ?? m.acs * m.rounds;
@@ -140,14 +148,16 @@ export function dayStats(group: DayGroup): DayStats {
   const worstMatch = withAcs.length ? withAcs.reduce((a, b) => (b.acs < a.acs ? b : a)) : null;
 
   const n = group.matches.length;
+  const decisive = n - draws;
   return {
     key: group.key,
     label: group.label,
     dayStart: group.dayStart,
     matches: n,
     wins,
-    losses: n - wins,
-    wr: n ? (wins / n) * 100 : 0,
+    losses: n - wins - draws,
+    draws,
+    wr: decisive ? (wins / decisive) * 100 : 0,
     kd: deaths ? kills / deaths : kills > 0 ? kills : 0,
     acs: rounds ? Math.round(score / rounds) : 0,
     adr: rounds ? Math.round(damage / rounds) : 0,

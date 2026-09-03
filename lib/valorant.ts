@@ -339,6 +339,7 @@ export interface MatchSummary {
 interface GroupStat {
   matches: number;
   wins: number;
+  draws: number;
   kills: number;
   deaths: number;
   assists: number;
@@ -351,13 +352,15 @@ interface GroupStat {
 }
 
 function newGroup(): GroupStat {
-  return { matches: 0, wins: 0, kills: 0, deaths: 0, assists: 0, score: 0, rounds: 0, damage: 0, headshots: 0, bodyshots: 0, legshots: 0 };
+  return { matches: 0, wins: 0, draws: 0, kills: 0, deaths: 0, assists: 0, score: 0, rounds: 0, damage: 0, headshots: 0, bodyshots: 0, legshots: 0 };
 }
 
-function addPlayer(g: GroupStat, p: ValPlayer, won: boolean): void {
+function addPlayer(g: GroupStat, p: ValPlayer, won: boolean, isDraw = false): void {
   const s = p.stats ?? {};
   g.matches += 1;
-  if (won) g.wins += 1;
+  // Empate (marcador igualado): no cuenta ni como victoria ni como derrota.
+  if (isDraw) g.draws += 1;
+  else if (won) g.wins += 1;
   g.kills += s.kills ?? 0;
   g.deaths += s.deaths ?? 0;
   g.assists += s.assists ?? 0;
@@ -373,10 +376,12 @@ function addPlayer(g: GroupStat, p: ValPlayer, won: boolean): void {
 
 function finishGroup(g: GroupStat) {
   const shotsTotal = g.headshots + g.bodyshots + g.legshots;
+  const decisive = g.matches - g.draws;
   return {
     matches: g.matches,
     wins: g.wins,
-    wr: g.matches ? (g.wins / g.matches) * 100 : 0,
+    draws: g.draws,
+    wr: decisive ? (g.wins / decisive) * 100 : 0,
     kd: g.deaths ? g.kills / g.deaths : g.kills > 0 ? g.kills : 0,
     acs: g.rounds ? g.score / g.rounds : 0,
     adr: g.rounds ? g.damage / g.rounds : 0,
@@ -491,6 +496,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   interface Acc {
     matches: number;
     wins: number;
+    draws: number;
     kills: number;
     deaths: number;
     assists: number;
@@ -501,11 +507,13 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     bodyshots: number;
     legshots: number;
   }
-  const newAcc = (): Acc => ({ matches: 0, wins: 0, kills: 0, deaths: 0, assists: 0, score: 0, rounds: 0, damage: 0, headshots: 0, bodyshots: 0, legshots: 0 });
-  const add = (a: Acc, me: HenrikMatchPlayer, won: boolean, rounds: number): void => {
+  const newAcc = (): Acc => ({ matches: 0, wins: 0, draws: 0, kills: 0, deaths: 0, assists: 0, score: 0, rounds: 0, damage: 0, headshots: 0, bodyshots: 0, legshots: 0 });
+  const add = (a: Acc, me: HenrikMatchPlayer, won: boolean, rounds: number, isDraw: boolean): void => {
     const s = me.stats ?? {};
     a.matches += 1;
-    if (won) a.wins += 1;
+    // Empate (marcador igualado): no cuenta ni como victoria ni como derrota.
+    if (isDraw) a.draws += 1;
+    else if (won) a.wins += 1;
     a.kills += s.kills ?? 0;
     a.deaths += s.deaths ?? 0;
     a.assists += s.assists ?? 0;
@@ -518,10 +526,12 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   };
   const finish = (a: Acc) => {
     const shots = a.headshots + a.bodyshots + a.legshots;
+    const decisive = a.matches - a.draws;
     return {
       matches: a.matches,
       wins: a.wins,
-      wr: a.matches ? (a.wins / a.matches) * 100 : 0,
+      draws: a.draws,
+      wr: decisive ? (a.wins / decisive) * 100 : 0,
       kd: a.deaths ? a.kills / a.deaths : a.kills > 0 ? a.kills : 0,
       acs: a.rounds ? a.score / a.rounds : 0,
       adr: a.rounds ? a.damage / a.rounds : 0,
@@ -547,16 +557,19 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       (m.teams ?? []).find((t) => t.team_id != null && t.team_id === me.team_id) ??
       (m.teams ?? [])[0];
     const won = Boolean(myTeam?.won);
+    const rds = henrikRoundsPlayed(m);
+    const roundsWon0 = myTeam?.rounds?.won ?? 0;
+    const roundsLost0 = myTeam?.rounds?.lost ?? Math.max(0, rds - roundsWon0);
+    const isDraw = roundsWon0 === roundsLost0;
     const map = m.metadata?.map?.name ?? '?';
     const agent = me.agent?.name ?? '?';
     const s = me.stats ?? {};
-    const rds = henrikRoundsPlayed(m);
 
-    add(group, me, won, rds);
+    add(group, me, won, rds, isDraw);
     if (!agentGroups.has(agent)) agentGroups.set(agent, newAcc());
-    add(agentGroups.get(agent)!, me, won, rds);
+    add(agentGroups.get(agent)!, me, won, rds, isDraw);
     if (!mapGroups.has(map)) mapGroups.set(map, newAcc());
-    add(mapGroups.get(map)!, me, won, rds);
+    add(mapGroups.get(map)!, me, won, rds, isDraw);
 
     const tier: number = me.tier?.id ?? prevTier ?? 0;
     const tierChange = prevTier != null ? tier - prevTier : 0;
@@ -567,8 +580,8 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     const leg = s.legshots ?? 0;
     const shots = hs + body + leg;
     const dmgDealt = s.damage?.dealt ?? 0;
-    const roundsWon = myTeam?.rounds?.won ?? 0;
-    const roundsLost = myTeam?.rounds?.lost ?? Math.max(0, rds - roundsWon);
+    const roundsWon = roundsWon0;
+    const roundsLost = roundsLost0;
     const lengthMin = Math.round((m.metadata?.game_length_in_ms ?? 0) / 60000);
 
     const hist = rrByMatch.get(m.metadata?.match_id ?? '');
@@ -617,6 +630,10 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const firstElo = firstMatch?.elo ?? null;
   const lastElo = lastMatch?.elo ?? null;
   const eloTotal = firstElo != null && lastElo != null ? lastElo - firstElo : null;
+
+  // Rango actual: el mmr-history es la fuente autoritativa (el bucket puede
+  // no haber sincronizado la última partida y mostrar un rango viejo).
+  const latestMmr = mmrHistory[0] ?? null;
 
   // ---------- Arsenal: uso de armas desde el kill feed ($0 requests) ----------
   const killsBy = new Map<string, number>();
@@ -675,11 +692,11 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       eloTotal,
       syncedAt: new Date(bucket.updatedAt).toISOString(),
     },
-    kpis: { ...kpis, wins: group.wins, losses: group.matches - group.wins },
-    currentTier: lastMatch?.tier ?? 0,
+    kpis: { ...kpis, wins: group.wins, losses: group.matches - group.wins - group.draws },
+    currentTier: latestMmr?.tier?.id ?? lastMatch?.tier ?? 0,
     startTier: firstMatch?.tier ?? 0,
-    currentElo: lastMatch?.elo ?? null,
-    currentRR: lastMatch?.rr ?? null,
+    currentElo: latestMmr?.elo ?? lastMatch?.elo ?? null,
+    currentRR: latestMmr?.rr ?? lastMatch?.rr ?? null,
     byAgent: [...agentGroups.entries()]
       .map(([agent, g]) => ({ agent, ...finish(g) }))
       .sort((a, b) => b.matches - a.matches),
@@ -755,11 +772,12 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
     const agentIcon = agentEntry?.icon ?? null;
     const mapIcon = mapEntry?.icon ?? null;
 
-    addPlayer(group, me, won);
+    const isDrawRiot = (myTeam?.roundsWon ?? 0) * 2 === (me.stats?.roundsPlayed ?? 0);
+    addPlayer(group, me, won, isDrawRiot);
     if (!agentGroups.has(agent)) agentGroups.set(agent, newGroup());
-    addPlayer(agentGroups.get(agent)!, me, won);
+    addPlayer(agentGroups.get(agent)!, me, won, isDrawRiot);
     if (!mapGroups.has(map)) mapGroups.set(map, newGroup());
-    addPlayer(mapGroups.get(map)!, me, won);
+    addPlayer(mapGroups.get(map)!, me, won, isDrawRiot);
 
     const tier: number = me.competitiveTier ?? prevTier ?? 0;
     const tierChange = prevTier != null ? tier - prevTier : 0;
@@ -821,7 +839,7 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
     kpis: {
       ...kpis,
       wins: group.wins,
-      losses: group.matches - group.wins,
+      losses: group.matches - group.wins - group.draws,
     },
     currentTier: lastMatch?.tier ?? 0,
     startTier: firstMatch?.tier ?? 0,

@@ -62,7 +62,7 @@ export function TierChart({ matchesAsc }: TierChartProps) {
         {matchesAsc.map((m, i) => {
           const cx = xAt(i);
           const cy = yAt(m.tier || 3);
-          const col = m.won ? '#2fd08a' : '#ff5c69';
+          const col = m.roundsWon === m.roundsLost ? '#e8c97a' : m.won ? '#2fd08a' : '#ff5c69';
           const d = new Date(m.timestamp);
           const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
           return (

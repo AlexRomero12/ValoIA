@@ -47,7 +47,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
             <h3>
               Análisis del día · <span style={{ textTransform: 'capitalize' }}>{day.label}</span>
               <span className={`res-badge ${day.wins >= day.losses ? 'w' : 'l'}`}>
-                {day.wins}V · {day.losses}D
+                {day.wins}V · {day.losses}D{day.draws > 0 ? ` · ${day.draws}E` : ''}
               </span>
             </h3>
             <span className="md-sub">
@@ -102,6 +102,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                 games: a.games,
                 wins: a.wins,
                 losses: a.losses,
+                draws: a.games - a.wins - a.losses,
                 kd: a.kd,
                 acs: a.acs,
                 adr: a.adr,
@@ -124,6 +125,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                 games: mp.games,
                 wins: mp.wins,
                 losses: mp.losses,
+                draws: mp.games - mp.wins - mp.losses,
                 kd: mp.kd,
                 acs: mp.acs,
                 adr: mp.adr,
@@ -159,7 +161,9 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                     <td>{esc(m.map)}</td>
                     <td>{esc(m.agent)}</td>
                     <td>
-                      <span className={`res-badge ${m.won ? 'w' : 'l'}`}>{m.won ? 'Victoria' : 'Derrota'}</span>
+                      <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>
+                        {isDraw(m) ? 'Empate' : m.won ? 'Victoria' : 'Derrota'}
+                      </span>
                     </td>
                     <td className="num">{m.roundsWon}–{m.roundsLost}</td>
                     <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
@@ -193,9 +197,14 @@ function MatchLine({ m }: { m: MatchRow }) {
     <div className="dd-matchline">
       <b>{esc(m.map)}</b> con {esc(m.agent)} — {m.roundsWon}–{m.roundsLost},{' '}
       {m.kills}/{m.deaths}/{m.assists}, ACS {m.acs}
-      <span className={`res-badge ${m.won ? 'w' : 'l'}`}>{m.won ? 'V' : 'D'}</span>
+      <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>{isDraw(m) ? 'E' : m.won ? 'V' : 'D'}</span>
     </div>
   );
+}
+
+/** Empate: marcador igualado (p. ej. 14-14). No cuenta como derrota. */
+function isDraw(m: MatchRow): boolean {
+  return m.roundsWon === m.roundsLost;
 }
 
 interface MiniRow {
@@ -205,6 +214,7 @@ interface MiniRow {
   games: number;
   wins: number;
   losses: number;
+  draws: number;
   kd: number;
   acs: number;
   adr: number;
@@ -230,7 +240,7 @@ function MiniTable({ rows, active, onToggle }: { rows: MiniRow[]; active: string
                 </span>
               </td>
               <td className="num">{r.games}</td>
-              <td className="num">{r.wins}-{r.losses}</td>
+              <td className="num">{r.wins}-{r.losses}{r.draws > 0 ? ` · ${r.draws}E` : ''}</td>
               <td className={`num${r.kd >= 1 ? ' stat-ok' : ''}`}>{r.kd.toFixed(2)}</td>
               <td className="num">{r.acs}</td>
               <td className="num">{r.adr}</td>
@@ -243,20 +253,25 @@ function MiniTable({ rows, active, onToggle }: { rows: MiniRow[]; active: string
   );
 }
 
-/** Racha más larga de victorias o derrotas consecutivas (orden cronológico). */
+/** Racha más larga de victorias o derrotas consecutivas (orden cronológico). Los empates cortan la racha. */
 function streakInfo(rows: MatchRow[]): string | null {
   const chrono = [...rows].reverse();
   if (chrono.length < 2) return null;
-  let bestRun = 1;
-  let bestWon = Boolean(chrono[0].won);
-  let run = 1;
-  let runWon = Boolean(chrono[0].won);
-  for (let i = 1; i < chrono.length; i++) {
-    if (Boolean(chrono[i].won) === runWon) {
+  let bestRun = 0;
+  let bestWon = false;
+  let run = 0;
+  let runWon = false;
+  for (const m of chrono) {
+    if (isDraw(m)) {
+      run = 0;
+      continue;
+    }
+    const won = Boolean(m.won);
+    if (run > 0 && won === runWon) {
       run += 1;
     } else {
       run = 1;
-      runWon = !runWon;
+      runWon = won;
     }
     if (run > bestRun) {
       bestRun = run;

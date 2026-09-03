@@ -58,6 +58,11 @@ export function StorePanel({
     <div className="panel">
       <h2>Tienda de hoy</h2>
 
+      <div className="store-window">
+        <span className="store-window-label">Ventana de tienda</span>
+        <span className="store-window-time">{fmtDuration(dailyRemainingSec)}</span>
+      </div>
+
       {daily.length === 0 ? (
         <p className="empty">
           {source === 'none'
@@ -78,7 +83,8 @@ export function StorePanel({
               </div>
               <div className="store-name" title={d.name}>{d.name}</div>
               <div className="store-meta">
-                {d.weapon ? `${d.weapon} · ` : ''}{d.price} VP
+                {d.weapon ? `${d.weapon} · ` : ''}
+                <span className="price-tag">{d.price} VP</span>
               </div>
               <button
                 className={`star-btn${d.isFavorite ? ' on' : ''}`}
@@ -125,7 +131,7 @@ export function StorePanel({
 
       <div className="store-foot">
         <span>
-          Rota en {fmtDuration(dailyRemainingSec)} · actualizado {updated}
+          actualizado {updated}
         </span>
         <span className={source === 'local' ? 'src-local' : source === 'rso' ? 'src-rso' : 'src-none'}>
           {sourceDetail}

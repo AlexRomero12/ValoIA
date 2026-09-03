@@ -106,7 +106,8 @@ function ensureDir(): boolean {
 }
 
 // Escrituras serializadas para no pisar archivos con writes concurrentes
-// (mismo patrón que la capa L2 del cache).
+// (mismo patrón que la capa L2 del cache). Atómico: `.tmp` + rename para que
+// un crash a mitad de escritura nunca corrompa una partida archivada.
 let writeQueue = Promise.resolve();
 let warnedWriteError = false;
 
@@ -114,7 +115,11 @@ function writeJson(file: string, value: unknown): void {
   if (!ensureDir()) return;
   writeQueue = writeQueue
     .then(() => fs.promises.mkdir(path.dirname(file), { recursive: true }))
-    .then(() => fs.promises.writeFile(file, JSON.stringify(value), 'utf8'))
+    .then(async () => {
+      const tmp = `${file}.tmp`;
+      await fs.promises.writeFile(tmp, JSON.stringify(value), 'utf8');
+      await fs.promises.rename(tmp, file);
+    })
     .catch((e) => {
       if (!warnedWriteError) {
         warnedWriteError = true;
