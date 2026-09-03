@@ -207,11 +207,23 @@ interface RsoState {
 
 const RSO_FILE = 'rso.json';
 
+/**
+ * Espejo en memoria del estado RSO. Necesario: writeData() escribe en disco por
+ * una cola asíncrona (.tmp + rename), y `rsoTokensFresh`/`rsoStatus` leen el
+ * archivo SÍNCRONO justo después de guardar tokens nuevos (post-reauth). Sin el
+ * espejo, la lectura gana la carrera y devuelve los tokens VIEJOS (expirados),
+ * y pd.a.pvp.net los rechaza con 400 BAD_CLAIMS ("Failure validating/decoding
+ * RSO Access Token") — el cron quedaba atascado en ese ciclo para siempre.
+ */
+let rsoCache: RsoState | null = null;
+
 function readRsoState(): RsoState {
-  return readData<RsoState>(RSO_FILE, {});
+  if (!rsoCache) rsoCache = readData<RsoState>(RSO_FILE, {});
+  return rsoCache;
 }
 
 function setRsoState(state: RsoState): void {
+  rsoCache = state;
   writeData(RSO_FILE, state);
 }
 

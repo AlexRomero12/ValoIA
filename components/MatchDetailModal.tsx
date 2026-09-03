@@ -37,6 +37,7 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
   // El modal solo se monta tras un click del usuario (client-side): document existe.
   if (typeof document === 'undefined') return null;
 
+  const isDraw = match.roundsWon === match.roundsLost;
   const myTeamId = detail?.players.find((x) => x.isMe)?.teamId;
   const myPlayers = detail?.players.filter((p) => p.teamId === myTeamId) ?? [];
   const enemyPlayers = detail?.players.filter((p) => p.teamId !== myTeamId) ?? [];
@@ -54,7 +55,9 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
           <div className="md-title">
             <h3>
               {match.map} · {match.agent}
-              <span className={`res-badge ${match.won ? 'w' : 'l'}`}>{match.won ? 'Victoria' : 'Derrota'}</span>
+              <span className={`res-badge ${isDraw ? 'e' : match.won ? 'w' : 'l'}`}>
+                {isDraw ? 'Empate' : match.won ? 'Victoria' : 'Derrota'}
+              </span>
             </h3>
             <span className="md-sub">
               {new Date(match.timestamp).toLocaleString('es')} · {match.roundsWon}–{match.roundsLost} · <TierIcon tier={match.tier} size={20} /> ·{' '}

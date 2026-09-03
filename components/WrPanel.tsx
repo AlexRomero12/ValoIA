@@ -6,6 +6,7 @@ interface WrRow {
   name: string;
   matches: number;
   wins: number;
+  draws?: number;
   wr: number;
 }
 
@@ -33,13 +34,15 @@ export function WrPanel({ title, label, rows, icons, onPick, active }: WrPanelPr
           <div className="wr-head"><span>{label}</span><span>Distribución</span><span>WR · récord</span></div>
           {sorted.map((r) => {
             const name = nameOf(r);
-            const losses = r.matches - r.wins;
+            const draws = r.draws ?? 0;
+            const losses = r.matches - r.wins - draws;
             const icon = icons.get(name);
+            const record = `${r.wins}V–${losses}D${draws > 0 ? `–${draws}E` : ''}`;
             return (
               <div
                 key={name}
                 className={`wr-row${onPick ? ' pickable' : ''}${active === name ? ' on' : ''}`}
-                title={`${name} — ${r.wins}V-${losses}D${onPick ? ' · click para filtrar Partidas recientes' : ''}`}
+                title={`${name} — ${record}${onPick ? ' · click para filtrar Partidas recientes' : ''}`}
                 onClick={onPick ? () => onPick(name) : undefined}
               >
                 <span className="wr-name">
@@ -51,7 +54,7 @@ export function WrPanel({ title, label, rows, icons, onPick, active }: WrPanelPr
                 </div>
                 <div className="wr-meta">
                   <div className="wr-pct" style={{ color: wrColor(r.wr) }}>{r.wr.toFixed(0)}%</div>
-                  <div className="wr-sub">{r.matches}p · {r.wins}V–{losses}D</div>
+                  <div className="wr-sub">{r.matches}p · {record}</div>
                 </div>
               </div>
             );

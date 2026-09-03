@@ -13,7 +13,7 @@ export function KpiGrid({ kpis: k, accent }: KpiGridProps) {
       <div className="kpi">
         <div className="label">Partidas</div>
         <div className="value">{k.matches}</div>
-        <div className="target"><b>{k.wins}V</b> · {k.losses}D</div>
+        <div className="target"><b>{k.wins}V</b> · {k.losses}D{k.draws ? ` · ${k.draws}E` : ''}</div>
         <div className="meter"><div className="fill" style={{ width: `${Math.min(100, k.matches * 10)}%`, background: 'var(--gold)' }} /></div>
       </div>
       {METAS.map((m) => {

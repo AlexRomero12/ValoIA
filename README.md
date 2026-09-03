@@ -2,16 +2,17 @@
 
 Dashboard personal de rendimiento para VALORANT + Aim Lab. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) y Aimlabs GraphQL, con cache persistente, Docker y soporte para los 4 perfiles del equipo.
 
-> Estado actual: **v1.4.0** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado actual: **v1.7.0** — ver [CHANGELOG.md](./CHANGELOG.md)
 
 ## Estructura
 
 ```
-app/                  Páginas (/, /valorant, /comparativo, /team, /tienda) + API routes
+app/                  Páginas (/, /valorant, /comparativo, /team, /tienda, /auditoria) + API routes
 components/           TopBar, KpiGrid, WrPanel, TierChart, MatchesTable, MatchDetailModal
+components/audit/     Auditoría de sesión: día auditado (SVG RR + tabla + notas)
 components/compare/   Filtros, ranking, trend, heatmap y tabla jugador × agente
 components/store/     Tienda de hoy, favoritas y panel de notificaciones
-lib/                  Clientes Henrik/Riot/Aimlabs, agregación, cache L1+L2, hooks
+lib/                  Clientes Henrik/Riot/Aimlabs, agregación, auditoría, cache L1+L2, hooks
 docs/                 Planes de diseño de vistas
 public/               Estáticos (incluye sw.js para Web Push)
 ```
@@ -37,6 +38,13 @@ public/               Estáticos (incluye sw.js para Web Push)
 - Filtros combinables: ventana (temporada o 7/14/30/90 días), rango de fechas custom, mapa y **filtro de agentes por iconitos**
 - Filtro de mínimo de partidas y leyenda de cobertura de datos
 
+### Página Auditoría (`/auditoria`)
+- Audita las competitivas de Alex contra las **Reglas de sesión** del plan: regla de parada (2 derrotas seguidas con K/D < 0.9 = cerrar sesión), violaciones de **pool** con su costo en RR y separación por sesiones (pausa ≥ 3 h)
+- Hero semanal con **RR real vs "Con regla" vs "Regla + pool"**, cortes totales/ignorados y fuera de pool
+- Por día: barras de RR por partida (cinta de peligro en el corte, bandas de sesión, violaciones marcadas), RR acumulado real vs plan, y tabla con hora, mapa · agente, K/D, RR, contador de la regla y badge CORTE AQUÍ
+- **Notas por partida**: contexto propio en cada fila, persistente en `data/match-comments.json` (volumen `valo-data`, externo al cache)
+- **Snapshots de días auditados**: al cerrar un día con RR completo se guarda una copia; las semanas viejas se reconstruyen desde ella cuando la API ya no devuelve el RR
+
 ### Página Aim Lab (`/`)
 - Sesión del día por escenario con gráfico de barras (color = precisión)
 - Habilidades Aimlabs, enfoque recomendado, PBs e histórico por escenario
@@ -51,6 +59,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 
 ### Transversal
 - Cache L1 memoria + L2 disco persistente (sobrevive reinicios)
+- **Escrituras atómicas** (`.tmp` + rename) en todos los datos persistentes (favoritas, comentarios, tokens RSO, archivo) — un crash nunca corrompe un JSON
 - **Archivo acumulativo de partidas** (modelo tracker.gg, `lib/archive.ts`): toda partida sincronizada se guarda para siempre en `data/archive/` (un JSON por partida + índice), **externo al cache** — inmune a `invalidateAll`, al borrado de `.cache/` y a rebuilds de Docker (volumen dedicado). Las agregaciones de temporada y ventanas largas calculan sobre bucket + archivo, así jugar 100+ partidas en el acto ya no recorta la vista de agentes/mapas
 - **Backfill profundo** (`POST /api/valorant/backfill`): pagina el historial competitivo más allá del bucket y lo archiva; una pasada (default 40 páginas ≈ 400 partidas) y no se repite salvo `force=1`
 - Bucket de partidas por jugador con **sync incremental**: un refresh sin novedades cuesta 1 request; el historial se pagina solo al profundizar ("Cargar más": 10 → 20 → 40)
@@ -149,6 +158,10 @@ O ejecutar `iniciar.bat` en Windows (Docker primero, fallback local).
 | `POST /api/push/subscribe` / `DELETE ?endpoint=` | Suscripción Web Push del navegador |
 | `POST /api/push/test` | Envía una notificación de prueba a todas las suscripciones |
 | `GET /api/valorant/tiers` | Badges oficiales por tier (iconos de rango, cache 7 días) |
+| `GET /api/valorant/audit-history` | Snapshots guardados de días auditados (RR real/plan/plan+pool por día) |
+| `POST /api/valorant/audit-history` | `{days:[...]}` — guarda/actualiza snapshots de días completos |
+| `GET /api/valorant/comments` | Notas por partida guardadas (`{matchId: {text, updatedAt}}`) |
+| `POST /api/valorant/comments` | `{matchId, text}` — guarda o borra (texto vacío) la nota de una partida |
 
 ## Notas
 

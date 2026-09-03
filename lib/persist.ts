@@ -29,7 +29,12 @@ export function readData<T>(file: string, fallback: T): T {
 
 let writeQueue = Promise.resolve();
 
-/** Escrituras serializadas para no pisar archivos con writes concurrentes. */
+/**
+ * Escrituras serializadas para no pisar archivos con writes concurrentes.
+ * Atómico: se escribe a un `.tmp` y se renombra, así un crash a mitad de
+ * escritura nunca deja el JSON principal corrupto (pérdida irreversible en
+ * favoritas/comentarios/historial).
+ */
 export function writeData(file: string, value: unknown): void {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -37,7 +42,12 @@ export function writeData(file: string, value: unknown): void {
     /* noop */
   }
   writeQueue = writeQueue
-    .then(() => fs.promises.writeFile(dataPath(file), JSON.stringify(value, null, 2), 'utf8'))
+    .then(async () => {
+      const target = dataPath(file);
+      const tmp = `${target}.tmp`;
+      await fs.promises.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8');
+      await fs.promises.rename(tmp, target);
+    })
     .catch((e) => {
       console.error(`[persist] falló la escritura de ${file}: ${e instanceof Error ? e.message : String(e)}`);
     });

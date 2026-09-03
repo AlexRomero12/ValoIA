@@ -2,6 +2,26 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.7.0] — 2026-09-02
+
+Auditoría de sesión (reglas de parada y pool con costo en RR) + empates corregidos en todo el dash.
+
+### Added
+- **Página Auditoría (`/auditoria`)**: audita las competitivas de Alex contra las **Reglas de sesión** del plan — regla de parada (2 derrotas seguidas con K/D < 0.9 = cerrar sesión; solo una victoria reinicia, empates y derrotas con K/D ≥ 0.9 no reinician ni cancelan), violaciones de **pool** (agente fuera del pool vigente de `champion_pool.md`) con su costo en RR, y sesiones (pausa ≥ 3 h = sesión nueva). Motor en `lib/audit.ts` (`AUDIT_POOL` configurable)
+- Vista semanal: hero con RR real / **Con regla** / **Regla + pool**, cortes totales vs ignorados, conteo de fuera de pool, y por día un SVG con barras de RR por partida (marcador de violaciones, cinta de peligro en el corte, bandas por sesión) + gráfico de RR acumulado real vs plan + tabla con badge CORTE AQUÍ / no debiste jugarla
+- **Notas por partida** (`lib/matchComments.ts`): contexto propio en cada fila de la auditoría — persistente en `data/match-comments.json` (volumen `valo-data`, externo al cache, atómico)
+- **Snapshots de días auditados** (`lib/auditHistory.ts` + `GET|POST /api/valorant/audit-history`): al pasar el día con RR completo se guarda una copia denormalizada; cuando la API deja de devolver el RR de partidas viejas, la semana pasada se reconstruye desde el snapshot (marca "guardado" / "parcial")
+- **Escritura atómica** en `lib/persist.ts` y `lib/archive.ts`: `.tmp` + rename — un crash a mitad de escritura nunca corrompe favoritas, comentarios, tokens RSO ni partidas archivadas
+- Panel de Tienda: cabecera con la **ventana de rotación** de la tienda diaria (tiempo restante) y `price-tag` para los precios
+
+### Changed
+- **Los empates ya no cuentan como derrotas**: marcador igualado (14-14) = badge dorado **E** en historial, día y detalle; los días muestran `XV-YD-ZE`, el WR excluye empates y las rachas los ignoran. Aplicado en `lib/dayAnalysis.ts`, agregaciones de `lib/valorant.ts` (KPIs, winrate por agente/mapa, comparativo) y `lib/compare.ts` (stats y timeline); `draws?` en `ValKpis`/`GroupRow`/`Kpis`
+- Rango actual (chip de Ranked, eje Y y comparativo) sale del `mmr-history` (`latestMmr[0]`) y no de la última partida del bucket — arregla rangos viejos cuando el bucket no ha sincronizado
+- TopBar: nueva pestaña **Auditoría**
+
+### Fixed
+- **RSO respaldo de la tienda roto (400 BAD_CLAIMS)**: `setRsoState` escribía `data/rso.json` por la cola asíncrona, pero `rsoTokensFresh`/`rsoStatus` leían el archivo síncrono justo después del reauth — la lectura ganaba la carrera y devolvía los tokens viejos (expirados), que `pd.a.pvp.net` rechaza con `BAD_CLAIMS` ("Failure validating/decoding RSO Access Token"). El cron quedaba atascado en ese ciclo y la tienda caía a "none" hasta que abrías la página. Fix: espejo del estado en memoria (`rsoCache`); el disco sigue siendo atómico. Verificado forzando la expiración de tokens + refresh (reauth → tokens nuevos → storefront 200)
+
 ## [1.6.0] — 2026-09-01
 
 ### Added

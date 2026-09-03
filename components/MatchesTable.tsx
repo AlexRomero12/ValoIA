@@ -114,7 +114,9 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
                         <span className="day-label">{esc(st.label)}</span>
                         <span className="day-meta">
                           {st.matches} partida{st.matches !== 1 ? 's' : ''} ·{' '}
-                          <b className={st.wins >= st.losses ? 'd-win' : 'd-loss'}>{st.wins}V-{st.losses}D</b>
+                          <b className={st.wins >= st.losses ? 'd-win' : 'd-loss'}>
+                            {st.wins}V-{st.losses}D{st.draws > 0 ? `-${st.draws}E` : ''}
+                          </b>
                           {' '}· KD {st.kd.toFixed(2)} · ACS {st.acs} · ADR {st.adr}
                         </span>
                         <span className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}>
@@ -202,7 +204,11 @@ function MatchRowEl({ m, fMap, fAgent, onSelect, toggle }: {
           {esc(m.agent)}
         </span>
       </td>
-      <td><span className={`res-badge ${m.won ? 'w' : 'l'}`}>{m.won ? 'Victoria' : 'Derrota'}</span></td>
+      <td>
+        <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>
+          {isDraw(m) ? 'Empate' : m.won ? 'Victoria' : 'Derrota'}
+        </span>
+      </td>
       <td className="num score">{m.roundsWon}–{m.roundsLost}</td>
       <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
       <td className={`num${okCls(parseFloat(kd), 1.05)}`}>{kd}</td>
@@ -214,4 +220,9 @@ function MatchRowEl({ m, fMap, fAgent, onSelect, toggle }: {
       </td>
     </tr>
   );
+}
+
+/** Empate: marcador igualado (p. ej. 14-14). No cuenta como derrota. */
+function isDraw(m: MatchRow): boolean {
+  return m.roundsWon === m.roundsLost;
 }

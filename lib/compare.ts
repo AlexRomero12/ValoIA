@@ -45,6 +45,7 @@ const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ?
 
 export function statsFromMatches(ms: MatchRow[]): PlayerStats {
   let wins = 0;
+  let draws = 0;
   let kills = 0;
   let deaths = 0;
   let scoreW = 0;
@@ -55,7 +56,9 @@ export function statsFromMatches(ms: MatchRow[]): PlayerStats {
   let hasRr = false;
 
   for (const m of ms) {
-    if (m.won) wins += 1;
+    // Empate (marcador igualado): no cuenta ni como victoria ni como derrota.
+    if (m.roundsWon === m.roundsLost) draws += 1;
+    else if (m.won) wins += 1;
     kills += m.kills;
     deaths += m.deaths;
     scoreW += m.acs * Math.max(1, m.rounds);
@@ -68,11 +71,12 @@ export function statsFromMatches(ms: MatchRow[]): PlayerStats {
     }
   }
   const games = ms.length;
+  const decisive = games - draws;
   return {
     games,
     wins,
-    losses: games - wins,
-    wr: games ? (wins / games) * 100 : 0,
+    losses: games - wins - draws,
+    wr: decisive ? (wins / decisive) * 100 : 0,
     kd: deaths ? kills / deaths : kills > 0 ? kills : 0,
     acs: rounds ? scoreW / rounds : 0,
     adr: rounds ? dmgW / rounds : 0,
@@ -114,6 +118,7 @@ interface Acc {
   label: string;
   games: number;
   wins: number;
+  draws: number;
   kills: number;
   deaths: number;
   acsW: number;
@@ -132,11 +137,12 @@ export function buildTimeline(
     const { key, label } = keyFor(m.timestamp, gran);
     let a = accs.get(key);
     if (!a) {
-      a = { key, label, games: 0, wins: 0, kills: 0, deaths: 0, acsW: 0, rounds: 0, eloVal: null, eloTs: -Infinity };
+      a = { key, label, games: 0, wins: 0, draws: 0, kills: 0, deaths: 0, acsW: 0, rounds: 0, eloVal: null, eloTs: -Infinity };
       accs.set(key, a);
     }
     a.games += 1;
-    if (m.won) a.wins += 1;
+    if (m.roundsWon === m.roundsLost) a.draws += 1;
+    else if (m.won) a.wins += 1;
     a.kills += m.kills;
     a.deaths += m.deaths;
     a.acsW += m.acs * Math.max(1, m.rounds);
@@ -151,7 +157,7 @@ export function buildTimeline(
     .sort((a, b) => (a.key < b.key ? -1 : 1))
     .map((a) => {
       let value: number | null = null;
-      if (metric === 'wr') value = a.games ? (a.wins / a.games) * 100 : null;
+      if (metric === 'wr') value = a.games - a.draws ? (a.wins / (a.games - a.draws)) * 100 : null;
       else if (metric === 'acs') value = a.rounds ? a.acsW / a.rounds : null;
       else if (metric === 'elo') value = a.eloVal;
       else value = a.deaths ? a.kills / a.deaths : a.games ? 0 : null;

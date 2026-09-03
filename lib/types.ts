@@ -8,6 +8,8 @@ export interface ValKpis {
   matches: number;
   wins: number;
   losses: number;
+  /** Empates (marcador igualado): no cuentan como victorias ni derrotas */
+  draws?: number;
   wr: number;
   kd: number;
   acs: number;
@@ -19,6 +21,8 @@ export interface GroupRow {
   name: string;
   matches: number;
   wins: number;
+  /** Empates (marcador igualado): no cuentan como victorias ni derrotas */
+  draws?: number;
   wr: number;
   kd: number;
   acs: number;
