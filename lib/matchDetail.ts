@@ -2,7 +2,7 @@ import { getContent } from './valorant';
 import { findCachedValues, cacheSet } from './cache';
 import { getArchiveMatchById } from './archive';
 import { getHenrikAccount } from './henrik';
-import { listProfiles, getProfile } from './profiles';
+import { listProfiles, listProfilesFor, type ProfileViewer } from './profiles';
 import { memberAccounts } from './profileTypes';
 import type { HenrikMatch } from './henrik';
 
@@ -63,15 +63,19 @@ export interface MatchDetail {
 
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
 
-export async function getMatchDetail(matchId: string, playerId?: string | null): Promise<MatchDetail> {
-  const cacheKey = `val:detail:v2:${getProfile(playerId).id}:${matchId}`;
+export async function getMatchDetail(matchId: string, playerId?: string | null, viewer?: ProfileViewer): Promise<MatchDetail> {
+  const candidates = viewer ? listProfilesFor(viewer) : listProfiles();
+  if (candidates.length === 0) {
+    throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NOT_CACHED' });
+  }
+  const preferred = candidates.find((m) => m.id === playerId) ?? candidates[0];
+  const cacheKey = `val:detail:v2:${preferred.id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 
-  const preferred = getProfile(playerId);
   const orderedMembers = [
     preferred,
-    ...listProfiles().filter((m) => m.id !== preferred.id),
+    ...candidates.filter((m) => m.id !== preferred.id),
   ];
 
   let match: HenrikMatch | undefined;

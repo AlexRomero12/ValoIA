@@ -5,6 +5,14 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      // Los <img> del dash son iconos PNG pequeños de valorant-api.com (agentes,
+      // mapas, armas, tiers) y avatares: next/image no aporta aquí y añadiría
+      // optimización/remotePatterns (y sharp) al deploy ARM.
+      '@next/next/no-img-element': 'off',
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

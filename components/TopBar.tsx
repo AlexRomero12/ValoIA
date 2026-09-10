@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 
 interface TopBarProps {
@@ -33,6 +34,7 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
         {chip}
         <div className="spacer" />
         {updated ? <span className="updated">{updated}</span> : null}
+        <UserMenu />
         <button
           className={accent === 'red' ? 'primary-red' : 'primary-blue'}
           onClick={onRefresh}
@@ -48,7 +50,7 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
         <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''}>Ranked</Link>
         <Link href="/comparativo" className={activePage === 'comparar' ? 'active' : ''}>Comparar</Link>
         <Link href="/team" className={activePage === 'team' ? 'active' : ''}>Team</Link>
-        <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>
+        {<Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>}
         <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''}>Auditoría</Link>
       </nav>
     </>

@@ -42,7 +42,7 @@ export function StorePanel({
   daily: StoreDailyItemUI[];
   dailyRemainingSec: number;
   fetchedAt: number;
-  source: 'local' | 'rso' | 'none';
+  source: 'rso' | 'none';
   sourceDetail: string;
   bundle: StoreBundleUI | null;
   favoriteIds?: Set<string>;
@@ -133,7 +133,7 @@ export function StorePanel({
         <span>
           actualizado {updated}
         </span>
-        <span className={source === 'local' ? 'src-local' : source === 'rso' ? 'src-rso' : 'src-none'}>
+              <span className={source === 'rso' ? 'src-rso' : 'src-none'}>
           {sourceDetail}
         </span>
       </div>

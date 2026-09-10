@@ -1,30 +1,21 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import https from 'node:https';
 import { env } from './env';
 import { cached, revalidate, invalidatePrefix } from './cache';
-import { readData, writeData } from './persist';
+import { readData, writeDataSync, deleteData } from './persist';
+import { adminUsername } from './auth';
 
 /**
- * Tienda diaria de Valorant.
+ * Tienda diaria de Valorant — RSO por usuario.
  *
- * HenrikDev eliminó la tienda individual de su API v4, así que este módulo
- * consulta directamente a Riot por dos vías:
- *
- *  1. LOCAL (preferida, $0 y sin credenciales): la API local del Riot Client
- *     (el launcher, que suele iniciar con Windows). El puerto y la contraseña
- *     salen del lockfile en `%LocalAppData%\Riot Games\Riot Client\Config`.
- *     Se lee con Basic auth `riot:{password}` y `/entitlements/v1/token`
- *     devuelve accessToken + entitlement + puuid listos para el storefront.
- *  2. RSO (respaldo): login remoto en auth.riotgames.com con las credenciales
- *     de la cuenta (VAL_RIOT_USER/PASS). Soporta 2FA (código ingresado desde
- *     la página). Los tokens duran ~24h y se guardan en data/rso.json.
+ * HenrikDev no expone la tienda individual, así que se consulta directo a
+ * Riot con el RSO de cada usuario: pega la cookie `ssid` de su sesión web
+ * (auth.riotgames.com) y el server renueva tokens solo cada hora. Cada usuario
+ * tiene su propio estado (`data/rso/<usuario>.json`) y su tienda es privada.
  *
  * El storefront se consulta en pd.{shard}.a.pvp.net con los headers de
  * plataforma/versión del cliente.
  */
 
-export type StoreSource = 'local' | 'rso' | 'none';
+export type StoreSource = 'rso' | 'none';
 
 export interface StoreDailyItem {
   offerId: string;
@@ -59,7 +50,7 @@ export interface StoreFront {
 }
 
 const STORE_TTL_MS = 60 * 60 * 1000;
-const STORE_KEY = 'store:front';
+const STORE_KEY_PREFIX = 'store:front:';
 
 const VP_CURRENCY = '85ad13f7-3d1b-5128-9eb2-7cd8b0e9c7c7';
 
@@ -72,51 +63,24 @@ const CLIENT_PLATFORM = Buffer.from(
   }),
 ).toString('base64');
 
-// ---------- Utilidades ----------
+function storeKey(user: string): string {
+  return `${STORE_KEY_PREFIX}${user}`;
+}
 
 function shard(): string {
   return env('STORE_SHARD', 'na');
 }
-
-function localHost(): string {
-  return env('STORE_LOCAL_HOST', '127.0.0.1');
-}
-
-/** ¿Estamos hablando con tools/riot-proxy.js (HTTP plano) en vez del Riot Client? */
-function viaProxy(): boolean {
-  const proxyPort = Number(env('RIOT_LOCAL_PORT'));
-  return Number.isInteger(proxyPort) && proxyPort > 0;
-}
-
-// fetch a 127.0.0.1 con cert autofirmado del Riot Client: Node valida por
-// defecto, así que usamos un agente https que no rechace el certificado.
-const localAgent = new https.Agent({ rejectUnauthorized: false });
 
 function firstCost(cost: Record<string, number> | undefined): number | undefined {
   if (!cost) return undefined;
   return cost[VP_CURRENCY] ?? Object.values(cost)[0];
 }
 
-// ---------- Versión del cliente (para los headers de pd) ----------
-
-async function fetchClientVersion(): Promise<string> {
-  return cached('valo:client-version', 24 * 60 * 60 * 1000, async () => {
-    const res = await fetch('https://valorant-api.com/v1/version', {
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) throw new Error(`version HTTP ${res.status}`);
-    const json = (await res.json()) as { data?: { version?: string } };
-    const v = json?.data?.version;
-    if (!v) throw new Error('version vacía');
-    return v;
-  });
-}
-
-// ---------- Identidad de la sesión (para atar la tienda al perfil principal) ----------
+// ---------- Identidad de la sesión (para atar la tienda al perfil) ----------
 
 /**
- * Riot ID de la sesión a partir del access token (local o RSO). El token de la
- * sesión es el de la cuenta conectada; userinfo devuelve acct.game_name/tag_line.
+ * Riot ID de la sesión a partir del access token. El token de la sesión es el
+ * de la cuenta conectada; userinfo devuelve acct.game_name/tag_line.
  */
 async function fetchRiotId(accessToken: string): Promise<{ name: string; tag: string } | null> {
   try {
@@ -134,85 +98,22 @@ async function fetchRiotId(accessToken: string): Promise<{ name: string; tag: st
   }
 }
 
-// ---------- Fuente local: API del Riot Client ----------
+// ---------- Versión del cliente (para los headers de pd) ----------
 
-interface LocalTokens {
-  accessToken: string;
-  entitlement: string;
-  subject: string;
-  port: number;
+async function fetchClientVersion(): Promise<string> {
+  return cached('valo:client-version', 24 * 60 * 60 * 1000, async () => {
+    const res = await fetch('https://valorant-api.com/v1/version', {
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) throw new Error(`version HTTP ${res.status}`);
+    const json = (await res.json()) as { data?: { version?: string } };
+    const v = json?.data?.version;
+    if (!v) throw new Error('version vacía');
+    return v;
+  });
 }
 
-function lockfilePath(): string | null {
-  const custom = env('RIOT_LOCKFILE');
-  if (custom) return custom;
-  // El storefront exige tokens de la sesión del JUEGO (el Riot Client da 404).
-  const local = process.env.LOCALAPPDATA;
-  if (!local) return null;
-  return path.join(local, 'Riot Games', 'Valorant', 'Config', 'lockfile');
-}
-
-function readLockfile(): { port: number; password: string } | null {
-  const file = lockfilePath();
-  if (!file) return null;
-  try {
-    const raw = fs.readFileSync(file, 'utf8').trim();
-    const parts = raw.split(':');
-    if (parts.length < 4) return null;
-    const port = Number(parts[2]);
-    if (!Number.isInteger(port) || port <= 0) return null;
-    return { port, password: parts[3] };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Puente al loopback del host (Docker + Riot Client): el Riot Client solo acepta
- * conexiones desde 127.0.0.1 del propio PC, así que tools/riot-proxy.js reenvía
- * en el host. Si RIOT_LOCAL_PORT está definido, se usa ese puerto (el del proxy)
- * en lugar del puerto del lockfile.
- */
-function effectiveLocalPort(lock: { port: number; password: string }): number {
-  const proxyPort = Number(env('RIOT_LOCAL_PORT'));
-  return Number.isInteger(proxyPort) && proxyPort > 0 ? proxyPort : lock.port;
-}
-
-function basicAuthHeader(password: string): string {
-  return `Basic ${Buffer.from(`riot:${password}`).toString('base64')}`;
-}
-
-async function localFetch(pathname: string, port: number, password: string): Promise<Record<string, unknown>> {
-  const isProxy = viaProxy();
-  // `agent` (cert autofirmado) es una opción de undici que no está en los tipos.
-  // El Riot Client es HTTPS con cert autofirmado; el proxy de tools/ es HTTP plano.
-  const res = await fetch(`${isProxy ? 'http' : 'https'}://${localHost()}:${port}${pathname}`, {
-    headers: { Authorization: basicAuthHeader(password), Accept: 'application/json' },
-    signal: AbortSignal.timeout(10_000),
-    ...(isProxy ? {} : { agent: localAgent }),
-  } as unknown as RequestInit);
-  if (!res.ok) throw new Error(`local API HTTP ${res.status}`);
-  return (await res.json()) as Record<string, unknown>;
-}
-
-/** Intenta obtener tokens del Riot Client local (null si no está disponible). */
-export async function getLocalTokens(): Promise<LocalTokens | null> {
-  const lock = readLockfile();
-  if (!lock) return null;
-  const port = effectiveLocalPort(lock);
-  try {
-    const json = await localFetch('/entitlements/v1/token', port, lock.password);
-    const accessToken = typeof json.accessToken === 'string' ? json.accessToken : null;
-    const entitlement = typeof json.token === 'string' ? json.token : null;
-    const subject = typeof json.subject === 'string' ? json.subject : null;
-    if (!accessToken || !entitlement || !subject) return null;
-    return { accessToken, entitlement, subject, port };
-  } catch {
-    return null;
-  }
-}
-
-// ---------- Fuente RSO (respaldo) ----------
+// ---------- RSO por usuario ----------
 
 interface RsoTokens {
   accessToken: string;
@@ -229,26 +130,41 @@ interface RsoState {
   pending2fa?: { cookies: string; nonce: string };
 }
 
-const RSO_FILE = 'rso.json';
-
 /**
- * Espejo en memoria del estado RSO. Necesario: writeData() escribe en disco por
- * una cola asíncrona (.tmp + rename), y `rsoTokensFresh`/`rsoStatus` leen el
- * archivo SÍNCRONO justo después de guardar tokens nuevos (post-reauth). Sin el
- * espejo, la lectura gana la carrera y devuelve los tokens VIEJOS (expirados),
- * y pd.a.pvp.net los rechaza con 400 BAD_CLAIMS ("Failure validating/decoding
- * RSO Access Token") — el cron quedaba atascado en ese ciclo para siempre.
+ * Espejo en memoria por usuario. Necesario: writeDataSync ya evita la carrera
+ * de disco, pero mantener el estado evita releer y facilita el reauth.
  */
-let rsoCache: RsoState | null = null;
+const rsoCaches = new Map<string, RsoState>();
 
-function readRsoState(): RsoState {
-  if (!rsoCache) rsoCache = readData<RsoState>(RSO_FILE, {});
-  return rsoCache;
+function safeUser(user: string): string {
+  return user.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
 }
 
-function setRsoState(state: RsoState): void {
-  rsoCache = state;
-  writeData(RSO_FILE, state);
+function rsoFile(user: string): string {
+  return `rso/${safeUser(user)}.json`;
+}
+
+function readRsoState(user: string): RsoState {
+  const cachedState = rsoCaches.get(user);
+  if (cachedState) return cachedState;
+
+  let state = readData<RsoState>(rsoFile(user), {});
+  // Migración del archivo global (pre-multiusuario): solo para el admin.
+  if (!state.tokens && !state.ssid && !state.pending2fa && user === adminUsername()) {
+    const legacy = readData<RsoState>('rso.json', {});
+    if (legacy.tokens || legacy.ssid || legacy.pending2fa) {
+      state = legacy;
+      writeDataSync(rsoFile(user), state);
+      deleteData('rso.json');
+    }
+  }
+  rsoCaches.set(user, state);
+  return state;
+}
+
+function setRsoState(user: string, state: RsoState): void {
+  rsoCaches.set(user, state);
+  writeDataSync(rsoFile(user), state);
 }
 
 const RSO_BASE = 'https://auth.riotgames.com';
@@ -317,19 +233,19 @@ async function fetchEntitlements(accessToken: string): Promise<string> {
   return json.entitlements_token;
 }
 
-async function saveTokensFromUri(uri: string): Promise<void> {
+async function saveTokensFromUri(user: string, uri: string): Promise<void> {
   const accessToken = extractAccessToken(uri);
   if (!accessToken) throw new Error('No se obtuvo access_token del flujo RSO');
   const entitlement = await fetchEntitlements(accessToken);
   const subject = String(decodeJwtPayload(accessToken).sub ?? '');
   // Tokens de 1h (expires_in=3600 en la respuesta de Riot). Se conservan ssid
   // y pending2fa: saveTokensFromUri no debe borrar el estado existente.
-  setRsoState({
-    ...readRsoState(),
+  setRsoState(user, {
+    ...readRsoState(user),
     tokens: { accessToken, entitlement, subject, expiresAt: Date.now() + 55 * 60 * 1000 },
   });
-  // Tokens nuevos: el cache de tienda puede tener un 'none' previo a la conexión.
-  invalidatePrefix(STORE_KEY);
+  // Tokens nuevos: la tienda cacheada de ESE usuario puede tener un 'none' previo.
+  invalidatePrefix(storeKey(user));
 }
 
 export type RsoLoginResult =
@@ -337,7 +253,7 @@ export type RsoLoginResult =
   | { ok: false; needs2fa: boolean; error?: string };
 
 /** Inicia sesión RSO con user/pass (o las del .env). Devuelve si hace falta 2FA. */
-export async function rsoLogin(usernameArg?: string, passwordArg?: string): Promise<RsoLoginResult> {
+export async function rsoLogin(user: string, usernameArg?: string, passwordArg?: string): Promise<RsoLoginResult> {
   const username = usernameArg ?? env('VAL_RIOT_USER');
   const password = passwordArg ?? env('VAL_RIOT_PASS');
   if (!username || !password) {
@@ -362,7 +278,7 @@ export async function rsoLogin(usernameArg?: string, passwordArg?: string): Prom
 
   if (second.status === 200 && second.json?.uri) {
     try {
-      await saveTokensFromUri(second.json.uri);
+      await saveTokensFromUri(user, second.json.uri);
       return { ok: true };
     } catch (e) {
       return { ok: false, needs2fa: false, error: e instanceof Error ? e.message : String(e) };
@@ -370,7 +286,7 @@ export async function rsoLogin(usernameArg?: string, passwordArg?: string): Prom
   }
 
   if (second.status === 403 && second.json?.type === 'multifactor') {
-    setRsoState({ pending2fa: { cookies: second.cookies, nonce: '1' } });
+    setRsoState(user, { ...readRsoState(user), pending2fa: { cookies: second.cookies, nonce: '1' } });
     return { ok: false, needs2fa: true };
   }
 
@@ -399,8 +315,8 @@ export async function rsoLogin(usernameArg?: string, passwordArg?: string): Prom
 }
 
 /** Envía el código 2FA de la sesión pendiente y guarda los tokens. */
-export async function rsoSubmit2fa(code: string): Promise<{ ok: boolean; error?: string }> {
-  const state = readRsoState();
+export async function rsoSubmit2fa(user: string, code: string): Promise<{ ok: boolean; error?: string }> {
+  const state = readRsoState(user);
   if (!state.pending2fa) return { ok: false, error: 'No hay sesión 2FA pendiente (inicia login primero)' };
 
   const res = await rsoFetch('PUT', '/api/v1/authorization', state.pending2fa.cookies, {
@@ -411,7 +327,7 @@ export async function rsoSubmit2fa(code: string): Promise<{ ok: boolean; error?:
 
   if (res.status === 200 && res.json?.uri) {
     try {
-      await saveTokensFromUri(res.json.uri);
+      await saveTokensFromUri(user, res.json.uri);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -421,14 +337,14 @@ export async function rsoSubmit2fa(code: string): Promise<{ ok: boolean; error?:
   return { ok: false, error: `2FA falló (HTTP ${res.status})` };
 }
 
-/** Estado de la vía RSO: ok | needs_2fa | needs_cookie */
-export async function rsoStatus(): Promise<'ok' | 'needs_2fa' | 'needs_cookie'> {
-  const state = readRsoState();
+/** Estado de la vía RSO del usuario: ok | needs_2fa | needs_cookie */
+export async function rsoStatus(user: string): Promise<'ok' | 'needs_2fa' | 'needs_cookie'> {
+  const state = readRsoState(user);
   if (state.tokens && state.tokens.expiresAt > Date.now()) return 'ok';
   if (state.pending2fa) return 'needs_2fa';
   if (state.ssid) {
     // Revalidación silenciosa con la cookie guardada.
-    const r = await rsoCookieReauth(state.ssid);
+    const r = await rsoCookieReauth(user, state.ssid);
     if (r.ok) return 'ok';
   }
   return 'needs_cookie';
@@ -441,7 +357,7 @@ export async function rsoStatus(): Promise<'ok' | 'needs_2fa' | 'needs_cookie'> 
  * Éxito = 301 hacia playvalorant.com/opt_in#access_token=...; fallo = 301
  * hacia authenticate.riotgames.com/login.
  */
-async function rsoCookieReauth(ssid: string): Promise<{ ok: boolean; newCookies?: string[]; error?: string }> {
+async function rsoCookieReauth(user: string, ssid: string): Promise<{ ok: boolean; newCookies?: string[]; error?: string }> {
   const url = `https://auth.riotgames.com/authorize?redirect_uri=${encodeURIComponent(RSO_REDIRECT_URI)}&client_id=${RSO_CLIENT_ID}&response_type=${encodeURIComponent('token id_token')}&nonce=1&scope=${encodeURIComponent(RSO_SCOPE)}`;
   let res: Response;
   try {
@@ -463,7 +379,7 @@ async function rsoCookieReauth(ssid: string): Promise<{ ok: boolean; newCookies?
     return { ok: false, error: `Reauth sin redirección (HTTP ${res.status})` };
   }
   try {
-    await saveTokensFromUri(location);
+    await saveTokensFromUri(user, location);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -471,28 +387,28 @@ async function rsoCookieReauth(ssid: string): Promise<{ ok: boolean; newCookies?
 }
 
 /** Conecta el respaldo con la cookie ssid del navegador (la valida y guarda). */
-export async function rsoConnectCookie(ssidRaw: string): Promise<{ ok: boolean; error?: string }> {
+export async function rsoConnectCookie(user: string, ssidRaw: string): Promise<{ ok: boolean; error?: string }> {
   const ssid = ssidRaw.trim().replace(/^ssid=/i, '');
   if (!ssid) return { ok: false, error: 'Falta la cookie ssid' };
-  const r = await rsoCookieReauth(ssid);
+  const r = await rsoCookieReauth(user, ssid);
   if (!r.ok) return r;
-  const state = readRsoState();
+  const state = readRsoState(user);
   // Riot puede renovar la ssid en la respuesta: guardamos la más reciente.
   const renewed = r.newCookies?.find((c) => c.startsWith('ssid='))?.slice(5);
   state.ssid = renewed ?? ssid;
-  setRsoState(state);
+  setRsoState(user, state);
   return { ok: true };
 }
 
-async function rsoTokensFresh(): Promise<RsoTokens | null> {
-  const state = readRsoState();
+async function rsoTokensFresh(user: string): Promise<RsoTokens | null> {
+  const state = readRsoState(user);
   if (state.tokens && state.tokens.expiresAt > Date.now()) return state.tokens;
 
   // Renovación silenciosa con la cookie ssid guardada (el cron la mantiene viva).
   if (state.ssid) {
-    const r = await rsoCookieReauth(state.ssid);
+    const r = await rsoCookieReauth(user, state.ssid);
     if (r.ok) {
-      const next = readRsoState().tokens ?? null;
+      const next = readRsoState(user).tokens ?? null;
       if (next) return next;
     }
   }
@@ -603,52 +519,40 @@ async function fetchStorefront(
 }
 
 /**
- * Storefront fresco (sin caché): local primero, RSO como respaldo.
- * Si ninguna vía está disponible devuelve { source: 'none', ... }.
+ * Storefront fresco del usuario (sin caché). Sin RSO conectado devuelve
+ * { source: 'none', ... }.
  */
-export async function fetchStoreFrontFresh(): Promise<StoreFront> {
-  const local = await getLocalTokens();
-  if (local) {
+export async function fetchStoreFrontFresh(user: string): Promise<StoreFront> {
+  const tokens = await rsoTokensFresh(user);
+  if (tokens) {
     try {
-      const front = await fetchStorefront(local);
-      front.source = 'local';
-      front.account = await fetchRiotId(local.accessToken);
-      return front;
-    } catch (e) {
-      console.error(`[store] storefront local falló: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  const rsoTokens = await rsoTokensFresh();
-  if (rsoTokens) {
-    try {
-      const front = await fetchStorefront(rsoTokens);
+      const front = await fetchStorefront(tokens);
       front.source = 'rso';
-      front.account = await fetchRiotId(rsoTokens.accessToken);
+      front.account = await fetchRiotId(tokens.accessToken);
       return front;
     } catch (e) {
-      console.error(`[store] storefront RSO falló: ${e instanceof Error ? e.message : String(e)}`);
+      console.error(`[store] storefront RSO de ${user} falló: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
   return { source: 'none', fetchedAt: Date.now(), daily: [], dailyRemainingSec: 0, bundle: null, account: null };
 }
 
-/** Storefront con caché de 1h (para la página). */
-export async function getStoreFront(): Promise<StoreFront> {
+/** Storefront del usuario con caché de 1h (para la página). */
+export async function getStoreFront(user: string): Promise<StoreFront> {
   try {
-    return await cached(STORE_KEY, STORE_TTL_MS, fetchStoreFrontFresh);
+    return await cached(storeKey(user), STORE_TTL_MS, () => fetchStoreFrontFresh(user));
   } catch {
     // Si el loader falla (p. ej. rate limit), servimos lo último conocido.
-    return fetchStoreFrontFresh();
+    return fetchStoreFrontFresh(user);
   }
 }
 
-/** Recarga forzada (para el cron de notificaciones). */
-export async function refreshStoreFront(): Promise<StoreFront> {
+/** Recarga forzada (para el cron de notificaciones y el botón Actualizar). */
+export async function refreshStoreFront(user: string): Promise<StoreFront> {
   try {
-    return await revalidate(STORE_KEY, STORE_TTL_MS, fetchStoreFrontFresh);
+    return await revalidate(storeKey(user), STORE_TTL_MS, () => fetchStoreFrontFresh(user));
   } catch {
-    return fetchStoreFrontFresh();
+    return fetchStoreFrontFresh(user);
   }
 }

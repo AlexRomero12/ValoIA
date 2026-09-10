@@ -1,16 +1,17 @@
-import { readData, writeData } from './persist';
+import { readData, writeDataSync } from './persist';
 import type { AuditPoolRule, AuditRules, Profile, ProfileAccount } from './profileTypes';
 import { slugifyId } from './profileTypes';
+import { adminUsername } from './auth';
 
 /**
  * Store de perfiles (server-only, usa `node:fs`).
  *
- * Durabilidad: mismo patrón que favoritas/comentarios — `data/profiles.json`
- * (volumen Docker `valo-data`), externo al cache, con writes atómicos.
+ * Durabilidad: mismo patrÃ³n que favoritas/comentarios â€” `data/profiles.json`
+ * (volumen Docker `valo-data`), externo al cache, con writes atÃ³micos.
  *
  * El primer GET siembra el archivo con el cuarteto original (Player, Player2,
- * Player3, Player4) y las reglas de auditoría del `champion_pool.md` de Player, así
- * la app arranca con los datos que ya existían sin perder nada.
+ * Player3, Player4) y las reglas de auditorÃ­a del `champion_pool.md` de Player, asÃ­
+ * la app arranca con los datos que ya existÃ­an sin perder nada.
  */
 
 interface ProfilesFile {
@@ -20,7 +21,7 @@ interface ProfilesFile {
 
 const PROFILES_FILE = 'profiles.json';
 
-/** Reglas de auditoría de Player (champion_pool.md + plan_mejora_player.md). */
+/** Reglas de auditorÃ­a de Player (champion_pool.md + plan_mejora_player.md). */
 const ALEX_AUDIT: AuditRules = {
   rulesVersion: 1,
   pool: {
@@ -75,7 +76,7 @@ const SEED_PROFILES: Profile[] = [
   {
     id: 'player3',
     label: 'Player3',
-    name: 'Player3 十六',
+    name: 'Player3 åå…­',
     tag: '0616',
     role: 'Flex Sentinel/Controller',
     color: '#e8c97a',
@@ -107,51 +108,111 @@ function readFile(): Profile[] {
 }
 
 function writeFile(profiles: Profile[]): void {
-  writeData(PROFILES_FILE, { version: 1, profiles });
+  writeDataSync(PROFILES_FILE, { version: 1, profiles });
 }
 
-/** Lista completa; siembra el archivo la primera vez. */
+/** Lista completa (con migraciones); incluye el dueÃ±o de cada perfil. */
 export function listProfiles(): Profile[] {
   const current = readFile();
+  const defaultOwner = adminUsername() ?? 'player';
   if (current.length === 0) {
-    writeFile(SEED_PROFILES);
-    return SEED_PROFILES;
+    const seeded = SEED_PROFILES.map((p) => ({ ...p, owner: defaultOwner }));
+    writeFile(seeded);
+    return seeded;
   }
-  // Migración: si ningún perfil es principal (archivo de antes del flag),
-  // se marca el primer visible para que Auditoría/Tienda tengan destino.
-  if (!current.some((p) => p.primary)) {
-    const idx = Math.max(0, current.findIndex((p) => p.visible));
-    const next = current.map((p, i) => (i === idx ? { ...p, primary: true } : p));
-    writeFile(next);
-    return next;
+  let next = current;
+  let changed = false;
+  // MigraciÃ³n: perfiles previos al aislamiento -> dueÃ±o = admin.
+  if (next.some((p) => !p.owner)) {
+    next = next.map((p) => (p.owner ? p : { ...p, owner: defaultOwner }));
+    changed = true;
   }
-  return current;
+  // Un principal por dueÃ±o (la AuditorÃ­a de cada usuario usa el suyo).
+  for (const owner of new Set(next.map((p) => p.owner ?? defaultOwner))) {
+    const own = next.filter((p) => (p.owner ?? defaultOwner) === owner);
+    if (!own.some((p) => p.primary)) {
+      const first = own.find((p) => p.visible) ?? own[0];
+      next = next.map((p) => (p.id === first.id ? { ...p, primary: true } : p));
+      changed = true;
+    }
+  }
+  if (changed) writeFile(next);
+  return next;
 }
 
-/** Lista solo los visibles (Ranked y calentamiento). */
+/** QuiÃ©n consulta: el admin ve todo; cada usuario, solo sus perfiles. */
+export interface ProfileViewer {
+  username: string;
+  admin: boolean;
+}
+
+export function canAccessProfile(profile: Profile, viewer: ProfileViewer): boolean {
+  return viewer.admin || !profile.owner || profile.owner === viewer.username;
+}
+
+/** Perfiles visibles para un usuario (propios primero, para el principal). */
+export function listProfilesFor(viewer: ProfileViewer): Profile[] {
+  const all = listProfiles();
+  if (viewer.admin) {
+    return [...all.filter((p) => p.owner === viewer.username), ...all.filter((p) => p.owner !== viewer.username)];
+  }
+  return all.filter((p) => p.owner === viewer.username);
+}
+
+export function listVisibleProfilesFor(viewer: ProfileViewer): Profile[] {
+  return listProfilesFor(viewer).filter((p) => p.visible);
+}
+
+/** Filtra una lista en memoria segÃºn el visor (para respuestas tras mutar). */
+export function scopeProfiles(profiles: Profile[], viewer: ProfileViewer): Profile[] {
+  if (viewer.admin) {
+    return [...profiles.filter((p) => p.owner === viewer.username), ...profiles.filter((p) => p.owner !== viewer.username)];
+  }
+  return profiles.filter((p) => p.owner === viewer.username);
+}
+
+/** Lista solo los visibles (calentamiento global del cron). */
 export function listVisibleProfiles(): Profile[] {
   return listProfiles().filter((p) => p.visible);
 }
 
-/** Perfil principal (o el primer visible, o el primero) — lo usa Auditoría. */
-export function getPrimaryProfile(): Profile {
+/** Perfil principal de un dueÃ±o (o el global si no se indica). */
+export function getPrimaryProfile(owner?: string | null): Profile {
   const profiles = listProfiles();
-  return profiles.find((p) => p.primary) ?? profiles.find((p) => p.visible) ?? profiles[0];
+  const scope = owner ? profiles.filter((p) => p.owner === owner) : profiles;
+  const list = scope.length > 0 ? scope : profiles;
+  return list.find((p) => p.primary) ?? list.find((p) => p.visible) ?? list[0];
 }
 
-/** Resuelve por id; sin id (o desconocido) devuelve el primero. */
-export function getProfile(id?: string | null): Profile {
+/** Principal del admin: es el que manda en la Tienda (sesiÃ³n Riot Ãºnica). */
+export function getStorePrimaryProfile(): Profile {
+  return getPrimaryProfile(adminUsername());
+}
+
+/** Motivo de acceso a un id: para mapear 400/403 en las rutas. */
+export function profileAccess(id: string | null | undefined, viewer: ProfileViewer): 'ok' | 'notfound' | 'forbidden' {
+  if (!id) return 'ok';
+  const profile = listProfiles().find((p) => p.id === id);
+  if (!profile) return 'notfound';
+  return canAccessProfile(profile, viewer) ? 'ok' : 'forbidden';
+}
+
+/** Resuelve por id dentro de lo permitido; sin id (o desconocido) devuelve el primero permitido. */
+export function getProfile(id?: string | null, viewer?: ProfileViewer): Profile {
   const profiles = listProfiles();
+  const allowed = viewer ? profiles.filter((p) => canAccessProfile(p, viewer)) : profiles;
+  const list = allowed.length > 0 ? allowed : profiles;
   if (id) {
-    const found = profiles.find((p) => p.id === id);
+    const found = list.find((p) => p.id === id);
     if (found) return found;
   }
-  return profiles[0];
+  return list[0];
 }
 
-export function isValidProfile(id?: string | null): boolean {
+export function isValidProfile(id?: string | null, viewer?: ProfileViewer): boolean {
   if (!id) return true;
-  return listProfiles().some((p) => p.id === id);
+  if (!viewer) return listProfiles().some((p) => p.id === id);
+  return listProfiles().some((p) => p.id === id && canAccessProfile(p, viewer));
 }
 
 function cleanAccounts(accounts: unknown): ProfileAccount[] | undefined {
@@ -224,7 +285,7 @@ export interface UpsertProfileInput {
   role?: string;
   color?: string;
   visible?: boolean;
-  /** true lo vuelve principal (y desmarca a los demás) */
+  /** true lo vuelve principal (y desmarca a los demÃ¡s) */
   primary?: boolean;
   accounts?: ProfileAccount[];
   prefs?: Profile['prefs'];
@@ -232,13 +293,39 @@ export interface UpsertProfileInput {
   audit?: AuditRules | null;
 }
 
-/** Crea o actualiza un perfil (match por id). Devuelve la lista completa. */
-export function upsertProfile(input: UpsertProfileInput): Profile[] {
+function forbidden(message = 'No tienes permiso sobre este perfil'): Error {
+  return Object.assign(new Error(message), { code: 'FORBIDDEN' });
+}
+
+function profileLimit(owner: string): number {
+  const isOwnerAdmin = owner === adminUsername();
+  const raw = Number(process.env[isOwnerAdmin ? 'MAX_PROFILES_ADMIN' : 'MAX_PROFILES'] ?? '');
+  const fallback = isOwnerAdmin ? 20 : 10;
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : fallback;
+}
+
+/**
+ * Crea o actualiza un perfil (match por id) para el visor.
+ * - Nuevo: queda con `owner = visor.username` y respeta el tope de perfiles.
+ * - Existente: el visor debe ser el dueño o admin.
+ * - `primary` se desmarca solo entre los perfiles del MISMO dueño.
+ */
+export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer): Profile[] {
   const profiles = listProfiles();
   const name = String(input.name ?? '').trim();
   const tag = String(input.tag ?? '').trim();
   if (!name || !tag) throw new Error('El perfil necesita Riot ID (nombre#tag)');
   const existing = input.id ? profiles.find((p) => p.id === input.id) : undefined;
+  if (existing && !canAccessProfile(existing, viewer)) throw forbidden();
+
+  const owner = existing?.owner ?? viewer.username;
+  if (!existing) {
+    const cap = profileLimit(owner);
+    const owned = profiles.filter((p) => p.owner === owner).length;
+    if (owned >= cap) {
+      throw Object.assign(new Error(`Alcanzaste el máximo de ${cap} perfiles`), { code: 'LIMIT' });
+    }
+  }
 
   const label = String(input.label ?? '').trim() || existing?.label || name;
   const id = existing?.id ?? slugifyId(label, new Set(profiles.map((p) => p.id)));
@@ -247,6 +334,7 @@ export function upsertProfile(input: UpsertProfileInput): Profile[] {
     label,
     name,
     tag,
+    owner,
     role: String(input.role ?? existing?.role ?? '').trim() || undefined,
     color: String(input.color ?? existing?.color ?? '').trim() || undefined,
     visible: input.visible ?? existing?.visible ?? true,
@@ -260,18 +348,22 @@ export function upsertProfile(input: UpsertProfileInput): Profile[] {
   };
 
   let merged = existing ? profiles.map((p) => (p.id === id ? next : p)) : [...profiles, next];
-  // Solo puede haber un principal: al marcarlo, se desmarca cualquier otro.
-  if (next.primary) merged = merged.map((p) => (p.id === id ? p : { ...p, primary: false }));
+  // Un principal por dueÃ±o: al marcarlo, se desmarcan los demÃ¡s del mismo dueÃ±o.
+  if (next.primary) {
+    merged = merged.map((p) => (p.id === id ? p : p.owner === owner ? { ...p, primary: false } : p));
+  }
   writeFile(merged);
   return merged;
 }
 
-/** Borra un perfil (nunca deja la lista vacía). Devuelve la lista completa. */
-export function deleteProfile(id: string): Profile[] {
+/** Borra un perfil del visor (nunca deja la lista vacÃ­a). Devuelve la lista completa. */
+export function deleteProfile(id: string, viewer: ProfileViewer): Profile[] {
   const profiles = listProfiles();
+  const target = profiles.find((p) => p.id === id);
+  if (!target) return profiles;
+  if (!canAccessProfile(target, viewer)) throw forbidden();
   const next = profiles.filter((p) => p.id !== id);
-  if (next.length === profiles.length) return profiles;
-  if (next.length === 0) throw new Error('No puedes borrar el último perfil');
+  if (next.length === 0) throw new Error('No puedes borrar el Ãºltimo perfil');
   writeFile(next);
   return next;
 }

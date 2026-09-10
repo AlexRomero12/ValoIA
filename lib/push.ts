@@ -1,13 +1,14 @@
 import webpush from 'web-push';
 import { env } from './env';
-import { readData, writeData } from './persist';
+import { readData, writeDataSync } from './persist';
+import { adminUsername } from './auth';
 
 /**
- * Web Push para avisar cuando una skin favorita aparece en la tienda.
+ * Web Push POR USUARIO.
  *
- * Las suscripciones del navegador viven en `data/push-subscriptions.json`
- * (persistente, externo al cache). El envío lo dispara el cron de
- * instrumentation.ts cuando detecta una favorita en la tienda de hoy.
+ * Cada suscripción del navegador pertenece a un usuario (`user`); el envío
+ * filtra por destinatario. Las suscripciones previas (sin usuario) migran al
+ * admin. Persisten en `data/push-subscriptions.json` (volumen `valo-data`).
  */
 
 export interface PushSubscriptionData {
@@ -15,6 +16,8 @@ export interface PushSubscriptionData {
   expirationTime: number | null;
   keys: { p256dh: string; auth: string };
   createdAt: number;
+  /** usuario dueño de la suscripción (el navegador donde inició sesión) */
+  user: string;
 }
 
 interface SubscriptionsFile {
@@ -22,14 +25,24 @@ interface SubscriptionsFile {
 }
 
 const SUBS_FILE = 'push-subscriptions.json';
+const MAX_PER_USER = 5;
+
+function writeSubs(subs: PushSubscriptionData[]): void {
+  writeDataSync(SUBS_FILE, { subscriptions: subs });
+}
 
 function readSubs(): PushSubscriptionData[] {
   const file = readData<SubscriptionsFile>(SUBS_FILE, { subscriptions: [] });
-  return Array.isArray(file?.subscriptions) ? file.subscriptions : [];
-}
-
-function writeSubs(subs: PushSubscriptionData[]): void {
-  writeData(SUBS_FILE, { subscriptions: subs });
+  const subs = Array.isArray(file?.subscriptions) ? file.subscriptions : [];
+  // Migración: suscripciones previas al flag de usuario -> admin.
+  const legacy = subs.filter((s) => s && !s.user);
+  if (legacy.length > 0) {
+    const owner = adminUsername() ?? 'admin';
+    const next = subs.map((s) => (s && !s.user ? { ...s, user: owner } : s));
+    writeSubs(next);
+    return next;
+  }
+  return subs;
 }
 
 export function pushConfig(): { publicKey: string; privateKey: string; subject: string } | null {
@@ -43,22 +56,43 @@ export function pushEnabled(): boolean {
   return pushConfig() != null;
 }
 
-export function getSubscriptions(): PushSubscriptionData[] {
-  return readSubs();
+/** Suscripciones de un usuario (o todas, uso interno del admin/cron global). */
+export function getSubscriptions(user?: string): PushSubscriptionData[] {
+  const subs = readSubs();
+  return user ? subs.filter((s) => s.user === user) : subs;
 }
 
-/** Registra (o renueva) una suscripción; dedupe por endpoint. */
-export function addSubscription(sub: Omit<PushSubscriptionData, 'createdAt'>): PushSubscriptionData[] {
+/**
+ * Registra (o renueva) una suscripción del usuario; dedupe por endpoint.
+ * Un mismo navegador con otra sesión reasigna la suscripción al nuevo usuario.
+ */
+export function addSubscription(sub: Omit<PushSubscriptionData, 'createdAt' | 'user'>, user: string): PushSubscriptionData[] {
   const current = readSubs().filter((s) => s.endpoint !== sub.endpoint);
-  const next = [...current, { ...sub, createdAt: Date.now() }];
+  // Tope por usuario: si excede, se descarta la más antigua suya.
+  const mine = current.filter((s) => s.user === user).sort((a, b) => a.createdAt - b.createdAt);
+  let kept = current;
+  if (mine.length >= MAX_PER_USER) {
+    const drop = new Set(mine.slice(0, mine.length - MAX_PER_USER + 1).map((s) => s.endpoint));
+    kept = current.filter((s) => !drop.has(s.endpoint));
+  }
+  const next = [...kept, { ...sub, user, createdAt: Date.now() }];
   writeSubs(next);
   return next;
 }
 
-export function removeSubscription(endpoint: string): PushSubscriptionData[] {
-  const next = readSubs().filter((s) => s.endpoint !== endpoint);
+export function removeSubscription(endpoint: string, user?: string): PushSubscriptionData[] {
+  const next = readSubs().filter((s) => s.endpoint !== endpoint || (user != null && s.user !== user));
   writeSubs(next);
   return next;
+}
+
+/** Borra todas las suscripciones de un usuario (al eliminarlo). */
+export function removeUserSubscriptions(user: string): number {
+  const subs = readSubs();
+  const next = subs.filter((s) => s.user !== user);
+  if (next.length === subs.length) return 0;
+  writeSubs(next);
+  return subs.length - next.length;
 }
 
 export interface PushResult {
@@ -66,13 +100,16 @@ export interface PushResult {
   failed: number;
 }
 
-/** Envía la notificación a todas las suscripciones; las fallidas se limpian. */
-export async function sendPush(payload: { title: string; body: string; icon?: string; url?: string }): Promise<PushResult> {
+/** Envía la notificación a las suscripciones del usuario (o a todas). */
+export async function sendPush(
+  payload: { title: string; body: string; icon?: string; url?: string },
+  user?: string,
+): Promise<PushResult> {
   const cfg = pushConfig();
   if (!cfg) return { sent: 0, failed: 0 };
   webpush.setVapidDetails(cfg.subject, cfg.publicKey, cfg.privateKey);
 
-  const subs = readSubs();
+  const subs = getSubscriptions(user);
   let sent = 0;
   let failed = 0;
   const dead: string[] = [];
@@ -96,6 +133,6 @@ export async function sendPush(payload: { title: string; body: string; icon?: st
     }),
   );
 
-  if (dead.length) writeSubs(subs.filter((s) => !dead.includes(s.endpoint)));
+  if (dead.length) writeSubs(readSubs().filter((s) => !dead.includes(s.endpoint)));
   return { sent, failed };
 }

@@ -1,6 +1,15 @@
 import type { Metadata } from 'next';
+import { Anton, Chakra_Petch } from 'next/font/google';
 import { Providers } from './providers';
 import './globals.css';
+
+const anton = Anton({ weight: '400', subsets: ['latin'], variable: '--font-anton', display: 'swap' });
+const chakra = Chakra_Petch({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+  variable: '--font-chakra',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'ValoIA · Dash',
@@ -9,15 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="es" className={`${anton.variable} ${chakra.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

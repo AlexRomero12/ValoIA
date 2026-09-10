@@ -2,8 +2,9 @@ import { NextRequest } from 'next/server';
 import { backfillPlayer, type BackfillPlayerOptions } from '@/lib/refresh';
 import { getProvider } from '@/lib/valorant';
 import { getArchiveStats } from '@/lib/archive';
-import { getProfile, isValidProfile, listProfiles } from '@/lib/profiles';
+import { getProfile, listProfilesFor, profileAccess } from '@/lib/profiles';
 import { memberAccounts } from '@/lib/profileTypes';
+import { viewerFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,23 +15,30 @@ let backfillQueue: Promise<unknown> = Promise.resolve();
 /**
  * Estado del archivo acumulativo por jugador: total archivado, rango temporal
  * y marcador del último backfill (cobertura alcanzada). Sin `player` devuelve
- * los 4 miembros del equipo.
+ * los perfiles permitidos al usuario.
  */
 export async function GET(req: NextRequest) {
+  const viewer = viewerFromRequest(req);
+  if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+
   const sp = req.nextUrl.searchParams;
   const playerParam = sp.get('player');
-  if (!isValidProfile(playerParam)) {
+  const access = profileAccess(playerParam, viewer);
+  if (access === 'notfound') {
     return Response.json({ error: `Perfil desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
+  }
+  if (access === 'forbidden') {
+    return Response.json({ error: 'Ese perfil no es tuyo', code: 'FORBIDDEN' }, { status: 403 });
   }
   // Cuenta concreta de un miembro multi-cuenta (para sondeo por cuenta).
   const rawAccount = sp.get('account');
   let account: { name: string; tag: string } | null = null;
   if (rawAccount != null) {
-    const accs = memberAccounts(getProfile(playerParam || undefined));
+    const accs = memberAccounts(getProfile(playerParam || undefined, viewer));
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) account = accs[idx];
   }
-  const members = playerParam ? [getProfile(playerParam)] : listProfiles();
+  const members = playerParam ? [getProfile(playerParam, viewer)] : listProfilesFor(viewer);
   const players = members.flatMap((m) => {
     const accs = account ? [account] : memberAccounts(m);
     return accs.map((a, i) => ({
@@ -50,16 +58,27 @@ export async function GET(req: NextRequest) {
  * refresh; el avance se consulta con GET /api/valorant/backfill.
  *
  * Params:
- *  - player     id del miembro (default: player)
+ *  - player     id del perfil (default: primer perfil permitido)
  *  - mode       'season' (default, cubre la temporada actual) | 'all' (fondo total)
  *  - maxPages   páginas de 10 partidas (default 40, tope 150)
  *  - force      =1 re-ejecuta aunque ya exista un backfill cubierto
  */
 export async function POST(req: NextRequest) {
+  const viewer = viewerFromRequest(req);
+  if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+  if (!viewer.admin) {
+    // El backfill profundo consume minutos de cuota de Henrik: solo el admin.
+    return Response.json({ error: 'El backfill profundo lo ejecuta el administrador' }, { status: 403 });
+  }
+
   const sp = req.nextUrl.searchParams;
   const playerParam = sp.get('player');
-  if (!isValidProfile(playerParam)) {
+  const access = profileAccess(playerParam, viewer);
+  if (access === 'notfound') {
     return Response.json({ error: `Perfil desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
+  }
+  if (access === 'forbidden') {
+    return Response.json({ error: 'Ese perfil no es tuyo', code: 'FORBIDDEN' }, { status: 403 });
   }
   if (getProvider() !== 'henrik') {
     return Response.json(
@@ -77,14 +96,14 @@ export async function POST(req: NextRequest) {
   let account: { name: string; tag: string } | undefined;
   const rawAccount = sp.get('account');
   if (rawAccount != null) {
-    const accs = memberAccounts(getProfile(playerParam || undefined));
+    const accs = memberAccounts(getProfile(playerParam || undefined, viewer));
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) account = accs[idx];
   }
 
   // Fire-and-forget: tarda minutos con key Basic (throttle ~24 req/min).
   void (backfillQueue = backfillQueue
-    .then(() => backfillPlayer(playerParam || undefined, { mode, maxPages, force }, account))
+    .then(() => backfillPlayer(playerParam || undefined, { mode, maxPages, force }, account, viewer))
     .then((r) =>
       console.log(
         `[backfill] ${r.name}#${r.tag}: +${r.added} nuevas (${r.total} total) en ${r.pages} páginas — ${r.stoppedBy}${r.error ? `: ${r.error}` : ''}`,

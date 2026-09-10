@@ -11,7 +11,7 @@ import {
   type MatchesBucket,
 } from './henrik';
 import { getProvider } from './valorant';
-import { getProfile } from './profiles';
+import { getProfile, type ProfileViewer } from './profiles';
 import type { ProfileAccount } from './profileTypes';
 
 export type RefreshScope = 'all' | 'matches' | 'mmr';
@@ -31,8 +31,9 @@ export async function refreshPlayer(
   scope: RefreshScope = 'all',
   want?: number,
   account?: ProfileAccount,
+  viewer?: ProfileViewer,
 ): Promise<boolean> {
-  const member = getProfile(playerId);
+  const member = getProfile(playerId, viewer);
   const acct = account ?? { name: member.name, tag: member.tag };
 
   if (getProvider() !== 'henrik') {
@@ -103,8 +104,9 @@ export async function backfillPlayer(
   playerId: string | undefined,
   opts: BackfillPlayerOptions = {},
   account?: ProfileAccount,
+  viewer?: ProfileViewer,
 ): Promise<BackfillResult> {
-  const member = getProfile(playerId);
+  const member = getProfile(playerId, viewer);
   const acct = account ?? { name: member.name, tag: member.tag };
   return backfillArchive(acct.name, acct.tag, opts);
 }

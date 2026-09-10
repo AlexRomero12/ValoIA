@@ -45,9 +45,6 @@ export interface PlayerStats {
   /** Partidas sin dato de RR (la API solo devuelve ~20 recientes): rrTotal es parcial si > 0. */
   rrMissing: number;
 }
-
-const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-
 export function statsFromMatches(ms: MatchRow[]): PlayerStats {
   let wins = 0;
   let draws = 0;

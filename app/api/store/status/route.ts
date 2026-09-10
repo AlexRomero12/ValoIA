@@ -4,20 +4,21 @@ import { getFavorites, type FavoriteSkin } from '@/lib/favorites';
 import { getSkinsCatalog } from '@/lib/skins';
 import { pushEnabled, pushConfig, getSubscriptions } from '@/lib/push';
 import { notifiedToday } from '@/lib/storeWatch';
-import { getPrimaryProfile } from '@/lib/profiles';
+import { listProfilesFor } from '@/lib/profiles';
+import { viewerFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export interface StoreStatusResponse {
-  source: 'local' | 'rso' | 'none';
+  source: 'rso' | 'none';
   sourceDetail: string;
   fetchedAt: number;
   dailyRemainingSec: number;
-  /** Perfil principal (el único cuya tienda se muestra). */
-  profile: { id: string; label: string; name: string; tag: string };
+  /** Perfil principal del usuario (null si aún no creó perfiles). */
+  profile: { id: string; label: string; name: string; tag: string } | null;
   /** Riot ID de la sesión conectada (null si no se pudo identificar). */
   account: { name: string; tag: string } | null;
-  /** true = la sesión es del principal; false = es otra cuenta; null = sin identificar. */
+  /** true = la sesión es de su principal; false = es otra cuenta; null = sin datos. */
   matchesPrimary: boolean | null;
   daily: Array<{
     offerId: string;
@@ -43,13 +44,17 @@ export interface StoreStatusResponse {
 }
 
 export async function GET(req: NextRequest) {
+  const viewer = viewerFromRequest(req);
+  if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+  const user = viewer.username;
+
   try {
-    // ?refresh=1 fuerza revalidación del storefront (botón Actualizar).
+    // ?refresh=1 fuerza revalidación del storefront del usuario (botón Actualizar).
     const front = req.nextUrl.searchParams.get('refresh') === '1'
-      ? await refreshStoreFront()
-      : await getStoreFront();
-    const [favorites, catalog] = await Promise.all([getFavorites(), getSkinsCatalog()]);
-    const notifiedIds = notifiedToday(front.fetchedAt);
+      ? await refreshStoreFront(user)
+      : await getStoreFront(user);
+    const [favorites, catalog] = await Promise.all([getFavorites(user), getSkinsCatalog()]);
+    const notifiedIds = notifiedToday(user, front.fetchedAt);
 
     const favIds = new Set(favorites.map((f) => f.offerId));
     const notifiedSet = new Set(notifiedIds);
@@ -94,27 +99,25 @@ export async function GET(req: NextRequest) {
       : null;
 
     const cfg = pushConfig();
-    const subs = getSubscriptions();
-    const rso = await rsoStatus();
-    const sourceDetail =
-      front.source === 'local'
-        ? 'Riot Client local'
-        : front.source === 'rso'
-          ? 'Respaldo RSO'
-          : 'Sin conexión';
+    const subs = getSubscriptions(user);
+    const rso = await rsoStatus(user);
+    const sourceDetail = front.source === 'rso' ? 'Respaldo RSO' : 'Sin conexión';
 
-    const primary = getPrimaryProfile();
+    const profiles = listProfilesFor(viewer);
+    const primary = profiles.find((p) => p.primary) ?? profiles.find((p) => p.visible) ?? profiles[0] ?? null;
     const account = front.account ?? null;
-    const matchesPrimary = account
-      ? account.name.toLowerCase() === primary.name.toLowerCase() && (account.tag ?? '').toLowerCase() === primary.tag.toLowerCase()
-      : null;
+    const matchesPrimary =
+      account && primary
+        ? account.name.toLowerCase() === primary.name.toLowerCase() &&
+          (account.tag ?? '').toLowerCase() === primary.tag.toLowerCase()
+        : null;
 
     const response: StoreStatusResponse = {
       source: front.source,
       sourceDetail,
       fetchedAt: front.fetchedAt,
       dailyRemainingSec: front.dailyRemainingSec,
-      profile: { id: primary.id, label: primary.label, name: primary.name, tag: primary.tag },
+      profile: primary ? { id: primary.id, label: primary.label, name: primary.name, tag: primary.tag } : null,
       account,
       matchesPrimary,
       daily,

@@ -4,12 +4,16 @@ import { useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ProfileForm } from '@/components/profiles/ProfileForm';
+import { UsersPanel } from '@/components/auth/UsersPanel';
 import { useProfileActions, useProfiles } from '@/lib/hooks';
+import { useSession } from '@/lib/useSession';
 import { profileColor, memberAccounts, type Profile } from '@/lib/profileTypes';
 
 export default function PerfilesPage() {
   const profilesQ = useProfiles();
   const actions = useProfileActions();
+  const session = useSession();
+  const isAdmin = session.data?.admin === true;
   const [editing, setEditing] = useState<Profile | null>(null);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -68,8 +72,9 @@ export default function PerfilesPage() {
           <button className="primary-red" onClick={() => setCreating(true)}>+ Nuevo perfil</button>
         </div>
         <p className="window-info" style={{ marginTop: 8 }}>
-          Elige el <b>perfil principal</b> (★): es el único que se audita y del que se muestra la tienda.
-          Los <b>visibles</b> aparecen en Ranked; Comparar y Team pueden usar cualquier perfil guardado.
+          Elige el <b>perfil principal</b> (★): es el único que se audita. Los <b>visibles</b> aparecen en Ranked;
+          Comparar y Team pueden usar cualquiera de tus perfiles.
+          {isAdmin ? ' Como admin ves también los perfiles de los demás usuarios (marcados con su dueño).' : ''}
         </p>
 
         {profiles.length === 0 && !profilesQ.isLoading ? (
@@ -89,6 +94,7 @@ export default function PerfilesPage() {
                       {p.primary ? <span className="profile-primary-badge">★ Principal</span> : null}
                       <span className="window-info">{p.name}#{p.tag}</span>
                       {p.role ? <span className="profile-role">{p.role}</span> : null}
+                      {isAdmin && p.owner ? <span className="profile-role">de {p.owner}</span> : null}
                     </div>
                     <div className="profile-card-meta">
                       {accs.length > 1 ? <span className="mini-stats">{accs.length} cuentas</span> : null}
@@ -130,6 +136,8 @@ export default function PerfilesPage() {
           </div>
         )}
       </div>
+
+      <UsersPanel />
 
       {(creating || editing) && (
         <ProfileForm

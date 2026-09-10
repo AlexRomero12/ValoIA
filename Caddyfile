@@ -1,0 +1,27 @@
+# ValoIA en producción: Caddy pone HTTPS automático (Let's Encrypt) y hace de
+# reverse proxy hacia el contenedor de Next. `DOMAIN` viene del .env.
+#
+# Caddy fija X-Real-IP con la IP real del cliente (pisando lo que mande el
+# navegador) para que el rate-limit y el registry de sesiones usen la IP buena.
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy valo-dash:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	log {
+		output file /data/access.log
+		format console
+	}
+}

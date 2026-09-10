@@ -1,11 +1,14 @@
 import { NextRequest } from 'next/server';
 import { getComments, setComment } from '@/lib/matchComments';
+import { viewerFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const viewer = viewerFromRequest(req);
+  if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
   try {
-    const comments = await getComments();
+    const comments = await getComments(viewer);
     return Response.json({ comments }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
@@ -13,6 +16,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const viewer = viewerFromRequest(req);
+  if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+
   let body: { matchId?: string; text?: string };
   try {
     body = await req.json();
@@ -27,7 +33,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Falta text' }, { status: 400 });
   }
   try {
-    const comments = await setComment(matchId, text);
+    const comments = await setComment(matchId, text, viewer.username, viewer);
     return Response.json({ ok: true, comments });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

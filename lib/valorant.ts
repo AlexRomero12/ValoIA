@@ -14,7 +14,7 @@ import {
   type HenrikMatch,
   type HenrikMatchPlayer,
 } from './henrik';
-import { getProfile } from './profiles';
+import { getProfile, type ProfileViewer } from './profiles';
 
 export const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
@@ -418,8 +418,10 @@ export interface AggregateOptions {
   refresh?: boolean;
   /** 'current' = filtrar por la temporada del partido más reciente; o un season.short concreto */
   season?: string;
-  /** id del perfil (lib/profiles.ts); default = primer perfil */
+  /** id del perfil (lib/profiles.ts); default = primer perfil permitido */
   playerId?: string;
+  /** Quién consulta: el admin ve todo; cada usuario, solo sus perfiles */
+  viewer?: ProfileViewer;
   /** Cuenta específica de un miembro multi-cuenta; default = su cuenta principal */
   accountName?: string;
   accountTag?: string;
@@ -449,10 +451,8 @@ export async function getValSummary(opts: AggregateOptions): Promise<ValSummary>
 
 // ---------- Proveedor Henrik ----------
 
-const henrikTimestamp = henrikMatchTimestamp;
-
 async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> {
-  const member = getProfile(opts.playerId);
+  const member = getProfile(opts.playerId, opts.viewer);
   const acctName = opts.accountName ?? member.name;
   const acctTag = opts.accountTag ?? member.tag;
   const account = await getHenrikAccount(acctName, acctTag);
@@ -748,7 +748,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
 // ---------- Proveedor Riot oficial ----------
 
 export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
-  const profile = getProfile(opts.playerId);
+  const profile = getProfile(opts.playerId, opts.viewer);
   // El proveedor Riot oficial solo conoce la cuenta del .env (VAL_NAME/VAL_TAG).
   if (opts.playerId && (profile.name !== VAL_CONFIG.name() || profile.tag !== VAL_CONFIG.tag())) {
     throw new RiotApiError(

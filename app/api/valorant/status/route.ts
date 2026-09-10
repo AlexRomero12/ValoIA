@@ -1,12 +1,24 @@
 import { NextRequest } from 'next/server';
 import { VAL_CONFIG, RiotApiError, getProvider, getAccount } from '@/lib/valorant';
 import { HENRIK_CONFIG, HenrikError, getHenrikAccount } from '@/lib/henrik';
-import { getProfile } from '@/lib/profiles';
+import { getProfile, profileAccess } from '@/lib/profiles';
+import { viewerFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const member = getProfile(req.nextUrl.searchParams.get('player'));
+  const viewer = viewerFromRequest(req);
+  if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+
+  const playerParam = req.nextUrl.searchParams.get('player');
+  const access = profileAccess(playerParam, viewer);
+  if (access === 'notfound') {
+    return Response.json({ error: `Perfil desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
+  }
+  if (access === 'forbidden') {
+    return Response.json({ error: 'Ese perfil no es tuyo', code: 'FORBIDDEN' }, { status: 403 });
+  }
+  const member = getProfile(playerParam, viewer);
   const provider = getProvider();
   const base = {
     keyConfigured: Boolean(provider),

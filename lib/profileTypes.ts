@@ -53,10 +53,12 @@ export interface Profile {
   tag: string;
   role?: string;
   color?: string;
-  /** Aparece en los selectores de Ranked/Auditoría (y por defecto en el resto). */
+  /** Aparece en los selectores de Ranked (y por defecto en el resto). */
   visible: boolean;
-  /** Perfil principal: es el único que audita la página Auditoría (y su push semanal). */
+  /** Perfil principal del DUEÑO: es el único que audita su página Auditoría. */
   primary?: boolean;
+  /** Usuario dueño del perfil (aislamiento; el admin ve todos). */
+  owner?: string;
   /** Cuentas alternativas del mismo jugador (stats mezcladas en Comparar). */
   accounts?: ProfileAccount[];
   prefs?: ProfilePref[];

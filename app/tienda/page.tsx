@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TopBar, RankChip } from '@/components/TopBar';
 import { StorePanel } from '@/components/store/StorePanel';
@@ -101,12 +102,13 @@ export default function TiendaPage() {
     : status
       ? status.matchesPrimary === false
         ? 'Tienda · otra cuenta'
-        : status.matchesPrimary === true
+        : status.matchesPrimary === true && status.profile
           ? `Tienda de ${status.profile.label} · ${status.sourceDetail}`
           : `Tienda · ${status.sourceDetail}`
       : 'Tienda —';
   const needsCode = !!status?.rso.needsCode;
   const wrongAccount = Boolean(status && status.matchesPrimary === false && status.account);
+  const noProfile = Boolean(status && !status.profile);
 
   return (
     <div className="wrap">
@@ -125,12 +127,18 @@ export default function TiendaPage() {
       {error ? <div className="banner error">{error instanceof Error ? error.message : String(error)}</div> : null}
       {status?.error ? <div className="banner error">{status.error}</div> : null}
 
-      {wrongAccount && status ? (
+      {wrongAccount && status && status.profile ? (
         <div className="banner warn">
-          <b>La tienda conectada es de {status.account!.name}{status.account!.tag ? `#${status.account!.tag}` : ''}, no del perfil principal.</b>{' '}
-          El perfil principal es <b>{status.profile.label} ({status.profile.name}#{status.profile.tag})</b> —
-          configura la tienda con esa cuenta (Riot Client abierto con ella o su cookie ssid) y pulsa Actualizar.
+          <b>La tienda conectada es de {status.account!.name}{status.account!.tag ? `#${status.account!.tag}` : ''}, no de tu perfil principal.</b>{' '}
+          Tu principal es <b>{status.profile.label} ({status.profile.name}#{status.profile.tag})</b> —
+          conecta tu tienda con esa cuenta (cookie ssid) y pulsa Actualizar.
           Por seguridad no se muestra la tienda de otra cuenta.
+        </div>
+      ) : null}
+
+      {noProfile ? (
+        <div className="banner warn">
+          Primero crea tu perfil principal en <Link href="/perfiles"><b>Perfiles</b></Link> para vincular tu tienda y tu auditoría.
         </div>
       ) : null}
 
@@ -198,7 +206,7 @@ export default function TiendaPage() {
               dailyRemainingSec={status.dailyRemainingSec}
               fetchedAt={status.fetchedAt}
               source={status.source}
-              sourceDetail={status.matchesPrimary === true ? `Tienda de ${status.profile.label} · ${status.sourceDetail}` : status.sourceDetail}
+              sourceDetail={status.matchesPrimary === true && status.profile ? `Tienda de ${status.profile.label} · ${status.sourceDetail}` : status.sourceDetail}
               bundle={status.bundle}
               favoriteIds={new Set(status.favorites.map((f) => f.offerId))}
               onToggleFavorite={toggleFavorite}

@@ -1,8 +1,9 @@
 import { auditDay, mondayOf } from './audit';
 import { getValSummary } from './valorant';
-import { getPrimaryProfile } from './profiles';
+import { getStorePrimaryProfile } from './profiles';
 import { getSubscriptions, pushEnabled, sendPush } from './push';
 import { readData, writeData } from './persist';
+import { adminUsername } from './auth';
 import type { MatchRow } from './types';
 
 /**
@@ -49,8 +50,13 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
   if (process.env.VAL_AUDIT_PUSH === '0') {
     return { checked: false, week: null, sent: 0, failed: 0, skipped: 'VAL_AUDIT_PUSH=0' };
   }
-  if (!pushEnabled() || getSubscriptions().length === 0) {
+  if (!pushEnabled()) {
     return { checked: false, week: null, sent: 0, failed: 0, skipped: 'push no configurado' };
+  }
+  const target = getStorePrimaryProfile();
+  const owner = target.owner ?? adminUsername() ?? '';
+  if (getSubscriptions(owner).length === 0) {
+    return { checked: false, week: null, sent: 0, failed: 0, skipped: 'sin suscripciones push' };
   }
 
   // Semana anterior completa: lunes de la semana pasada.
@@ -67,7 +73,7 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
   }
 
   const weekEnd = lastMonday.getTime() + 7 * 86_400_000;
-  const profile = getPrimaryProfile();
+  const profile = getStorePrimaryProfile();
   const daysBack = Math.min(30, Math.ceil((now - lastMonday.getTime()) / 86_400_000) + 1);
 
   let matches: MatchRow[] = [];
@@ -121,11 +127,14 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
   const losses = matches.length - wins - draws;
   const record = `${wins}-${losses}${draws ? `-${draws}E` : ''}`;
 
-  const res = await sendPush({
-    title: `Auditoría semanal · ${profile.label}`,
-    body: `${record} en ${matches.length}p · ${fmtRR(Math.round(rrReal))} RR · ${findings.join(' · ')}`,
-    url: '/auditoria',
-  });
+  const res = await sendPush(
+    {
+      title: `Auditoría semanal · ${profile.label}`,
+      body: `${record} en ${matches.length}p · ${fmtRR(Math.round(rrReal))} RR · ${findings.join(' · ')}`,
+      url: '/auditoria',
+    },
+    owner,
+  );
 
   writeData(NOTIFIED_FILE, { week, sentAt: Date.now() });
   return { checked: true, week, sent: res.sent, failed: res.failed, skipped: '' };

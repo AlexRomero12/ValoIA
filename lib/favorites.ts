@@ -1,14 +1,16 @@
-import { readData, writeData } from './persist';
+import { readData, writeDataSync, deleteData } from './persist';
 import { getSkinById } from './skins';
+import { adminUsername } from './auth';
 
 /**
- * Skins favoritas del usuario.
+ * Skins favoritas POR USUARIO.
  *
  * IMPORTANTE — durabilidad: este store es EXTERNO al cache L1/L2. Vive en
- * `data/favorites.json` (volumen Docker `valo-data`) y NO se pierde al borrar
- * `.cache/` ni al reiniciar. Cada favorita guarda su SNAPSHOT denormalizado
- * (nombre, icono, arma), así la lista renderiza completa aunque el catálogo
- * de skins no esté disponible.
+ * `data/favorites.<usuario>.json` (volumen Docker `valo-data`) y NO se pierde
+ * al borrar `.cache/` ni al reiniciar. Cada favorita guarda su SNAPSHOT
+ * denormalizado (nombre, icono, arma), así la lista renderiza completa aunque
+ * el catálogo de skins no esté disponible. El archivo global previo migra al
+ * admin la primera vez.
  */
 
 export interface FavoriteSkin {
@@ -24,28 +26,45 @@ interface FavoritesFile {
   skins: FavoriteSkin[];
 }
 
-const FAVORITES_FILE = 'favorites.json';
-
-function readFavorites(): FavoriteSkin[] {
-  const file = readData<FavoritesFile>(FAVORITES_FILE, { version: 1, skins: [] });
-  return Array.isArray(file?.skins) ? file.skins : [];
+function safeUser(user: string): string {
+  return user.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
 }
 
-function writeFavorites(skins: FavoriteSkin[]): void {
-  writeData(FAVORITES_FILE, { version: 1, skins });
+function favoritesFile(user: string): string {
+  return `favorites.${safeUser(user)}.json`;
 }
 
-export async function getFavorites(): Promise<FavoriteSkin[]> {
-  return readFavorites();
+function readFavorites(user: string): FavoriteSkin[] {
+  const file = readData<FavoritesFile | null>(favoritesFile(user), null);
+  if (file && Array.isArray(file.skins)) return file.skins;
+
+  // Migración del archivo global (pre-multiusuario): solo para el admin.
+  if (user === adminUsername()) {
+    const legacy = readData<FavoritesFile>('favorites.json', { version: 1, skins: [] });
+    if (Array.isArray(legacy?.skins) && legacy.skins.length > 0) {
+      writeDataSync(favoritesFile(user), { version: 1, skins: legacy.skins });
+      deleteData('favorites.json');
+      return legacy.skins;
+    }
+  }
+  return [];
 }
 
-export function isFavorite(offerId: string): boolean {
-  return readFavorites().some((s) => s.offerId === offerId);
+function writeFavorites(user: string, skins: FavoriteSkin[]): void {
+  writeDataSync(favoritesFile(user), { version: 1, skins });
+}
+
+export async function getFavorites(user: string): Promise<FavoriteSkin[]> {
+  return readFavorites(user);
+}
+
+export function isFavorite(user: string, offerId: string): boolean {
+  return readFavorites(user).some((s) => s.offerId === offerId);
 }
 
 /** Añade una favorita (no-op si ya existe). Saca el snapshot del catálogo. */
-export async function addFavorite(offerId: string): Promise<FavoriteSkin[]> {
-  const current = readFavorites();
+export async function addFavorite(user: string, offerId: string): Promise<FavoriteSkin[]> {
+  const current = readFavorites(user);
   if (current.some((s) => s.offerId === offerId)) return current;
 
   let name = 'Skin';
@@ -64,12 +83,12 @@ export async function addFavorite(offerId: string): Promise<FavoriteSkin[]> {
   }
 
   const next = [...current, { offerId, name, icon, weapon, addedAt: Date.now() }];
-  writeFavorites(next);
+  writeFavorites(user, next);
   return next;
 }
 
-export function removeFavorite(offerId: string): FavoriteSkin[] {
-  const next = readFavorites().filter((s) => s.offerId !== offerId);
-  writeFavorites(next);
+export function removeFavorite(user: string, offerId: string): FavoriteSkin[] {
+  const next = readFavorites(user).filter((s) => s.offerId !== offerId);
+  writeFavorites(user, next);
   return next;
 }

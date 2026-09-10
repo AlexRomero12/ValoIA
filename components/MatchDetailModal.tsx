@@ -221,7 +221,3 @@ function resultIcon(r?: string): string {
 function resultEs(r?: string): string {
   return RESULT_ES[(r ?? '').toLowerCase()] ?? r ?? '—';
 }
-
-function escWeapon(w: string): string {
-  return w.replace(/[&<>"]/g, '');
-}

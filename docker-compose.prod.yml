@@ -1,0 +1,49 @@
+services:
+  valo-dash:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: valo-dash
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+      CACHE_DIR: /app/data/cache
+      ARCHIVE_DIR: /app/data/archive
+      DATA_DIR: /app/data
+      # Detrás de Caddy: confiar en X-Real-IP/X-Forwarded-* para rate-limit y sesiones.
+      TRUST_PROXY: "1"
+    expose:
+      - "3000"
+    volumes:
+      - valo-cache:/app/data/cache
+      - valo-archive:/app/data/archive
+      - valo-data:/app/data
+      # Cache/build de Next entre reinicios (opcional, acelera el arranque).
+      - valo-next-cache:/app/.next/cache
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: valo-caddy
+    depends_on:
+      - valo-dash
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  valo-cache:
+  valo-archive:
+  valo-data:
+  valo-next-cache:
+  caddy-data:
+  caddy-config:

@@ -11,7 +11,6 @@ interface WrRow {
 }
 
 interface WrPanelProps {
-  title?: string;
   label: 'Agente' | 'Mapa';
   rows: WrRow[];
   icons: Map<string, string | null>;
@@ -20,7 +19,7 @@ interface WrPanelProps {
   active?: string | null;
 }
 
-export function WrPanel({ title, label, rows, icons, onPick, active }: WrPanelProps) {
+export function WrPanel({ label, rows, icons, onPick, active }: WrPanelProps) {
   const sorted = [...rows].sort((a, b) => b.matches - a.matches || b.wr - a.wr);
   const kind = label === 'Agente' ? 'agent-icon' : 'map-icon';
   const nameOf = (r: WrRow) => r.name ?? '';

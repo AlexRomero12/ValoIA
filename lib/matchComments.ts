@@ -1,17 +1,22 @@
-import { readData, writeData } from './persist';
+import { readData, writeDataSync } from './persist';
 
 /**
- * Comentarios del usuario por partida (contexto propio: qué pasó, por qué).
+ * Comentarios del usuario por partida (contexto propio: quÃ© pasÃ³, por quÃ©).
  *
- * IMPORTANTE — durabilidad: mismo patrón que favoritas — vive en
+ * IMPORTANTE â€” durabilidad: mismo patrÃ³n que favoritas â€” vive en
  * `data/match-comments.json` (volumen Docker `valo-data`), EXTERNO al cache,
  * inmune a invalidateAll() y a los rebuilds. La clave es el matchId (UUID
- * estable), así el comentario sobrevive al pasar por cualquier ventana.
+ * estable), asÃ­ el comentario sobrevive al pasar por cualquier ventana.
+ *
+ * Aislamiento: cada nota guarda su autor; cada usuario ve las suyas y el admin
+ * ve todas (las notas previas al flag, sin autor, solo las ve el admin).
  */
 
 export interface MatchComment {
   text: string;
   updatedAt: number;
+  /** usuario autor de la nota */
+  author?: string;
 }
 
 interface CommentsFile {
@@ -27,23 +32,44 @@ function readComments(): Record<string, MatchComment> {
   return file?.comments && typeof file.comments === 'object' ? file.comments : {};
 }
 
-export async function getComments(): Promise<Record<string, MatchComment>> {
-  return readComments();
+export interface CommentsViewer {
+  username: string;
+  admin: boolean;
+}
+
+function visibleTo(all: Record<string, MatchComment>, viewer?: CommentsViewer): Record<string, MatchComment> {
+  if (!viewer || viewer.admin) return all;
+  const out: Record<string, MatchComment> = {};
+  for (const [matchId, comment] of Object.entries(all)) {
+    if (comment.author === viewer.username) out[matchId] = comment;
+  }
+  return out;
+}
+
+/** Notas visibles para el visor (sin visor = todas, uso interno). */
+export async function getComments(viewer?: CommentsViewer): Promise<Record<string, MatchComment>> {
+  return visibleTo(readComments(), viewer);
 }
 
 /**
- * Guarda o reemplaza el comentario de una partida. Texto vacío = borra la nota.
- * Devuelve el estado completo de comentarios.
+ * Guarda o reemplaza el comentario de una partida. Texto vacÃ­o = borra la nota.
+ * Devuelve el estado visible para el autor (in-memory: evita la carrera con la
+ * cola de escritura de `persist.ts`).
  */
-export async function setComment(matchId: string, text: string): Promise<Record<string, MatchComment>> {
+export async function setComment(
+  matchId: string,
+  text: string,
+  author: string,
+  viewer?: CommentsViewer,
+): Promise<Record<string, MatchComment>> {
   const current = readComments();
   const trimmed = text.trim().slice(0, MAX_COMMENT_LENGTH);
   const next = { ...current };
   if (!trimmed) {
     delete next[matchId];
   } else {
-    next[matchId] = { text: trimmed, updatedAt: Date.now() };
+    next[matchId] = { text: trimmed, updatedAt: Date.now(), author };
   }
-  writeData(COMMENTS_FILE, { version: 1, comments: next });
-  return next;
+  writeDataSync(COMMENTS_FILE, { version: 1, comments: next });
+  return visibleTo(next, viewer);
 }

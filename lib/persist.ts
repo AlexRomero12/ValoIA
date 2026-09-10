@@ -37,7 +37,7 @@ let writeQueue = Promise.resolve();
  */
 export function writeData(file: string, value: unknown): void {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.mkdirSync(path.dirname(dataPath(file)), { recursive: true });
   } catch {
     /* noop */
   }
@@ -51,4 +51,31 @@ export function writeData(file: string, value: unknown): void {
     .catch((e) => {
       console.error(`[persist] falló la escritura de ${file}: ${e instanceof Error ? e.message : String(e)}`);
     });
+}
+
+/**
+ * Escritura atómica síncrona. Para archivos críticos que se escriben y se
+ * leen al instante desde otro bundle/módulo (p. ej. el registry de sesiones,
+ * que el proxy lee en su propio contexto): la cola async daría lecturas
+ * rancias justo después del login.
+ */
+export function writeDataSync(file: string, value: unknown): void {
+  try {
+    fs.mkdirSync(path.dirname(dataPath(file)), { recursive: true });
+    const target = dataPath(file);
+    const tmp = `${target}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
+    fs.renameSync(tmp, target);
+  } catch (e) {
+    console.error(`[persist] falló la escritura síncrona de ${file}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/** Borra un archivo de datos (no falla si no existe). Para migraciones. */
+export function deleteData(file: string): void {
+  try {
+    fs.unlinkSync(dataPath(file));
+  } catch {
+    /* noop */
+  }
 }

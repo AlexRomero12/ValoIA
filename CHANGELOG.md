@@ -2,6 +2,60 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.11.0] — 2026-09-10
+
+Seguridad multiusuario completa: sesiones revocables, altas con aprobación y tienda/favoritas/push por usuario.
+
+### Added
+- **Despliegue en producción**: `docker-compose.prod.yml` (valo-dash sin exponer + Caddy con HTTPS automático) y `Caddyfile` con `X-Real-IP` + HSTS; guía paso a paso en `docs/despliegue.md` (Oracle Always Free ARM, firewall de dos capas, DNS, backups y actualizaciones)
+- **Backups**: `scripts/backup.sh` (volúmenes `valo-data` + `valo-archive`, retención de 14) listo para cron
+- **Sesiones revocables**: registry `data/sessions.json` con `sid` firmado (dispositivo, IP, último uso); topes de 5 por usuario y 3 por IP (revoca la más antigua); al cambiar contraseña o borrar usuario se revocan sus sesiones; pestaña **Sesiones** con cerrar una o “las demás” (el admin ve todas)
+- **Solicitudes de acceso con aprobación**: formulario público en `/login` (rate-limit 3/h por IP), panel admin con **Aprobar** (crea usuario con contraseña temporal y cambio forzado) / **Rechazar**; se muestra la temporal una sola vez y se registra la IP de creación
+- **Cambio forzado de contraseña** (`mustChangePassword`): el proxy solo deja cambiarla y salir hasta que se actualice
+- **Rate-limit de login** por IP+usuario (5/10min), por usuario (10/15min) y por IP (30/15min) con `Retry-After`; **cooldown de refresh** de 10s por usuario; **backfill solo admin**
+- **Endurecimiento**: `Origin` propio en mutaciones, headers de seguridad (`X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`), IP real con `TRUST_PROXY` (X-Real-IP / última XFF), contraseña ≤128, `next` del login sanitizado y hash dummy de mismo costo
+- **Actividad** (`data/auth-log.json`, últimos 500 eventos): logins ok/fallo/bloqueo, altas/bajas, cambios de contraseña, solicitudes y aprobaciones — visor en el panel admin
+- **Límites de uso**: máx. 10 perfiles por usuario (20 el admin)
+- **Tienda RSO por usuario**: `data/rso/<usuario>.json` y cache por usuario; **favoritas** `data/favorites.<usuario>.json`; **push con dueño** y envío filtrado; vigilancia del cron por usuario (avisa solo a sus dispositivos); al borrar un usuario se limpian sus favoritas, RSO, push y dedupe
+- **Primer uso**: aviso en Tienda si aún no hay perfil principal (con enlace a Perfiles)
+- Escrituras **síncronas atómicas** para stores pequeños (sesiones, usuarios, favoritas, push, comentarios, log, solicitudes): elimina carreras read-after-write entre bundles del server
+
+### Changed
+- **Fuera la vía local del Riot Client** (lockfile, `tools/riot-proxy.js`, mounts de Docker y `STORE_LOCAL_HOST`/`RIOT_*`): la tienda es 100% RSO — requisito para desplegar en Linux/ARM (Oracle/Hetzner)
+- La tienda y las notificaciones dejan de ser del admin: **cada usuario conecta su RSO**; el admin no ve tiendas, favoritas ni notas ajenas
+- El perfil **principal ahora es por dueño**; migraciones automáticas: `rso.json` → `rso/<admin>.json`, `favorites.json` → `favorites.<admin>.json`, push legacy → admin; perfiles/usuarios viejos heredan dueño/admin
+- Fuentes vía `next/font` (Anton + Chakra Petch self-hosted) y **lint a 0 warnings** (variables sin uso, `no-location-assign`, `<img>` justificado)
+
+## [1.10.0] — 2026-09-10
+
+Aislamiento por usuario: cada quien con sus perfiles, el admin con todo.
+
+### Added
+- **Dueño por perfil**: cada usuario ve y edita solo sus perfiles en Ranked, Comparar, Team, Auditoría y Perfiles; el **admin** ve todos (con el dueño marcado) y las rutas de datos responden 403 si pides un perfil ajeno
+- **Admin** (el primer usuario): gestiona usuarios (crear, borrar, cambiar contraseñas), conecta la Tienda/RSO y es el dueño del push semanal; los usuarios normales solo cambian su propia contraseña
+- **Migraciones automáticas**: usuarios previos sin flag admin → el más antiguo; perfiles sin dueño → el admin
+- Filtrado por dueño en snapshots de auditoría y en el detalle de partida (solo busca entre tus cuentas)
+- **Notas por partida con autor**: cada usuario ve solo las suyas (el admin ve todas; las previas al flag quedan como del admin)
+
+### Changed
+- `primary` es por dueño (cada usuario su principal para Auditoría); la Tienda usa el principal del admin
+- **Tienda solo para el admin** (la sesión de Riot es única): se oculta del nav y la página avisa al resto
+- `GET /api/auth/session` informa `admin`; `/api/store/auth` queda restringido al admin
+
+## [1.9.0] — 2026-09-10
+
+Acceso con login y usuarios: la app deja de estar abierta para poder publicarla.
+
+### Added
+- **Login con usuarios** (`/login`): toda la app queda detrás de sesión con `proxy.ts` (convención de Next 16; runtime Node). Páginas sin sesión redirigen a `/login?next=…`; APIs responden 401; `/sw.js` y estáticos quedan libres
+- **Usuarios** en `data/users.json` (volumen `valo-data`): hash **scrypt** con sal por usuario, nunca la contraseña; primer usuario sembrado desde `AUTH_USER`/`AUTH_PASSWORD`; panel **Usuarios** en `/perfiles` para crear, cambiar contraseña y borrar (nunca el propio ni el último)
+- **Sesiones firmadas** (HMAC-SHA256 con `AUTH_SECRET`) en cookie `HttpOnly` + `SameSite=Lax` (+ `Secure` con HTTPS), 30 días; `/api/auth/session` y botón **Salir** en el TopBar
+- **Rate-limit** de login: 5 intentos / 10 min por IP+usuario; comparación en tiempo constante
+- `GET|POST /api/auth/users`, `POST /api/auth/login|logout`, `GET /api/auth/session`
+
+### Changed
+- `.env.example` documenta `AUTH_SECRET`, `AUTH_USER` y `AUTH_PASSWORD`; en producción sin `AUTH_SECRET` el login avisa con un error claro en vez de fallar en silencio
+
 ## [1.8.0] — 2026-09-10
 
 Perfiles personalizables (adiós al cuarteto fijo), auditoría por persona y fuera Aim Lab.
