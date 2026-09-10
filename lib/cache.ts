@@ -60,7 +60,7 @@ function fileFor(key: string): string {
   // Los ':' (y cualquier otro carácter raro) van a '_': en Windows los ':' en
   // nombre de archivo son inválidos/ADS y rompían la capa de disco (L2).
   // El sufijo hash evita colisiones entre claves distintas que sanitizan
-  // igual (p. ej. cuentas `Player4` y `Player3 十六` → guiones). Nota: la caché
+  // igual (p. ej. un Riot ID con caracteres CJK → guiones). Nota: la caché
   // en disco anterior se invalida una vez (miss) tras este cambio.
   return path.join(CACHE_DIR, `${sanitizeKey(key)}_${keyHash(key)}.json`);
 }

@@ -7,23 +7,49 @@ con HTTPS automático y login propio. Todo el stack son dos contenedores:
 > **Requisitos**: cuenta Oracle Cloud (Free Tier), un dominio (o subdominio
 > DuckDNS gratis) y tu `.env` local a mano (tiene los secretos).
 
+> **Región**: los recursos Always Free deben crearse en la **home region** de
+> tu cuenta (la que elegiste al registrarte; no se puede cambiar). Mírala en el
+> selector de región arriba a la derecha.
+
 ---
 
 ## 1. Crear la VM
 
 Consola OCI → **Compute → Instances → Create instance**:
 
-- **Image**: Ubuntu 24.04 (o 22.04)
-- **Shape**: `VM.Standard.A1.Flex` → **2 OCPU / 12 GB** (el máximo Always Free; puedes pedir 1/6)
-- **Boot volume**: 50 GB (mínimo 47)
-- **Networking**: asignar **IPv4 pública** (VCN por defecto)
-- **SSH keys**: sube tu clave pública (o deja que Oracle genere y descarga la privada)
+- **Name**: `valoia`
+- **Image**: Ubuntu 24.04 (Change image → Canonical Ubuntu)
+- **Shape**: Change shape → Ampere → `VM.Standard.A1.Flex` → **2 OCPU / 12 GB** (el máximo Always Free; puedes pedir 1/6)
+- **Boot volume**: 50 GB (Specify a custom boot volume size)
+- **Networking**: Create new VCN (default) con **Assign a public IPv4 address = Yes**
 
-Si sale **"Out of host capacity"**: reintenta (tu región tiene un solo AD) o sube
-la cuenta a **Pay As You Go** (los recursos Always Free siguen gratis y
-desaparece la recolección por inactividad).
+> **Ojo con la subred**: debe ser **pública**. Si el aviso *"You must select a
+> public subnet to assign a public IPv4 address"* aparece en el formulario,
+> elige **Create new public subnet** (o crea la subred aparte marcando *Public
+> Subnet*) — una subred privada bloquea la IP pública, y sin IP pública no hay
+> SSH ni HTTPS.
+- **SSH keys**: **Generate a key pair for me** → descarga la llave **privada** (`.key`) y guarda la **pública**; o sube tu propia clave pública
 
-Anota la **IP pública**.
+Si sale **"Out of host capacity"**: reintenta (algunas regiones tienen un solo
+availability domain), prueba
+**1 OCPU / 6 GB**, o sube la cuenta a **Pay As You Go** (los recursos Always
+Free siguen gratis y desaparece la recolección por inactividad).
+
+> **¿El asistente muestra ~$2/mes?** Es normal: es el estimado a precio de
+> lista (suele ser la IP pública IPv4, ~$0.0025/h) antes de aplicar el Always
+> Free. Al crear, con 2 OCPU/12 GB y boot ≤50 GB, el cargo real es **$0**;
+> verifícalo en *Billing → Cost Analysis* al día siguiente. No pases de 200 GB
+> de block storage ni de 2 OCPU/12 GB en A1 para mantenerlo gratis.
+
+Anota la **IP pública** (Instances → tu instancia → Public IP address).
+
+### Conectar por SSH (Windows)
+
+```powershell
+# Si PowerShell se queja de permisos de la llave:
+icacls "C:\ruta\ssh-key-2026-09-10.key" /inheritance:r /grant:r "$($env:USERNAME):(R)"
+ssh -i "C:\ruta\ssh-key-2026-09-10.key" ubuntu@IP
+```
 
 ## 2. Abrir puertos (dos capas)
 
@@ -61,7 +87,7 @@ docker compose version
 
 ```bash
 sudo mkdir -p /opt/valoia && sudo chown $USER /opt/valoia
-git clone https://github.com/Player/ValoIA.git /opt/valoia
+git clone https://github.com/TU_USUARIO/ValoIA.git /opt/valoia
 cd /opt/valoia/valo-dash-next
 ```
 
@@ -81,6 +107,9 @@ Añade al `.env` del servidor una línea con tu dominio:
 ```env
 DOMAIN=valoia.tudominio.com
 ```
+
+Opcionalmente añade `TZ=<tu zona IANA>` (por defecto el contenedor usa UTC).
+Afecta los cortes de día de la auditoría.
 
 Revisa que tenga al menos: `HENRIK_API_KEY`, `AUTH_SECRET`, `AUTH_USER`,
 `AUTH_PASSWORD`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `STORE_SHARD`.

@@ -31,7 +31,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Actividad** (`data/auth-log.json`, últimos 500): logins, altas/bajas, cambios y solicitudes, visible en el panel admin
 
 ### Página Ranked (`/valorant`)
-- **Selector de perfiles visibles**: los que marques en `/perfiles` (Player, Player2, Player3, Player4 de fábrica) — todo el dash se recalcula
+- **Selector de perfiles visibles**: los que marques en `/perfiles` (el inicial se siembra desde `VAL_NAME`/`VAL_TAG`) — todo el dash se recalcula
 - **Todas las cuentas combinadas**: KPIs, WR por agente y mapa, arsenal y trend se calculan sobre la unión de la cuenta principal + alternativas del perfil elegido (útil para ver todo lo que juega y dónde)
 - **Rango con badges oficiales**: icono del tier con tooltip en el chip (con **RR dentro del rango** en vez de MMR crudo), en el eje Y del gráfico de tendencia y en el scoreboard del detalle
 - KPIs vs metas del plan (WR ≥55%, K/D ≥1.05, ACS ≥220, HS% ≥25%, ADR ≥150)
@@ -91,7 +91,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Aviso semanal de auditoría por Web Push** (lunes; `VAL_AUDIT_PUSH=0` lo apaga): resume los cortes ignorados y violaciones de pool de la semana anterior del perfil principal del **admin**
 - **Vigilancia de tienda por usuario** (cron): refresca la tienda de cada usuario con favoritas + push y avisa solo a sus dispositivos (dedupe diario por usuario)
 - Cooldown de 15s en Actualizar
-- Zona horaria UTC en contenedor
+- Zona horaria configurable con `TZ` (default `UTC`; ver `.env.example`)
 
 ## Stack
 
@@ -132,12 +132,13 @@ cp .env.example .env
 |---|---|---|
 | `AUTH_SECRET` | — | **Obligatorio en producción**: firma las sesiones (32+ bytes). Genera con `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
 | `AUTH_USER` / `AUTH_PASSWORD` | — / — | Usuario inicial: se crea en el primer login si no hay ningún usuario (contraseña mínimo 8) |
-| `VAL_NAME` / `VAL_TAG` | `Player` / `LAN` | Riot ID de la cuenta del `.env` (la usa el proveedor Riot de fallback y el seed inicial de perfiles) |
+| `VAL_NAME` / `VAL_TAG` | `Player` / `0000` | Riot ID de la cuenta del `.env` (la usa el proveedor Riot de fallback y el seed inicial de perfiles) |
 | `VAL_REGION` / `VAL_PLATFORM` | `na` / `pc` | Routing de Henrik (LAN comparte deployment con NA) |
 | `VAL_BACKGROUND_REFRESH` | `0` | `1` activa el cron que sincroniza los perfiles visibles cada `VAL_REFRESH_INTERVAL_MIN` min y alimenta el archivo |
 | `VAL_REFRESH_INTERVAL_MIN` | `15` | Intervalo del cron en minutos |
 | `VAL_AUDIT_PUSH` | `1` | `0` apaga el aviso semanal de auditoría por Web Push (requiere Web Push configurado) |
 | `ARCHIVE_DIR` | `data/archive` | Directorio del archivo acumulativo de partidas (persistente, externo al cache) |
+| `TZ` | `UTC` | Zona horaria IANA del contenedor (afecta cortes de día de la auditoría y timestamps) |
 | `DATA_DIR` | `data` | Datos persistentes de la app: perfiles, favoritas, suscripciones push, tokens RSO, notificaciones (externo al cache) |
 | `STORE_SHARD` | `na` | Shard de `pd.a.pvp.net` para el storefront (latam/br/na → `na`) |
 | `TRUST_PROXY` | `0` | `1` detrás de un proxy (Caddy/nginx): usa `X-Real-IP`/`X-Forwarded-*` para rate-limit y sesiones |

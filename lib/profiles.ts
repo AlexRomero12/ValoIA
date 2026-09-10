@@ -1,4 +1,5 @@
 import { readData, writeDataSync } from './persist';
+import { env } from './env';
 import type { AuditPoolRule, AuditRules, Profile, ProfileAccount } from './profileTypes';
 import { slugifyId } from './profileTypes';
 import { adminUsername } from './auth';
@@ -9,9 +10,9 @@ import { adminUsername } from './auth';
  * Durabilidad: mismo patrÃ³n que favoritas/comentarios â€” `data/profiles.json`
  * (volumen Docker `valo-data`), externo al cache, con writes atÃ³micos.
  *
- * El primer GET siembra el archivo con el cuarteto original (Player, Player2,
- * Player3, Player4) y las reglas de auditorÃ­a del `champion_pool.md` de Player, asÃ­
- * la app arranca con los datos que ya existÃ­an sin perder nada.
+ * El primer GET siembra un perfil inicial con `VAL_NAME`/`VAL_TAG` del `.env`
+ * (o `Player#0000`) para que la app arranque usable; el resto se configura en
+ * la página Perfiles.
  */
 
 interface ProfilesFile {
@@ -21,86 +22,27 @@ interface ProfilesFile {
 
 const PROFILES_FILE = 'profiles.json';
 
-/** Reglas de auditorÃ­a de Player (champion_pool.md + plan_mejora_player.md). */
-const ALEX_AUDIT: AuditRules = {
-  rulesVersion: 1,
-  pool: {
-    default: { main: ['Jett', 'Raze', 'Chamber'], backup: ['Sage'] },
-    byMap: {
-      Ascent: { main: ['Jett'], backup: ['Chamber'] },
-      Haven: { main: ['Chamber'], backup: ['Sage'] },
-      Sunset: { main: ['Chamber'], backup: ['Raze'] },
-      Lotus: { main: ['Raze'], backup: ['Jett', 'Sage'] },
-      Split: { main: ['Raze'], backup: ['Sage', 'Jett'] },
-      Summit: { main: ['Chamber'], backup: ['Sage'] },
-      Abyss: { main: ['Jett', 'Raze'], backup: [] },
+/**
+ * Perfil inicial: se siembra desde `VAL_NAME`/`VAL_TAG` del `.env` (o
+ * `Player#0000`) para que la app arranque usable; el resto se configura en la
+ * página Perfiles.
+ */
+function seedProfiles(): Profile[] {
+  const name = env('VAL_NAME', 'Player').trim() || 'Player';
+  const tag = env('VAL_TAG', '0000').trim() || '0000';
+  return [
+    {
+      id: 'player',
+      label: name,
+      name,
+      tag,
+      role: 'Duelist',
+      color: '#ff4655',
+      visible: true,
+      primary: true,
     },
-  },
-  bannedAgents: [],
-  bannedRoles: ['Initiator'],
-  stop: { losses: 2, kdBelow: 0.9 },
-  sessions: { gapMinutes: 180 },
-  goals: { wr: 55, kd: 1.05, acs: 220, hsPct: 25, adr: 150, fbPositive: true },
-};
-
-const SEED_PROFILES: Profile[] = [
-  {
-    id: 'player',
-    label: 'Player',
-    name: 'Player',
-    tag: 'LAN',
-    role: 'Duelist/Sentinel',
-    color: '#ff4655',
-    visible: true,
-    primary: true,
-    prefs: [
-      { map: 'Haven', agents: ['Chamber'] },
-      { map: 'Sunset', agents: ['Chamber'] },
-      { map: 'Split', agents: ['Sage', 'Raze', 'Jett'] },
-    ],
-    audit: ALEX_AUDIT,
-  },
-  {
-    id: 'player2',
-    label: 'Player2',
-    name: 'Player2',
-    tag: '0000',
-    role: 'Sentinel',
-    color: '#35b6ff',
-    visible: true,
-    prefs: [
-      { map: 'Haven', agents: ['Yoru', 'Cypher'] },
-      { map: 'Ascent', agents: ['Killjoy'] },
-    ],
-  },
-  {
-    id: 'player3',
-    label: 'Player3',
-    name: 'Player3 åå…­',
-    tag: '0616',
-    role: 'Flex Sentinel/Controller',
-    color: '#e8c97a',
-    visible: true,
-  },
-  {
-    id: 'player4',
-    label: 'Player4',
-    name: 'Player4',
-    tag: 'lol',
-    role: 'Initiator/Controller',
-    color: '#2fd08a',
-    visible: true,
-    accounts: [
-      { name: 'Player4', tag: 'Rol' },
-      { name: 'Player5', tag: 'NA1' },
-    ],
-    prefs: [
-      { map: 'Haven', agents: ['Sova'] },
-      { map: 'Ascent', agents: ['Sova'] },
-      { map: 'Abyss', agents: ['Sova'] },
-    ],
-  },
-];
+  ];
+}
 
 function readFile(): Profile[] {
   const file = readData<ProfilesFile>(PROFILES_FILE, { version: 1, profiles: [] });
@@ -114,9 +56,9 @@ function writeFile(profiles: Profile[]): void {
 /** Lista completa (con migraciones); incluye el dueÃ±o de cada perfil. */
 export function listProfiles(): Profile[] {
   const current = readFile();
-  const defaultOwner = adminUsername() ?? 'player';
+  const defaultOwner = adminUsername() ?? 'admin';
   if (current.length === 0) {
-    const seeded = SEED_PROFILES.map((p) => ({ ...p, owner: defaultOwner }));
+    const seeded = seedProfiles().map((p) => ({ ...p, owner: defaultOwner }));
     writeFile(seeded);
     return seeded;
   }

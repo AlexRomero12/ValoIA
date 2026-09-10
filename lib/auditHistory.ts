@@ -6,7 +6,8 @@ import type { AuditDay } from './audit';
  * /auditoria). La lectura/escritura en disco vive en `auditHistoryStore.ts`.
  *
  * Clave del snapshot: `${profileId}:${YYYY-MM-DD}` — cada perfil tiene su
- * historial independiente. Snapshots viejos sin prefijo se migran a `player`.
+ * historial independiente. Snapshots viejos sin prefijo se asignan al primer
+ * perfil del dueño.
  */
 
 export interface StoredAuditDay {

@@ -6,7 +6,7 @@ const BASE = 'https://api.henrikdev.xyz';
 export const HENRIK_CONFIG = {
   apiKey: () => env('HENRIK_API_KEY'),
   name: () => env('VAL_NAME', 'Player'),
-  tag: () => env('VAL_TAG', 'LAN'),
+  tag: () => env('VAL_TAG', '0000'),
   region: () => env('VAL_REGION', 'na'),
   platform: () => env('VAL_PLATFORM', 'pc'),
 };

@@ -18,7 +18,7 @@ import { getProfile, type ProfileViewer } from './profiles';
 
 export const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
-  tag: () => env('VAL_TAG', 'LAN'),
+  tag: () => env('VAL_TAG', '0000'),
   shard: () => env('VAL_SHARD', 'latam'),
   cluster: () => env('VAL_CLUSTER', 'americas'),
   apiKey: () => env('RIOT_API_KEY'),

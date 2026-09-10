@@ -58,10 +58,10 @@ Acceso con login y usuarios: la app deja de estar abierta para poder publicarla.
 
 ## [1.8.0] — 2026-09-10
 
-Perfiles personalizables (adiós al cuarteto fijo), auditoría por persona y fuera Aim Lab.
+Perfiles personalizables (adiós a los perfiles fijos), auditoría por persona y fuera Aim Lab.
 
 ### Added
-- **Perfiles gestionables (`/perfiles`)**: Riot ID, etiqueta, rol, color, cuentas alternativas, preferencias de agente por mapa y flag **visible** (Ranked/Auditoría). Persisten en `data/profiles.json` (volumen `valo-data`, externo al cache). `GET|POST /api/valorant/profiles` (`upsert`/`delete`, nunca deja la lista vacía). La primera vez se siembran el cuarteto original y las reglas de Player para no perder nada
+- **Perfiles gestionables (`/perfiles`)**: Riot ID, etiqueta, rol, color, cuentas alternativas, preferencias de agente por mapa y flag **visible** (Ranked/Auditoría). Persisten en `data/profiles.json` (volumen `valo-data`, externo al cache). `GET|POST /api/valorant/profiles` (`upsert`/`delete`, nunca deja la lista vacía). La primera vez se siembra un perfil inicial desde `VAL_NAME`/`VAL_TAG` (o `Player#0000`) para no perder nada
 - **Perfil principal (★)**: se elige en `/perfiles` (solo puede haber uno). Auditoría audita únicamente ese perfil, la Tienda muestra únicamente su tienda y el aviso semanal push es solo del principal
 - **Reglas de auditoría por perfil** (`AuditRules`): pool **por mapa** (principal/backup) con selector de agentes por iconos, agentes y **roles prohibidos** (p. ej. `Initiator`), regla de parada parametrizable (N derrotas con K/D < X), pausa de sesión (minutos) y metas semanales (WR, K/D, ACS, HS%, ADR, FB≥FD). Copiar reglas entre perfiles e importar/exportar JSON
 - **Recomendaciones de auditoría** con acción directa: violaciones recurrentes (con fecha de la última), reglas vs datos (sugiere subir/bajar agente con ≥5 partidas), RR evitable tras cortes ignorados, metas de la semana y mapas jugados sin regla
@@ -121,7 +121,7 @@ mezclados o inventados que se mostraban como exactos.
 
 ### Fixed
 - **Métrica RANGO marcaba un tier menos en promociones (y ocultaba deranks)**: el `tier` por partida salía del detalle del match (tier *previo* al partido) pero el RR del `mmr-history` (post-partida); al promocionar se mostraba "D1 · 10" en vez de "D2 · 10". Ahora el tier post-partida del `mmr-history` es el autoritativo y va junto a su RR (`lib/valorant.ts`)
-- Datos de Player2 refrescados (derankeó a D1 el 09-02 y volvió a **Diamante 2 · 10 RR** el 09-03): el gráfico de evolución por día/semana ya culmina en D2
+- Datos de un perfil refrescados tras un derank y su repromoción: el gráfico de evolución por día/semana ya culmina en el tier actual
 
 ## [1.7.1] — 2026-09-02
 
@@ -133,7 +133,7 @@ mezclados o inventados que se mostraban como exactos.
 Auditoría de sesión (reglas de parada y pool con costo en RR) + empates corregidos en todo el dash.
 
 ### Added
-- **Página Auditoría (`/auditoria`)**: audita las competitivas de Player contra las **Reglas de sesión** del plan — regla de parada (2 derrotas seguidas con K/D < 0.9 = cerrar sesión; solo una victoria reinicia, empates y derrotas con K/D ≥ 0.9 no reinician ni cancelan), violaciones de **pool** (agente fuera del pool vigente de `champion_pool.md`) con su costo en RR, y sesiones (pausa ≥ 3 h = sesión nueva). Motor en `lib/audit.ts` (`AUDIT_POOL` configurable)
+- **Página Auditoría (`/auditoria`)**: audita las competitivas del perfil principal contra sus **Reglas de sesión** — regla de parada (2 derrotas seguidas con K/D < 0.9 = cerrar sesión; solo una victoria reinicia, empates y derrotas con K/D ≥ 0.9 no reinician ni cancelan), violaciones de **pool** con su costo en RR, y sesiones (pausa ≥ 3 h = sesión nueva). Motor en `lib/audit.ts` (`AUDIT_POOL` configurable)
 - Vista semanal: hero con RR real / **Con regla** / **Regla + pool**, cortes totales vs ignorados, conteo de fuera de pool, y por día un SVG con barras de RR por partida (marcador de violaciones, cinta de peligro en el corte, bandas por sesión) + gráfico de RR acumulado real vs plan + tabla con badge CORTE AQUÍ / no debiste jugarla
 - **Notas por partida** (`lib/matchComments.ts`): contexto propio en cada fila de la auditoría — persistente en `data/match-comments.json` (volumen `valo-data`, externo al cache, atómico)
 - **Snapshots de días auditados** (`lib/auditHistory.ts` + `GET|POST /api/valorant/audit-history`): al pasar el día con RR completo se guarda una copia denormalizada; cuando la API deja de devolver el RR de partidas viejas, la semana pasada se reconstruye desde el snapshot (marca "guardado" / "parcial")
@@ -167,13 +167,13 @@ Auditoría de sesión (reglas de parada y pool con costo en RR) + empates correg
 - `TopBar` con enlace **Tienda**; `docker-compose.yml` añade `STORE_LOCAL_HOST=host.docker.internal`, `RIOT_LOCKFILE`, `RIOT_GAME_LOCKFILE` y `RIOT_LOCAL_PORT=56080`
 - **Explorador de arsenal** en Favoritas: modal con categorías de arma (normalizadas: Pistols→Sidearms, Sniper Rifles→Snipers, Heavy Weapons→Machine Guns, EEquippableCategory::Melee→Melee), fila de armas con icono oficial y contador de skins, y grid de TODAS las skins base (excluye niveles de evolución y variantes `(…)`) con estrella de favorita; `GET /api/store/weapons` + `GET /api/store/catalog?weapon=`
 - Vía local de la tienda: usa el lockfile del cliente de **Valorant** (el Riot Client da tokens sin permisos del storefront, HTTP 404) y `tools/riot-proxy.js` como puente en el host (la API local solo acepta 127.0.0.1); `RIOT_LOCAL_PORT=56080`
-- **Multi-cuenta en Comparar**: `TeamMember.accounts` en `lib/team.ts` para mezclar las stats de un jugador que usa varias cuentas Riot (prueba: Player4 = Player4#lol + Player4#Rol + Player5#NA1)
+- **Multi-cuenta en Comparar**: `TeamMember.accounts` en `lib/team.ts` para mezclar las stats de un jugador que usa varias cuentas Riot
 - `GET /api/valorant/summary|refresh` aceptan `account=<índice>` para consultar una cuenta concreta de un miembro; `mergeAccountSummaries` (lib/compare) une partidas deduplicadas por matchId y elige el rango de la cuenta mejor clasificada
 - **Pestaña Team (`/team`)**: composición recomendada por mapa (estilo vlr.gg) — para cada mapa, qué agente juega cada jugador con su WR (fuente del dato marcada: mapa/global), rol del agente, uso pro del agente en el mapa, backups por jugador y WR del equipo en ese mapa. Ventanas temporada/7/14/30/90 días. Motor en `lib/comp.ts` con reglas: máx 2 jugadores por rol, nunca dos roles duplicados a la vez y prioridad a la meta profesional
 - **Meta pro**: `lib/proneta.ts` con el pick rate por agente y mapa de VCT 2026 Americas Stage 2 (vlr.gg). Los agentes con uso pro ≥10% se premian (y se marca el % en la tarjeta); los que no se juegan pro en el mapa se penalizan −20 y solo salen si no hay opción mejor. Solo se muestran mapas en rotación (`ROTATION_MAPS`: Abyss, Ascent, Haven, Lotus, Split, Summit, Sunset)
-- **Metodología de asignación (rol primero)**: los 4 roles se reparten entre los jugadores según su rol declarado (Player duelista, Player2 sentinel, Player3 controller, Player4 iniciador — con flex cuando los datos no lo soportan) y dentro del rol se elige el mejor agente por WR×mapa+meta
-- **Recencia**: WR ponderada por fecha (media-vida 90 días) — lo que juegas ahora pesa más que el histórico viejo; **propiedad**: el jugador que más volumen tiene de un agente lo conserva (ej. Player4→Sova → "él es nuestro mejor Sova")
-- **Preferencias manuales** (`TeamMember.prefs`): agente favorito por mapa que gana al score automático (ej. Player: Chamber en Haven/Sunset; Split: Sage/Raze/Jett). Si la preferencia de un mapa apunta a un solo rol (Chamber→Sentinel), el rol queda bloqueado para ese jugador; con varios roles queda flexible con bonus
+- **Metodología de asignación (rol primero)**: los 4 roles se reparten entre los jugadores según su rol declarado (con flex cuando los datos no lo soportan) y dentro del rol se elige el mejor agente por WR×mapa+meta
+- **Recencia**: WR ponderada por fecha (media-vida 90 días) — lo que juegas ahora pesa más que el histórico viejo; **propiedad**: el jugador que más volumen tiene de un agente lo conserva ("él es nuestro mejor Sova")
+- **Preferencias manuales** (`TeamMember.prefs`): agente favorito por mapa que gana al score automático (p. ej. Chamber en Haven/Sunset). Si la preferencia de un mapa apunta a un solo rol (Chamber→Sentinel), el rol queda bloqueado para ese jugador; con varios roles queda flexible con bonus
 - El reparto por roles se compara contra la búsqueda libre (flex) y gana la mejor suma — nunca se fuerza un relleno de 0 partidas si existe una comp real mejor
 - El ranking de agentes usa WR con contracción por muestra (WR2p ≈ 80% realista) para no dejar que una racha pequeña domine, y presta al 35% el WR del agente en otros mapas cuando la muestra del mapa es chica
 - Roles de agentes: el catálogo de contenido (`getContent`) ahora trae el rol de cada agente y los `MatchRow` llevan `agentRole` (fallback por nombre en `lib/roles.ts`)
@@ -244,7 +244,7 @@ Optimización de carga bajo rate limit (sync incremental + SWR + cron opcional).
 
 ## [1.1.0] — 2026-08-25
 
-Nueva vista Comparar: los 4 perfiles del cuarteto lado a lado.
+Nueva vista Comparar: los perfiles del equipo lado a lado.
 
 ### Added
 - Página `/comparativo` con nav "Comparar" en la TopBar
@@ -264,7 +264,7 @@ Nueva vista Comparar: los 4 perfiles del cuarteto lado a lado.
 Migración completa a Next.js y consolidación de todas las features del dash.
 
 ### Added
-- Selector de perfiles del cuarteto (Player / Player2 / Player3 / Player4) con recálculo total del dash
+- Selector de perfiles visibles con recálculo total del dash
 - Detalle de partida al hacer click en una fila: scoreboard de los 10 jugadores (ACS, daño±, créditos, loadout), timeline ronda por ronda con motivo (⚔ / 💥 / ✂ / ⏱), duelos de apertura y rivales que te eliminaron
 - Filtro por temporada (`season=current`) además de ventanas de 7/14/30/90 días
 - Columna RR por partida (± coloreado, tooltip con RR en rango y Elo) y RR neto por ventana
@@ -279,7 +279,7 @@ Migración completa a Next.js y consolidación de todas las features del dash.
 - Stack migrado de Astro SSR + vanilla JS a **Next.js 16 + React 19 + TanStack Query**
 - Tipografía y design system unificados (Anton + Chakra Petch, paleta #0F1923/#FF4655 azul #35B6FF en Aim Lab)
 - Proveedor de datos principal: HenrikDev API v4 (Riot oficial queda como fallback limitado)
-- Zona horaria del contenedor fijada a UTC
+- Zona horaria del contenedor configurable con `TZ`
 
 ### Fixed
 - Estilos que no aplicaban a DOM generado por JS (CSS scoped de Astro → globals)
@@ -298,7 +298,3 @@ Migración completa a Next.js y consolidación de todas las features del dash.
 - Primer dashboard en Astro SSR: vista Aim Lab (sesión diaria, PBs, skills Voltaic, gráficos SVG) y vista Ranked inicial
 - Integraciones Aimlabs GraphQL + Hevy
 - Cache en memoria y catálogo de escenarios con ranks Voltaic
-
-[1.1.0]: https://github.com/Player/ValoIA/releases/tag/v1.1.0
-[1.0.0]: https://github.com/Player/ValoIA/releases/tag/v1.0.0
-[0.1.0]: https://github.com/Player/ValoIA/releases/tag/v0.1.0

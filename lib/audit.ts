@@ -3,7 +3,7 @@ import { agentRole } from './roles';
 import { poolRuleFor, type AuditRules } from './profileTypes';
 
 /**
- * Motor de auditoría de sesión (Reglas de sesión, plan_mejora_player.md).
+ * Motor de auditoría de sesión (reglas configurables por perfil).
  *
  * Regla de parada: N derrotas seguidas con K/D < X = cerrar sesión
  * (default 2 derrotas con K/D < 0.9).

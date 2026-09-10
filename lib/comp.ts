@@ -153,8 +153,8 @@ function buildPlayer(team: CompTeam): PlayerModel {
 
 /**
  * "Dueño" de cada agente: el jugador con más volumen (ponderado por fecha) en
- * ese agente del equipo. Ej.: si Player4 es quien más juega Sova, el bonus de
- * propiedad le asegura el pick cuando el equipo necesita un Sova.
+ * ese agente del equipo. Ej.: el jugador que más juega Sova conserva el bonus
+ * de propiedad cuando el equipo necesita un Sova.
  */
 export function agentOwners(models: PlayerModel[], agents: string[]): Map<string, { player: PlayerModel; wGames: number }> {
   const owners = new Map<string, { player: PlayerModel; wGames: number }>();
@@ -302,7 +302,7 @@ function assignRoles(
   if (best.some((row) => row.every((x) => x == null))) return null;
 
   // Preferencias manuales: si el jugador prefiere agentes de UN solo rol en
-  // este mapa, ese rol queda bloqueado para él (p. ej. Player: Chamber en
+  // este mapa, ese rol queda bloqueado para él (p. ej. Chamber en
   // Sunset/Haven → siempre sentinel). Con prefs de varios roles (Sage/Raze/
   // Jett en Split) se queda flexible, solo con bonus.
   const forced: (number | null)[] = models.map((p, i) => {

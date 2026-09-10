@@ -1,4 +1,5 @@
 import { readData, writeData } from './persist';
+import { listProfiles } from './profiles';
 import type { StoredAuditDay } from './auditHistory';
 
 /**
@@ -11,7 +12,7 @@ import type { StoredAuditDay } from './auditHistory';
  * ya no lo devuelva.
  *
  * Clave por perfil: `${profileId}:${YYYY-MM-DD}`. Los snapshots viejos (sin
- * prefijo, solo de Player) se migran una vez a `player:`.
+ * prefijo, de la época sin perfiles) se asignan una vez al primer perfil.
  *
  * Durabilidad: mismo patrón que favoritas/comentarios — `data/audit-history.json`
  * (volumen Docker `valo-data`), externo al cache, con writes atómicos.
@@ -23,7 +24,6 @@ interface AuditHistoryFile {
 }
 
 const HISTORY_FILE = 'audit-history.json';
-const LEGACY_PROFILE = 'player';
 
 function migrate(days: Record<string, StoredAuditDay>): { days: Record<string, StoredAuditDay>; changed: boolean } {
   let changed = false;
@@ -34,9 +34,10 @@ function migrate(days: Record<string, StoredAuditDay>): { days: Record<string, S
       out[key] = day.profileId ? day : { ...day, profileId: key.split(':')[0] };
       continue;
     }
-    // Legacy: snapshots de antes de existir perfiles -> eran de Player.
+    // Legacy: snapshots de antes de existir perfiles -> primer perfil.
+    const profileId = day.profileId ?? listProfiles()[0]?.id;
+    if (!profileId) continue;
     changed = true;
-    const profileId = day.profileId ?? LEGACY_PROFILE;
     out[`${profileId}:${key}`] = { ...day, key: `${profileId}:${key}`, profileId };
   }
   return { days: out, changed };

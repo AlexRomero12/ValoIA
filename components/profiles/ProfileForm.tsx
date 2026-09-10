@@ -116,15 +116,15 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
           <div className="pf-grid">
             <label className="pf-field">
               <span>Etiqueta</span>
-              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Player" />
+              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Mi perfil" />
             </label>
             <label className="pf-field grow">
               <span>Nombre Riot</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Player" />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="TuNombreRiot" />
             </label>
             <label className="pf-field">
               <span>Tag</span>
-              <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="LAN" />
+              <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="0000" />
             </label>
             <label className="pf-field grow">
               <span>Rol</span>
