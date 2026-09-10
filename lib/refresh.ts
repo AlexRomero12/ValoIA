@@ -11,7 +11,8 @@ import {
   type MatchesBucket,
 } from './henrik';
 import { getProvider } from './valorant';
-import { resolvePlayer, type TeamAccount } from './team';
+import { getProfile } from './profiles';
+import type { ProfileAccount } from './profileTypes';
 
 export type RefreshScope = 'all' | 'matches' | 'mmr';
 
@@ -29,9 +30,9 @@ export async function refreshPlayer(
   playerId?: string,
   scope: RefreshScope = 'all',
   want?: number,
-  account?: TeamAccount,
+  account?: ProfileAccount,
 ): Promise<boolean> {
-  const member = resolvePlayer(playerId);
+  const member = getProfile(playerId);
   const acct = account ?? { name: member.name, tag: member.tag };
 
   if (getProvider() !== 'henrik') {
@@ -44,28 +45,42 @@ export async function refreshPlayer(
   }
 
   const target = Math.min(Math.max(want ?? BUCKET_LIMIT, 10), BUCKET_LIMIT);
-  const jobs: Promise<unknown>[] = [];
+  // Secuencial a propósito: en paralelo las 3 revalidaciones emitían ráfagas
+  // que el throttle de Henrik penaliza con 429 (ver lib/henrik.ts).
+  const results: boolean[] = [];
 
   if (scope === 'all' || scope === 'matches') {
-    jobs.push(
-      revalidate<MatchesBucket>(bucketKeyOf(acct.name, acct.tag), BUCKET_TTL_MS, () =>
+    results.push(
+      await revalidate<MatchesBucket>(bucketKeyOf(acct.name, acct.tag), BUCKET_TTL_MS, () =>
         syncMatchesBucket(acct.name, acct.tag, target),
+      ).then(
+        () => true,
+        () => false,
       ),
     );
   }
   if (scope === 'all' || scope === 'mmr') {
-    jobs.push(revalidate(henrikMmrKey(acct.name, acct.tag), MMR_TTL_MS, () =>
-      fetchHenrikMmrHistoryRaw(acct.name, acct.tag),
-    ));
+    results.push(
+      await revalidate(henrikMmrKey(acct.name, acct.tag), MMR_TTL_MS, () =>
+        fetchHenrikMmrHistoryRaw(acct.name, acct.tag),
+      ).then(
+        () => true,
+        () => false,
+      ),
+    );
   }
   if (scope === 'all') {
-    jobs.push(revalidate(henrikAccountKey(acct.name, acct.tag), ACCOUNT_TTL_MS, () =>
-      fetchHenrikAccountRaw(acct.name, acct.tag).then((d) => d ?? {}),
-    ));
+    results.push(
+      await revalidate(henrikAccountKey(acct.name, acct.tag), ACCOUNT_TTL_MS, () =>
+        fetchHenrikAccountRaw(acct.name, acct.tag).then((d) => d ?? {}),
+      ).then(
+        () => true,
+        () => false,
+      ),
+    );
   }
 
-  const results = await Promise.allSettled(jobs);
-  return results.some((r) => r.status === 'fulfilled');
+  return results.length > 0 && results.every(Boolean);
 }
 
 function bucketKeyOf(name: string, tag: string): string {
@@ -87,9 +102,9 @@ export interface BackfillPlayerOptions {
 export async function backfillPlayer(
   playerId: string | undefined,
   opts: BackfillPlayerOptions = {},
-  account?: TeamAccount,
+  account?: ProfileAccount,
 ): Promise<BackfillResult> {
-  const member = resolvePlayer(playerId);
+  const member = getProfile(playerId);
   const acct = account ?? { name: member.name, tag: member.tag };
   return backfillArchive(acct.name, acct.tag, opts);
 }

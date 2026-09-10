@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { refreshPlayer, type RefreshScope } from '@/lib/refresh';
-import { isValidPlayer, resolvePlayer, memberAccounts } from '@/lib/team';
+import { isValidProfile, getProfile } from '@/lib/profiles';
+import { memberAccounts } from '@/lib/profileTypes';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +13,8 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const playerParam = sp.get('player');
-  if (!isValidPlayer(playerParam)) {
-    return Response.json({ error: `Jugador desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
+  if (!isValidProfile(playerParam)) {
+    return Response.json({ error: `Perfil desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
   }
   const scopeRaw = sp.get('scope');
   const scope: RefreshScope = scopeRaw === 'matches' || scopeRaw === 'mmr' ? scopeRaw : 'all';
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
   let account: { name: string; tag: string } | undefined;
   const rawAccount = sp.get('account');
   if (rawAccount != null) {
-    const accs = memberAccounts(resolvePlayer(playerParam || undefined));
+    const accs = memberAccounts(getProfile(playerParam || undefined));
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) {
       account = { name: accs[idx].name, tag: accs[idx].tag };

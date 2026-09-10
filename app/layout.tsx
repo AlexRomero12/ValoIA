@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'ValoIA · Dash',
-  description: 'Dashboard de rendimiento Valorant + Aim Lab',
+  description: 'Dashboard de rendimiento Valorant',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

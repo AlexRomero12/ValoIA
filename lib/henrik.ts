@@ -364,9 +364,17 @@ export async function syncMatchesBucket(
   const deep: HenrikMatch[] = [];
   const seen = new Set<string>();
   for (const m of allOld) {
+    // Las incompletas NO entran en `seen`: su payload es provisional (sin
+    // rondas, sin tier final) y el archivo las rechaza; si se marcaran como
+    // vistas, al completarse se descartarían por duplicadas y se perderían.
+    if (m.metadata?.is_completed === false) continue;
     const id = matchId(m);
     if (id) seen.add(id);
   }
+  // Si la página 0 es toda nueva (sin solape con el bucket), las páginas
+  // profundas también pueden traer novedades y NO se saltan: saltarlas con
+  // >10 partidas nuevas por ciclo abría huecos permanentes.
+  let page0Overlap = false;
 
   const pagesNeeded = Math.ceil(target / PAGE_SIZE);
   for (let p = 0; p < pagesNeeded; p++) {
@@ -376,7 +384,7 @@ export async function syncMatchesBucket(
 
     // Páginas ya cubiertas por el bucket previo: se saltan (la página 0 se
     // descarga siempre para detectar partidas nuevas).
-    if (p !== 0 && start + size <= baseLen) continue;
+    if (p !== 0 && page0Overlap && start + size <= baseLen) continue;
 
     let batch: HenrikMatch[];
     try {
@@ -390,7 +398,14 @@ export async function syncMatchesBucket(
 
     for (const m of batch) {
       const id = matchId(m);
-      if (!id || seen.has(id)) continue;
+      if (!id) continue;
+      if (seen.has(id)) {
+        if (p === 0) page0Overlap = true;
+        continue;
+      }
+      // Incompleta: no se fija ni se archiva; el próximo ciclo la traerá
+      // completada (no está en `seen`, así que no se descarta).
+      if (m.metadata?.is_completed === false) continue;
       seen.add(id);
       (p === 0 ? fresh : deep).push(m);
     }
@@ -398,11 +413,14 @@ export async function syncMatchesBucket(
     if (batch.length < size) break;
   }
 
-  // Orden final (más reciente primero): nuevas frescas de la página 0 +
-  // bucket previo (ya ordenado) + nuevas profundas (más antiguas que el bucket).
+  // Orden final garantizado (más reciente primero): la API no promete orden
+  // total y el slice a 40 debe expulsar las más viejas, no las que vengan
+  // desordenadas en un batch.
   const freshIds = new Set(fresh.map(matchId));
   const baseDeduped = allOld.filter((m) => !freshIds.has(matchId(m)));
-  const all = [...fresh, ...baseDeduped, ...deep].slice(0, BUCKET_LIMIT);
+  const all = [...fresh, ...baseDeduped, ...deep]
+    .sort((a, b) => henrikMatchTimestamp(b) - henrikMatchTimestamp(a))
+    .slice(0, BUCKET_LIMIT);
 
   // Archivo acumulativo (estilo tracker.gg): toda partida nueva descargada
   // se guarda para siempre, aunque luego salga del bucket de 40. Best-effort:

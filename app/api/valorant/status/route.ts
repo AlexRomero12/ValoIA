@@ -1,12 +1,12 @@
 import { NextRequest } from 'next/server';
 import { VAL_CONFIG, RiotApiError, getProvider, getAccount } from '@/lib/valorant';
 import { HENRIK_CONFIG, HenrikError, getHenrikAccount } from '@/lib/henrik';
-import { resolvePlayer } from '@/lib/team';
+import { getProfile } from '@/lib/profiles';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const member = resolvePlayer(req.nextUrl.searchParams.get('player'));
+  const member = getProfile(req.nextUrl.searchParams.get('player'));
   const provider = getProvider();
   const base = {
     keyConfigured: Boolean(provider),

@@ -2,7 +2,8 @@ import { getContent } from './valorant';
 import { findCachedValues, cacheSet } from './cache';
 import { getArchiveMatchById } from './archive';
 import { getHenrikAccount } from './henrik';
-import { getTeam, resolvePlayer } from './team';
+import { listProfiles, getProfile } from './profiles';
+import { memberAccounts } from './profileTypes';
 import type { HenrikMatch } from './henrik';
 
 export interface DetailPlayer {
@@ -63,36 +64,39 @@ export interface MatchDetail {
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
 
 export async function getMatchDetail(matchId: string, playerId?: string | null): Promise<MatchDetail> {
-  const cacheKey = `val:detail:v2:${resolvePlayer(playerId).id}:${matchId}`;
+  const cacheKey = `val:detail:v2:${getProfile(playerId).id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 
-  const preferred = resolvePlayer(playerId);
+  const preferred = getProfile(playerId);
   const orderedMembers = [
     preferred,
-    ...getTeam().filter((m) => m.id !== preferred.id),
+    ...listProfiles().filter((m) => m.id !== preferred.id),
   ];
 
   let match: HenrikMatch | undefined;
   let ownerPuuid = '';
-  for (const member of orderedMembers) {
-    const acc = await getHenrikAccount(member.name, member.tag).catch(() => null);
-    if (!acc?.puuid) continue;
-    // 1) Archivo acumulativo: cubre partidas fuera del bucket de 40 ($0 requests)
-    const archived = getArchiveMatchById(member.name, member.tag, matchId);
-    if (archived) {
-      match = archived;
-      ownerPuuid = acc.puuid;
-      break;
-    }
-    // 2) Buckets cacheados (ventana fresca)
-    const found = findCachedValues<HenrikMatch[]>(`henrik:matches:${acc.puuid}`)
-      .flat()
-      .find((m) => m.metadata?.match_id === matchId);
-    if (found) {
-      match = found;
-      ownerPuuid = acc.puuid;
-      break;
+  outer: for (const member of orderedMembers) {
+    // Un perfil multi-cuenta: la partida puede ser de cualquiera de sus cuentas.
+    for (const acct of memberAccounts(member)) {
+      const acc = await getHenrikAccount(acct.name, acct.tag).catch(() => null);
+      if (!acc?.puuid) continue;
+      // 1) Archivo acumulativo: cubre partidas fuera del bucket de 40 ($0 requests)
+      const archived = getArchiveMatchById(acct.name, acct.tag, matchId);
+      if (archived) {
+        match = archived;
+        ownerPuuid = acc.puuid;
+        break outer;
+      }
+      // 2) Buckets cacheados (ventana fresca)
+      const found = findCachedValues<HenrikMatch[]>(`henrik:matches:${acc.puuid}`)
+        .flat()
+        .find((m) => m.metadata?.match_id === matchId);
+      if (found) {
+        match = found;
+        ownerPuuid = acc.puuid;
+        break outer;
+      }
     }
   }
   if (!match) {

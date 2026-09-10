@@ -1,6 +1,7 @@
 'use client';
 
 import type { BucketPoint } from '@/lib/compare';
+import { pickXMarks } from '@/lib/chartAxis';
 
 export interface TrendSeries {
   id: string;
@@ -19,7 +20,7 @@ interface TrendCompareProps {
 }
 
 export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps) {
-  const active = series.filter((s) => s.points.length > 0);
+  const active = series.filter((s) => s.points.some((p) => p.value != null));
   if (!active.length) return <p className="empty">Sin datos suficientes para la evolución con estos filtros.</p>;
 
   const labels: string[] = [];
@@ -49,7 +50,22 @@ export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps
   const yAt = (v: number) => PT + ch - ((v - min) / Math.max(1e-9, max - min)) * ch;
 
   const gridVals = (ticks && ticks.length ? ticks.filter((t) => t >= min && t <= max) : [0, 1, 2, 3, 4].map((g) => min + ((max - min) * g) / 4));
-  const labelStep = Math.ceil(labels.length / 10);
+  // Etiquetas del eje X: una por día distinto (en la primera posición donde
+  // aparece), no una por punto. Con un punto por partida el eje repetía el
+  // mismo "03/09" 8 veces seguidas y no se entendía nada.
+  const labelAt = (key: string): string =>
+    labelOf.get(key) ??
+    (key.startsWith('w-')
+      ? (() => {
+          const d = key.slice(2).split('-').map(Number);
+          return d.length === 3
+            ? `${String(d[2]).padStart(2, '0')}/${String(d[1]).padStart(2, '0')}`
+            : key;
+        })()
+      : key);
+  // Separación mínima real en píxeles (ver lib/chartAxis.ts): días de 1-2
+  // partidas dejaban marcas en puntos adyacentes que se encimaban igual.
+  const showSet = pickXMarks({ count: labels.length, labelOf: (i) => labelAt(labels[i]), plotW: cw });
 
   return (
     <div className="chart-wrap">
@@ -64,26 +80,42 @@ export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps
           );
         })}
         {labels.map((key, i) => {
-          if (i % labelStep !== 0 && i !== labels.length - 1) return null;
-          const d = key.startsWith('w-') ? key.slice(2).split('-').map(Number) : null;
-          const lbl = d ? `${String(d[2]).padStart(2, '0')}/${String(d[1] + 1).padStart(2, '0')}` : (labelOf.get(key) ?? '');
-          return <text key={key} x={xAt(i)} y={H - PB + 18} fontSize="9" fill="#5d7080" textAnchor="middle">{lbl}</text>;
+          if (!showSet.has(i)) return null;
+          return <text key={key} x={xAt(i)} y={H - PB + 18} fontSize="9" fill="#5d7080" textAnchor="middle">{labelAt(key)}</text>;
         })}
         {active.map((s) => {
           const pts = s.points
             .map((p) => ({ ...p, i: labels.indexOf(p.key), v: p.value }))
             .filter((p) => p.i >= 0);
-          const path = pts
-            .filter((p) => p.v != null)
-            .map((p, idx) => `${idx === 0 ? 'M' : 'L'}${xAt(p.i).toFixed(1)} ${yAt(p.v!).toFixed(1)}`)
-            .join(' ');
+          // Segmentos separados por huecos (días sin partidas): la línea se
+          // corta en vez de conectar a través del vacío.
+          const segs: string[] = [];
+          let cur: string[] = [];
+          for (const p of pts) {
+            if (p.v == null) {
+              if (cur.length) { segs.push(cur.join(' ')); cur = []; }
+              continue;
+            }
+            cur.push(`${cur.length === 0 ? 'M' : 'L'}${xAt(p.i).toFixed(1)} ${yAt(p.v).toFixed(1)}`);
+          }
+          if (cur.length) segs.push(cur.join(' '));
           return (
             <g key={s.id}>
-              {path && <path d={path} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" opacity={0.9} />}
+              {segs.map((d, si) => (
+                <path key={si} d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" opacity={0.9} />
+              ))}
               {pts.map((p) =>
                 p.v != null ? (
-                  <circle key={p.key} cx={xAt(p.i)} cy={yAt(p.v)} r={3.5} fill={s.color} stroke="#0f1923" strokeWidth={1.3}>
-                    <title>{`${s.label} · ${labelOf.get(p.key) ?? p.key}: ${fmt(p.v)} (${p.games}p)`}</title>
+                  <circle
+                    key={p.key}
+                    cx={xAt(p.i)}
+                    cy={yAt(p.v)}
+                    r={3.5}
+                    fill={p.approx ? '#0f1923' : s.color}
+                    stroke={s.color}
+                    strokeWidth={1.3}
+                  >
+                    <title>{`${s.label} · ${labelOf.get(p.key) ?? p.key}: ${fmt(p.v)} (${p.games}p)${p.approx ? ' · aprox.' : ''}`}</title>
                   </circle>
                 ) : null,
               )}

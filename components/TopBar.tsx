@@ -12,7 +12,7 @@ interface TopBarProps {
   onRefresh: () => void;
   loading?: boolean;
   disabled?: boolean;
-  activePage: 'aim' | 'ranked' | 'comparar' | 'team' | 'tienda' | 'auditoria';
+  activePage: 'ranked' | 'comparar' | 'team' | 'tienda' | 'auditoria' | 'perfiles';
 }
 
 export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, loading, disabled, activePage }: TopBarProps) {
@@ -44,7 +44,7 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
       </div>
 
       <nav className="nav" style={{ ['--accent-nav' as string]: emColor }}>
-        <Link href="/" className={activePage === 'aim' ? 'active' : ''}>Aim Lab</Link>
+        <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''}>Perfiles</Link>
         <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''}>Ranked</Link>
         <Link href="/comparativo" className={activePage === 'comparar' ? 'active' : ''}>Comparar</Link>
         <Link href="/team" className={activePage === 'team' ? 'active' : ''}>Team</Link>

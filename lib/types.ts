@@ -53,6 +53,8 @@ export interface MatchRow {
   shots?: number;
   tier: number;
   tierChange: number;
+  /** Tier sin respaldo del mmr-history (aproximado): el punto de rango lleva ~. */
+  tierApprox?: boolean;
   durationMin: number;
   rrDelta?: number | null;
   rr?: number | null;
@@ -62,6 +64,9 @@ export interface MatchRow {
   mapIcon?: string | null;
   /** Rol del agente (Duelist/Initiator/Controller/Sentinel) */
   agentRole?: string | null;
+  /** Cuenta que jugó la partida (solo al combinar varias cuentas de un perfil). */
+  accountName?: string;
+  accountTag?: string;
 }
 
 export interface ArsenalRow {
@@ -94,9 +99,15 @@ export interface ValSummary {
     archivedMatches?: number;
     seasonShort?: string | null;
     rrTotal?: number | null;
+    /** Partidas de la ventana sin dato de RR: rrTotal es parcial si > 0. */
+    rrMissing?: number;
     eloTotal?: number | null;
     /** Bucket Henrik: fecha ISO de la última sincronización contra la API */
     syncedAt?: string | null;
+    /** MMR-history: fecha ISO de su última descarga (TTL distinto al bucket) */
+    mmrSyncedAt?: string | null;
+    /** La ventana puede estar recortada (bucket al tope sin cobertura total) */
+    truncated?: boolean;
   };
   kpis: ValKpis;
   currentTier: number;
@@ -121,4 +132,6 @@ export interface ValStatus {
 export interface AgentIconInfo {
   name: string;
   icon: string | null;
+  /** Rol del agente (Duelist/Initiator/Controller/Sentinel) */
+  role?: string | null;
 }

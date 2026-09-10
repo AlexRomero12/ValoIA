@@ -303,7 +303,13 @@ export async function backfillArchive(nameArg: string, tagArg: string, opts: Bac
 
   const idx0 = readArchiveIndex(nameArg, tagArg);
   const prev = idx0.backfill;
-  if (!opts.force && prev && prev.mode === mode && prev.pages >= maxPages && prev.stoppedBy !== 'error') {
+  // Solo se considera cubierto si la pasada anterior terminó por haber llegado
+  // al fondo o al borde de temporada. Un 'maxPages' (techo, temporada sin
+  // cubrir) o 'error' NUNCA se marcan como completos: repetir con el mismo
+  // maxPages devolvía 'skipped' y el archivo jamás avanzaba.
+  const covered = prev != null && prev.mode === mode && prev.pages >= maxPages &&
+    (prev.stoppedBy === 'seasonBoundary' || prev.stoppedBy === 'partial' || prev.stoppedBy === 'skipped');
+  if (!opts.force && covered) {
     return {
       name: nameArg,
       tag: tagArg,

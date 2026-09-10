@@ -119,8 +119,11 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
                           </b>
                           {' '}· KD {st.kd.toFixed(2)} · ACS {st.acs} · ADR {st.adr}
                         </span>
-                        <span className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}>
-                          {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal} RR` : ''}
+                        <span
+                          className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}
+                          title={st.rrMissing > 0 ? `RR de ${st.matches - st.rrMissing}/${st.matches} partidas (${st.rrMissing} sin dato)` : undefined}
+                        >
+                          {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
                         </span>
                       </button>
                     </td>
@@ -203,6 +206,9 @@ function MatchRowEl({ m, fMap, fAgent, onSelect, toggle }: {
           {m.agentIcon ? <img className="agent-icon" src={m.agentIcon} alt="" loading="lazy" /> : null}
           {esc(m.agent)}
         </span>
+        {m.accountTag ? (
+          <span className="acct-tag" title={`${m.accountName ?? ''}#${m.accountTag}`}>#{m.accountTag}</span>
+        ) : null}
       </td>
       <td>
         <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>

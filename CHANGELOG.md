@@ -2,6 +2,73 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.8.0] — 2026-09-10
+
+Perfiles personalizables (adiós al cuarteto fijo), auditoría por persona y fuera Aim Lab.
+
+### Added
+- **Perfiles gestionables (`/perfiles`)**: Riot ID, etiqueta, rol, color, cuentas alternativas, preferencias de agente por mapa y flag **visible** (Ranked/Auditoría). Persisten en `data/profiles.json` (volumen `valo-data`, externo al cache). `GET|POST /api/valorant/profiles` (`upsert`/`delete`, nunca deja la lista vacía). La primera vez se siembran el cuarteto original y las reglas de Player para no perder nada
+- **Perfil principal (★)**: se elige en `/perfiles` (solo puede haber uno). Auditoría audita únicamente ese perfil, la Tienda muestra únicamente su tienda y el aviso semanal push es solo del principal
+- **Reglas de auditoría por perfil** (`AuditRules`): pool **por mapa** (principal/backup) con selector de agentes por iconos, agentes y **roles prohibidos** (p. ej. `Initiator`), regla de parada parametrizable (N derrotas con K/D < X), pausa de sesión (minutos) y metas semanales (WR, K/D, ACS, HS%, ADR, FB≥FD). Copiar reglas entre perfiles e importar/exportar JSON
+- **Recomendaciones de auditoría** con acción directa: violaciones recurrentes (con fecha de la última), reglas vs datos (sugiere subir/bajar agente con ≥5 partidas), RR evitable tras cortes ignorados, metas de la semana y mapas jugados sin regla
+- **Snapshots de auditoría versionados por perfil**: clave `perfilId:fecha` + `rulesVersion` (editar reglas no reescribe el pasado); los snapshots viejos se migran a `player` automáticamente
+- **Loader de cargas grandes** (`LoadingOverlay`): panel flotante con spinner, paso actual, progreso (perfil i/N confirmado) y cronómetro; overlay bloqueante en las cargas iniciales. Integrado en Ranked, Comparar, Team, Auditoría y Perfiles
+- **Aviso semanal por Web Push** (`lib/auditWatch.ts`): lunes por la mañana resume los cortes ignorados y violaciones de pool de la semana anterior del **perfil principal** (dedupe semanal en `data/audit-notified.json`, `VAL_AUDIT_PUSH=0` lo apaga)
+- **Comparar y Team con selección libre de perfiles** + botón “Agregar perfil” sin salir de la página; colores por perfil (propio o paleta) y stats de cuentas alternativas mezcladas como antes
+- **Team para N jugadores**: con 4 reparte 1 rol por jugador como siempre; con otro número usa la mejor combinación libre respetando las reglas de composición
+
+### Changed
+- **Ranked combina todas las cuentas del perfil** (principal + alternativas): `mergeAccountSummaries` ahora recalcula `byAgent`/`byMap`/arsenal y el total de RR sobre las partidas mezcladas, así el WR por agente/mapa refleja todo lo que juega el jugador; el detalle de partida busca en todas sus cuentas
+- **Ranked** ya no tiene chips fijos: muestra los perfiles marcados como visibles (con enlace directo a `/perfiles`)
+- **Perfiles es la primera pestaña** de la nav (antes Ranked)
+- **Auditoría** audita el **perfil principal** (se elige en `/perfiles`, sin selector en la página) y muestra la línea de reglas aplicadas (`Reglas de X · vN`); los badges de cada partida ahora distinguen `M` principal, `B` backup, `P` fuera de pool y `X` prohibido
+- **Tienda**: solo se muestra la tienda del **perfil principal**; si la sesión conectada (Riot Client/RSO) es de otra cuenta, se avisa y no se enseña la tienda ajena (la vigilancia push tampoco notifica)
+- El bucket de fondo (cron) calienta los perfiles visibles; el resumen semanal sale de los mismos datos cacheados ($0 extra)
+- Endpoint de agentes ahora incluye el **rol** (para el editor de reglas)
+- Migración de `lib/team.ts` a `lib/profileTypes.ts` + `lib/profiles.ts`; las rutas `summary/refresh/backfill/status` y el detalle de partida resuelven por id de perfil
+- `/` redirige a `/valorant`; la nav suma **Perfiles** (primera) y pierde **Aim Lab**
+
+### Removed
+- **Aim Lab**: página `/`, `GET /api/data`, `lib/aimlab.ts`, `lib/analysis.ts`, `lib/useAimlabData.ts`, `lib/config.ts` y las variables `AIMLAB_*`
+
+### Fixed
+- **Gráfico de RR acumulado** (auditoría por día): eje con cero real — antes usaba `Math.abs` y +57 se dibujaba igual que −57 (abajo); ahora los positivos van sobre la línea de 0 y la línea "real" incluye las partidas posteriores al corte
+- Snapshots de auditoría aislados por perfil (antes dos personas con partidas el mismo día compartían la misma clave)
+
+## [1.7.3] — 2026-09-03
+Auditoría de correctitud (20 bugs de la misma familia que el D1/D2): datos parciales,
+mezclados o inventados que se mostraban como exactos.
+
+### Fixed — gráfico RANGO
+- Sin clamp de RR (Radiant y derank-protection ya no se aplanan) y `tierShort` cubre 27+ como RAD
+- Un punto por partida en día/semana: las promociones y deranks intra-día ya no se ocultan
+- Eje Y con piso dinámico (antes recortaba caídas bajo P3) y `TierChart` sin piso fijo ni tiers inventados para Unrated
+- Eje X legible: una marca por día distinto (máx. ~10) en vez de una por punto, en el comparativo y en el gráfico de rango de Ranked, con separación mínima de 48 px entre marcas
+
+### Fixed — números coherentes
+- Heatmap con empates excluidos del WR (igual que el ranking) y récord con E
+- Cobertura de RR en todas partes (`~` + tooltip: ranking, detalle por agente, historial diario, chip de Ranked, ventana del summary con `rrMissing`)
+- Medallas solo en orden descendente y compartidas en empates
+- ACS/ADR/HS% del comparativo desde totales crudos (igual que el diario); W-L muestra E
+- Team: % mostrado = muestra mostrada (ya no mezcla préstamo con V-D crudo), empates excluidos del WR, récord con E
+
+### Fixed — pipeline
+- Sin huecos: las páginas profundas ya no se saltan cuando la página 0 es toda nueva
+- Partidas incompletas ya no quedan stale para siempre (se reintentan y no se archivan a medias)
+- Rango actual ordenado por fecha y filtrado por temporada; tramos sin historial marcados `tierApprox` (~)
+- Refresh secuencial (menos 429), frescura por fuente (`mmrSyncedAt`) y el sondeo confirma cambios de MMR
+- Backfill con techo ya no dice `skipped` falso; badge de ventana truncada; caché en disco con hash anti-colisiones (+ adopción del formato anterior sin tormenta de requests)
+
+### Fixed — filtros y auditoría
+- Keys semanales `w-AAAA-MM-DD` (orden correcto, unificadas con auditoría); filtro `to` inclusivo; cobertura calculada sin filtros
+- Auditoría: costo de pool solo con pérdidas (las victorias suman en `violationGain`, tooltip con balance); snapshot restauran el split y el conteo guardado
+
+## [1.7.2] — 2026-09-03
+
+### Fixed
+- **Métrica RANGO marcaba un tier menos en promociones (y ocultaba deranks)**: el `tier` por partida salía del detalle del match (tier *previo* al partido) pero el RR del `mmr-history` (post-partida); al promocionar se mostraba "D1 · 10" en vez de "D2 · 10". Ahora el tier post-partida del `mmr-history` es el autoritativo y va junto a su RR (`lib/valorant.ts`)
+- Datos de Player2 refrescados (derankeó a D1 el 09-02 y volvió a **Diamante 2 · 10 RR** el 09-03): el gráfico de evolución por día/semana ya culmina en D2
+
 ## [1.7.1] — 2026-09-02
 
 ### Changed

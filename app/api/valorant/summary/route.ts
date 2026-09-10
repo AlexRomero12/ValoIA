@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { getValSummary } from '@/lib/valorant';
 import { refreshPlayer } from '@/lib/refresh';
-import { isValidPlayer, resolvePlayer, memberAccounts } from '@/lib/team';
+import { isValidProfile, getProfile } from '@/lib/profiles';
+import { memberAccounts } from '@/lib/profileTypes';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,8 @@ export async function GET(req: NextRequest) {
   const rawLimit = Number(sp.get('limit') ?? '');
   const limit = Number.isFinite(rawLimit) && rawLimit >= 1 && rawLimit <= 40 ? Math.floor(rawLimit) : undefined;
   const playerParam = sp.get('player');
-  if (!isValidPlayer(playerParam)) {
-    return Response.json({ error: `Jugador desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
+  if (!isValidProfile(playerParam)) {
+    return Response.json({ error: `Perfil desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
   }
   const playerId = playerParam || undefined;
 
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   let accountTag: string | undefined;
   const rawAccount = sp.get('account');
   if (rawAccount != null) {
-    const accs = memberAccounts(resolvePlayer(playerId));
+    const accs = memberAccounts(getProfile(playerId));
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) {
       accountName = accs[idx].name;

@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { TopBar } from '@/components/TopBar';
 import { AuditDay } from '@/components/audit/AuditDay';
-import { auditDay, groupAuditWeeks, mondayOf, type AuditDay as AuditDayT } from '@/lib/audit';
-import { sameAuditDay, storedToAuditDay, toStoredAuditDay, type StoredAuditDay } from '@/lib/auditHistory';
-import { useValSummary } from '@/lib/hooks';
+import { AuditRecommendations } from '@/components/audit/AuditRecommendations';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { auditDay, groupAuditWeeks, mondayOf, type AuditDay as AuditDayT, type AuditWeek } from '@/lib/audit';
+import { sameAuditDay, storedDayKey, storedToAuditDay, toStoredAuditDay, type StoredAuditDay } from '@/lib/auditHistory';
+import { useProfileActions, useProfiles, useValSummary } from '@/lib/hooks';
+import { emptyAuditRules, primaryOf, type AuditRules, type Profile } from '@/lib/profileTypes';
 import type { MatchComment } from '@/lib/matchComments';
 import type { MatchRow } from '@/lib/types';
 
@@ -38,18 +42,31 @@ function enrichWithHistory(d: AuditDayT, saved?: StoredAuditDay): AuditDayT {
     rrCoverage: true,
     rrMissing: 0,
     violationCost: saved.violationCost,
+    violationLoss: saved.violationLoss ?? (saved.violationCost != null && saved.violationCost < 0 ? saved.violationCost : null),
+    violationGain: saved.violationGain ?? (saved.violationCost != null && saved.violationCost > 0 ? saved.violationCost : null),
     stored: true,
+    storedMatches: saved.matches,
   };
 }
 
 export default function AuditoriaPage() {
   const [comments, setComments] = useState<Record<string, MatchComment>>({});
   const [history, setHistory] = useState<Record<string, StoredAuditDay>>({});
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [openWeek, setOpenWeek] = useState<string | null>(null);
   const saving = useRef(false);
   // Lunes de la semana actual, fijado una sola vez al montar la página.
   const [mondayTs] = useState(() => mondayOf(Date.now()).getTime());
 
-  const query = useValSummary({ kind: 'days', days: FETCH_DAYS }, 'player', LIMIT);
+  const profilesQ = useProfiles();
+  const actions = useProfileActions();
+
+  // Auditoría: SOLO el perfil principal (se elige en /perfiles; fallback al primer visible).
+  const profile: Profile | undefined = primaryOf(profilesQ.data ?? []);
+  const rules: AuditRules | undefined = profile?.audit;
+  const pid = profile?.id ?? '';
+
+  const query = useValSummary({ kind: 'days', days: FETCH_DAYS }, pid, LIMIT, Boolean(profile));
   const data = query.data;
 
   const commentsQ = useQuery<{ comments: Record<string, MatchComment> }>({
@@ -84,13 +101,17 @@ export default function AuditoriaPage() {
     // Días con partidas en vivo, enriquecidos con el snapshot guardado si el live es parcial.
     const byKey = new Map<string, AuditDayT>();
     for (const [k, list] of days.entries()) {
-      const live = auditDay(list);
-      byKey.set(k, enrichWithHistory(live, history[k]));
+      const live = auditDay(list, rules);
+      byKey.set(storedDayKey(pid, k), enrichWithHistory(live, history[storedDayKey(pid, k)]));
     }
-    // Días que la API ya no devuelve pero tenemos guardados (semanas pasadas).
-    for (const [k, s] of Object.entries(history)) {
-      if (s.dayStart >= mondayTs) continue; // la semana actual siempre se calcula en vivo
-      if (!byKey.has(k)) byKey.set(k, storedToAuditDay(s));
+    // Días que la API ya no devuelve pero tenemos guardados (semanas pasadas) del perfil.
+    const prefix = `${pid}:`;
+    if (pid) {
+      for (const [k, s] of Object.entries(history)) {
+        if (!k.startsWith(prefix)) continue;
+        if (s.dayStart >= mondayTs) continue; // la semana actual siempre se calcula en vivo
+        if (!byKey.has(k)) byKey.set(k, storedToAuditDay(s));
+      }
     }
     const audited = [...byKey.values()].sort((a, b) => b.dayStart - a.dayStart);
 
@@ -116,22 +137,37 @@ export default function AuditoriaPage() {
         planRR: sum((d) => d.planRR),
         planPoolRR: sum((d) => d.planPoolRR),
         violationCost: sum((d) => d.violationCost),
+        violationLoss: sum((d) => d.violationLoss),
+        violationGain: sum((d) => d.violationGain),
         violationCount: current.reduce((a, d) => a + d.violationCount, 0),
+        bannedCount: current.reduce((a, d) => a + d.bannedCount, 0),
         cutsIgnored: current.filter((d) => d.cutIgnored).length,
         cutsTotal: current.filter((d) => d.cutAt != null).length,
       },
       weekPartial: current.some((d) => !d.rrCoverage),
       weekRange: `${new Date(mondayTs).toLocaleDateString('es', { day: 'numeric', month: 'short' })} — ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'short' })}`,
     };
-  }, [data, mondayTs, history]);
+  }, [data, mondayTs, history, rules, pid]);
+
+  // Partidas de la semana en curso (recomendaciones de arriba); para semanas
+  // pasadas se filtra por el rango del "Ver más".
+  const currentWeekMatches = useMemo(
+    () => (data?.matches ?? []).filter((m) => m.timestamp >= mondayTs),
+    [data, mondayTs],
+  );
+  const weekMatchesOf = (w: AuditWeek) => {
+    const start = w.days[0]?.dayStart ?? 0;
+    const end = start + 7 * 86_400_000;
+    return (data?.matches ?? []).filter((m) => m.timestamp >= start && m.timestamp < end);
+  };
 
   // Persistir los días COMPLETOS que aún no están guardados (o que cambiaron):
   // cuando la API deje de devolver su RR, seguiremos teniendo el snapshot.
   useEffect(() => {
-    if (saving.current) return;
+    if (saving.current || !pid) return;
     const pending = allDays
       .filter((d) => d.rrCoverage)
-      .map(toStoredAuditDay)
+      .map((d) => toStoredAuditDay(d, pid, rules?.rulesVersion))
       .filter((s) => !history[s.key] || !sameAuditDay(history[s.key], s));
     if (!pending.length) return;
     saving.current = true;
@@ -148,7 +184,7 @@ export default function AuditoriaPage() {
       .finally(() => {
         saving.current = false;
       });
-  }, [allDays, history]);
+  }, [allDays, history, pid, rules?.rulesVersion]);
 
   const saveComment = async (matchId: string, text: string) => {
     const res = await fetch('/api/valorant/comments', {
@@ -165,8 +201,30 @@ export default function AuditoriaPage() {
     await Promise.all([query.refetch(), commentsQ.refetch(), historyQ.refetch()]);
   };
 
+  const applyRules = async (next: AuditRules) => {
+    if (!profile) return;
+    setApplyError(null);
+    const res = await actions.upsert({ id: profile.id, name: profile.name, tag: profile.tag, audit: next });
+    if (!res.ok) setApplyError(res.error ?? 'No se pudo aplicar la recomendación');
+  };
+
+  const configureRules = async () => {
+    if (!profile) return;
+    await applyRules(emptyAuditRules());
+  };
+
   const error = query.error as (Error & { code?: string }) | null;
   const wt = weekTotals;
+  const loadingProfiles = profilesQ.isLoading;
+  const coldLoad = Boolean(profile) && query.isLoading && !data;
+
+  const rulesSummary = rules
+    ? `Reglas de ${profile?.label}: ${Object.keys(rules.pool.byMap).length} mapas con pool${rules.pool.default && (rules.pool.default.main.length || rules.pool.default.backup.length) ? ' + default' : ''}${
+        rules.bannedRoles.length ? ` · ${rules.bannedRoles.join('/')} prohibido` : ''
+      } · corte ${rules.stop.losses}×K/D<${rules.stop.kdBelow} · sesión ≥ ${Math.round(rules.sessions.gapMinutes / 60)}h · v${rules.rulesVersion}`
+    : profile
+      ? `${profile.label} sin pool configurado — cortes con defaults (2×K/D<0.9 · sesión ≥ 3h)`
+      : '';
 
   return (
     <div className="wrap">
@@ -176,20 +234,47 @@ export default function AuditoriaPage() {
         subtitle={['Reglas de', 'sesión']}
         chip={
           <span className="chip-red">
-            {query.isLoading ? 'cargando…' : `${wt.matches} competitivas · ${fmtRR(wt.realRR)} RR (semana)`}
+            {loadingProfiles || coldLoad ? 'cargando…' : `${wt.matches} competitivas · ${fmtRR(wt.realRR)} RR (semana)`}
           </span>
         }
         updated={data ? `actualizado ${new Date(data.generatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null}
         onRefresh={refresh}
         loading={query.isFetching}
+        disabled={!profile}
         activePage="auditoria"
       />
 
+      <LoadingOverlay open={loadingProfiles} title="Cargando perfiles" message="Leyendo los perfiles configurados" blocking />
+      <LoadingOverlay
+        open={coldLoad}
+        title={`Cargando auditoría de ${profile?.label ?? ''}`}
+        message="Partidas y RR de los últimos 30 días (puede tardar en la primera carga)"
+        blocking
+      />
+
+      {!profile && !loadingProfiles ? (
+        <div className="panel" style={{ marginTop: 20 }}>
+          <p className="empty">
+            No hay ningún perfil. <Link href="/perfiles">Crea tus perfiles</Link> para auditar.
+          </p>
+        </div>
+      ) : null}
+
+      {profile ? (
+        <div className="controls" style={{ marginTop: 20 }}>
+          <label>Perfil principal</label>
+          <span className="f-chip player-on" title={`${profile.name}#${profile.tag}`}>{profile.label}</span>
+          <Link className="f-chip profile-chip add" href="/perfiles" title="Cambiar el perfil principal">Cambiar en Perfiles</Link>
+          <span className="window-info">{rulesSummary}</span>
+        </div>
+      ) : null}
+
+      {applyError ? <div className="banner error">{applyError}</div> : null}
       {error && <div className="banner error">{error.message}</div>}
 
-      {query.isLoading && <p className="empty" style={{ marginTop: 24 }}>Cargando auditoría…</p>}
+      {query.isLoading && !loadingProfiles && <p className="empty" style={{ marginTop: 24 }}>Cargando auditoría…</p>}
 
-      {data && (
+      {data && profile && (
         <>
           <div className="audit-hero">
             <div className="audit-hero-main">
@@ -217,11 +302,22 @@ export default function AuditoriaPage() {
                 {wt.cutsTotal ? `${wt.cutsIgnored}/${wt.cutsTotal} cortes ignorados` : 'sin cortes'}
               </span>
               <span className={`audit-falta${wt.violationCount ? ' bad' : ''}`}>
-                {wt.violationCount ? `${wt.violationCount} fuera de pool · ${fmtRR(wt.violationCost)} RR` : 'pool limpio'}
+                {wt.violationCount ? `${wt.violationCount} fuera de pool · ${fmtRR(wt.violationLoss)} RR` : 'pool limpio'}
               </span>
+              {wt.bannedCount ? <span className="audit-falta bad">{wt.bannedCount} prohibidos</span> : null}
               {weekPartial ? <span className="audit-falta warn">RR parcial</span> : null}
             </div>
           </div>
+
+          <AuditRecommendations
+            profile={profile}
+            rules={rules}
+            matches={currentWeekMatches}
+            days={currentDays}
+            scopeLabel="semana actual"
+            onApply={applyRules}
+            onConfigure={configureRules}
+          />
 
           {currentDays.length === 0 ? (
             <p className="empty" style={{ marginTop: 20 }}>
@@ -232,6 +328,7 @@ export default function AuditoriaPage() {
               <AuditDay
                 key={d.key}
                 day={d}
+                rules={rules}
                 comments={comments}
                 onSaveComment={saveComment}
                 defaultOpen={i === 0}
@@ -252,29 +349,72 @@ export default function AuditoriaPage() {
                     <tr>
                       <th>Semana</th><th className="num">Partidas</th><th className="num">RR real</th>
                       <th className="num">Con regla</th><th className="num">Regla + pool</th>
-                      <th className="num">Fuera de pool</th><th className="num">Cortes</th>
+                      <th className="num">Fuera de pool</th><th className="num">Cortes</th><th />
                     </tr>
                   </thead>
                   <tbody>
                     {pastWeeks.map((w) => (
-                      <tr key={w.key}>
-                        <td>
-                          {w.label}
-                          {w.rrPartial ? (
-                            <span className="audit-warn" title="Algún día sin RR completo ni snapshot"> · parcial</span>
-                          ) : w.days.every((d) => d.stored) ? (
-                            <span className="audit-warn" title="RR recuperado del snapshot guardado"> · guardado</span>
-                          ) : null}
-                        </td>
-                        <td className="num">{w.matches}</td>
-                        <td className={`num ${(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}`}>{fmtRR(w.realRR)}</td>
-                        <td className="num">{fmtRR(w.planRR)}</td>
-                        <td className="num">{fmtRR(w.planPoolRR)}</td>
-                        <td className="num">{w.violationCount ? `${w.violationCount} · ${fmtRR(w.violationCost)}` : '—'}</td>
-                        <td className="num">
-                          {w.cutsTotal ? `${w.cutsIgnored}/${w.cutsTotal} ignorados` : '—'}
-                        </td>
-                      </tr>
+                      <Fragment key={w.key}>
+                        <tr>
+                          <td>
+                            {w.label}
+                            {w.rrPartial ? (
+                              <span className="audit-warn" title="Algún día sin RR completo ni snapshot"> · parcial</span>
+                            ) : w.days.every((d) => d.stored) ? (
+                              <span className="audit-warn" title="RR recuperado del snapshot guardado"> · guardado</span>
+                            ) : null}
+                          </td>
+                          <td className="num">{w.matches}</td>
+                          <td className={`num ${(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}`}>{fmtRR(w.realRR)}</td>
+                          <td className="num">{fmtRR(w.planRR)}</td>
+                          <td className="num">{fmtRR(w.planPoolRR)}</td>
+                          <td className="num">
+                            {w.violationCount ? `${w.violationCount}${w.bannedCount ? ` (${w.bannedCount} proh.)` : ''} · ${fmtRR(w.violationLoss)}` : '—'}
+                          </td>
+                          <td className="num">
+                            {w.cutsTotal ? `${w.cutsIgnored}/${w.cutsTotal} ignorados` : '—'}
+                          </td>
+                          <td className="num">
+                            <button
+                              className="f-chip"
+                              onClick={() => setOpenWeek(openWeek === w.key ? null : w.key)}
+                              aria-expanded={openWeek === w.key}
+                            >
+                              {openWeek === w.key ? 'Ver menos' : 'Ver más'}
+                            </button>
+                          </td>
+                        </tr>
+                        {openWeek === w.key ? (
+                          <tr className="week-detail-row">
+                            <td colSpan={8}>
+                              <AuditRecommendations
+                                embedded
+                                profile={profile}
+                                rules={rules}
+                                matches={weekMatchesOf(w)}
+                                days={w.days}
+                                scopeLabel={`semana del ${w.label}`}
+                                onApply={applyRules}
+                                onConfigure={configureRules}
+                              />
+                              {w.days.filter((d) => d.matches.length > 0).map((d) => (
+                                <AuditDay
+                                  key={d.key}
+                                  day={d}
+                                  rules={rules}
+                                  comments={comments}
+                                  onSaveComment={saveComment}
+                                />
+                              ))}
+                              {w.days.some((d) => d.matches.length === 0) ? (
+                                <p className="audit-cover-note">
+                                  {w.days.filter((d) => d.matches.length === 0).length} día(s) solo con snapshot (sin detalle de partidas).
+                                </p>
+                              ) : null}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

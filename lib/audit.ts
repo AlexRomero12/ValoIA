@@ -1,14 +1,18 @@
 import type { MatchRow } from './types';
+import { agentRole } from './roles';
+import { poolRuleFor, type AuditRules } from './profileTypes';
 
 /**
  * Motor de auditoría de sesión (Reglas de sesión, plan_mejora_player.md).
  *
- * Regla de parada: 2 derrotas seguidas con K/D < 0.9 = cerrar sesión.
+ * Regla de parada: N derrotas seguidas con K/D < X = cerrar sesión
+ * (default 2 derrotas con K/D < 0.9).
  * - Solo una VICTORIA reinicia el contador.
- * - Empates y derrotas con K/D >= 0.9 no reinician ni cancelan la cadena.
- * - Sesión nueva = pausa >= 3 h entre partidas (el contador arranca en 0).
+ * - Empates y derrotas con K/D >= X no reinician ni cancelan la cadena.
+ * - Sesión nueva = pausa >= gap entre partidas (default 3 h; el contador arranca en 0).
  *
- * Violación de pool: agente fuera del pool vigente en una competitiva.
+ * Pool: cada partida se clasifica como main / backup / fuera / prohibido según
+ * las reglas del perfil (`AuditRules`); fuera y prohibido son violación.
  */
 
 export interface AuditPool {
@@ -16,15 +20,18 @@ export interface AuditPool {
   backup: string[];
 }
 
-/** Pool vigente desde el 31 ago 2026 (champion_pool.md). Actualizar aquí cuando cambie (ej. Neon en Fase 3). */
+/** Pool por defecto (histórico de Player) cuando el perfil no define reglas. */
 export const AUDIT_POOL: AuditPool = {
   main: ['Jett', 'Raze', 'Chamber'],
   backup: ['Sage', 'Astra'],
 };
 
-/** Pausa >= 3 h entre partidas = sesión nueva (el contador se reinicia). */
+/** Clasificación de un pick contra las reglas del perfil. */
+export type PickClass = 'main' | 'backup' | 'off' | 'banned' | 'flex';
+
+/** Pausa >= 3 h entre partidas = sesión nueva (default). */
 export const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
-/** Umbral de la regla de parada. */
+/** Umbral de la regla de parada (default). */
 export const STOP_KD = 0.9;
 
 export function isDraw(m: MatchRow): boolean {
@@ -35,6 +42,20 @@ export function matchKd(m: MatchRow): number {
   return m.deaths ? m.kills / m.deaths : m.kills > 0 ? m.kills : 0;
 }
 
+/** Clasifica el agente de una partida contra las reglas (flex = sin regla). */
+export function classifyPick(m: MatchRow, rules?: AuditRules): PickClass {
+  if (!rules) return 'flex';
+  if ((rules.bannedAgents ?? []).includes(m.agent)) return 'banned';
+  const role = m.agentRole ?? agentRole(m.agent);
+  if (role && (rules.bannedRoles ?? []).includes(role)) return 'banned';
+  const rule = poolRuleFor(rules, m.map);
+  if (!rule) return 'flex';
+  if (rule.main.includes(m.agent)) return 'main';
+  if (rule.backup.includes(m.agent)) return 'backup';
+  return 'off';
+}
+
+/** Violación de pool plana (compat): agente fuera de main+backup. */
 export function isPoolViolation(m: MatchRow, pool: AuditPool = AUDIT_POOL): boolean {
   return !pool.main.includes(m.agent) && !pool.backup.includes(m.agent);
 }
@@ -42,11 +63,13 @@ export function isPoolViolation(m: MatchRow, pool: AuditPool = AUDIT_POOL): bool
 export interface AuditMatchRow {
   match: MatchRow;
   kd: number;
-  /** Contador de la regla tras esta partida (0-2). */
+  /** Contador de la regla tras esta partida (0-2 típicamente). */
   counterAfter: number;
+  /** Clasificación del pick contra las reglas del perfil. */
+  pickClass: PickClass;
   /** Agente fuera de pool (competitiva). */
   violation: boolean;
-  /** Partida donde el contador llegó a 2 (aquí se corta; esta no se cuenta como "no debiste"). */
+  /** Partida donde el contador llegó al umbral (aquí se corta; esta no se cuenta como "no debiste"). */
   cutPoint: boolean;
   /** Posterior al punto de corte (no debiste jugarla). */
   afterCut: boolean;
@@ -71,7 +94,17 @@ export interface AuditDay {
   /** Cuántos rrDelta faltaban en el día (sumas parciales). */
   rrMissing: number;
   violationCount: number;
+  /** Partidas con agente prohibido (agente o rol vetado). */
+  bannedCount: number;
+  /**
+   * Balance neto de las violaciones (puede ser positivo: una victoria fuera
+   * de pool suma). Para el "costo" real ver violationLoss.
+   */
   violationCost: number | null;
+  /** RR perdido en violaciones (solo deltas negativos, ≤ 0). */
+  violationLoss: number | null;
+  /** RR ganado en violaciones (solo deltas positivos, ≥ 0). */
+  violationGain: number | null;
   /** Hora local del corte (p. ej. "14:11") o null si no se activó la regla. */
   cutAt: string | null;
   /** true si hubo corte y aun así se siguió jugando. */
@@ -113,7 +146,10 @@ function sumRR(rows: AuditMatchRow[], filter: (r: AuditMatchRow) => boolean): { 
 }
 
 /** Audita las competitivas de un día (entrada ya filtrada a competitive + completadas). */
-export function auditDay(matches: MatchRow[]): AuditDay {
+export function auditDay(matches: MatchRow[], rules?: AuditRules): AuditDay {
+  const stopKd = rules?.stop.kdBelow ?? STOP_KD;
+  const stopLosses = Math.max(1, Math.floor(rules?.stop.losses ?? 2));
+  const sessionGapMs = Math.max(1, rules?.sessions.gapMinutes ?? SESSION_GAP_MS / 60_000) * 60_000;
   const sorted = [...matches].sort((a, b) => a.timestamp - b.timestamp);
   const key = sorted.length ? isoDayLocal(sorted[0].timestamp) : '?';
   const dayStart = sorted.length ? new Date(sorted[0].timestamp).setHours(0, 0, 0, 0) : 0;
@@ -126,7 +162,7 @@ export function auditDay(matches: MatchRow[]): AuditDay {
   for (let i = 0; i < sorted.length; i++) {
     const m = sorted[i];
     const prev = sorted[i - 1];
-    if (prev && m.timestamp - prev.timestamp >= SESSION_GAP_MS) {
+    if (prev && m.timestamp - prev.timestamp >= sessionGapMs) {
       session += 1;
       counter = 0;
     }
@@ -134,16 +170,18 @@ export function auditDay(matches: MatchRow[]): AuditDay {
     const draw = isDraw(m);
     if (!draw) {
       if (m.won) counter = 0;
-      else if (kd < STOP_KD) counter = Math.min(2, counter + 1);
-      // derrota con K/D >= 0.9: no reinicia ni cancela
+      else if (kd < stopKd) counter = Math.min(stopLosses, counter + 1);
+      // derrota con K/D >= umbral: no reinicia ni cancela
     }
-    const cutPoint = counter >= 2 && cutAtIdx === -1;
+    const cutPoint = counter >= stopLosses && cutAtIdx === -1;
     if (cutPoint) cutAtIdx = i;
+    const pickClass = classifyPick(m, rules);
     rows.push({
       match: m,
       kd,
       counterAfter: counter,
-      violation: isPoolViolation(m),
+      pickClass,
+      violation: pickClass === 'off' || pickClass === 'banned',
       cutPoint,
       afterCut: cutAtIdx !== -1 && i > cutAtIdx,
       session,
@@ -155,16 +193,23 @@ export function auditDay(matches: MatchRow[]): AuditDay {
   const planPool = sumRR(rows, (r) => !r.afterCut && !r.violation);
 
   const violations = rows.filter((r) => r.violation);
-  const violationCost = (() => {
+  const splitRR = (pred: (d: number) => boolean): number | null => {
     let sum = 0;
     let present = 0;
     for (const r of violations) {
-      if (r.match.rrDelta == null) continue;
-      sum += r.match.rrDelta;
+      const d = r.match.rrDelta;
+      if (d == null || !pred(d)) continue;
+      sum += d;
       present += 1;
     }
     return present ? sum : null;
-  })();
+  };
+  const violationCost = splitRR(() => true);
+  // Costo = solo lo perdido (≤ 0): una victoria fuera de pool (+15) no es un
+  // costo y antes se pintaba en rojo como si lo fuera. El neto queda en
+  // violationCost y lo ganado en violationGain.
+  const violationLoss = splitRR((d) => d < 0);
+  const violationGain = splitRR((d) => d > 0);
 
   const cutIdx = rows.findIndex((r) => r.cutPoint);
 
@@ -179,7 +224,10 @@ export function auditDay(matches: MatchRow[]): AuditDay {
     rrCoverage: real.coverage,
     rrMissing: real.missing,
     violationCount: violations.length,
+    bannedCount: rows.filter((r) => r.pickClass === 'banned').length,
     violationCost,
+    violationLoss,
+    violationGain,
     cutAt: cutIdx >= 0 ? hourLocal(sorted[cutIdx].timestamp) : null,
     cutIgnored: cutIdx >= 0 && rows.some((r) => r.afterCut),
     sessions: session + 1,
@@ -204,7 +252,10 @@ export interface AuditWeek {
   planRR: number | null;
   planPoolRR: number | null;
   violationCount: number;
+  bannedCount: number;
   violationCost: number | null;
+  violationLoss: number | null;
+  violationGain: number | null;
   cutsTotal: number;
   cutsIgnored: number;
   /** true si algún día de la semana tenía rrDelta faltantes (sumas parciales). */
@@ -236,7 +287,10 @@ export function groupAuditWeeks(days: AuditDay[]): AuditWeek[] {
         planRR: sum((d) => d.planRR),
         planPoolRR: sum((d) => d.planPoolRR),
         violationCount: list.reduce((a, d) => a + d.violationCount, 0),
+        bannedCount: list.reduce((a, d) => a + d.bannedCount, 0),
         violationCost: sum((d) => d.violationCost),
+        violationLoss: sum((d) => d.violationLoss),
+        violationGain: sum((d) => d.violationGain),
         cutsTotal: list.filter((d) => d.cutAt != null).length,
         cutsIgnored: list.filter((d) => d.cutIgnored).length,
         rrPartial: list.some((d) => !d.rrCoverage),

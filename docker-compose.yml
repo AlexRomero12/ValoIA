@@ -11,7 +11,8 @@ services:
       CACHE_DIR: /app/data/cache
       # Archivo acumulativo de partidas: persistente, inmune al borrado del cache.
       ARCHIVE_DIR: /app/data/archive
-      # Datos persistentes de la app (favoritas, suscripciones push, tokens RSO):
+      # Datos persistentes de la app (perfiles, favoritas, suscripciones push,
+      # comentarios, historial de auditoría, tokens RSO):
       # mismos valores de durabilidad que el archive.
       DATA_DIR: /app/data
       # API local del Riot Client: el contenedor accede al host de Windows.

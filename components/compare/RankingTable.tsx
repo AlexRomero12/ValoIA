@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { wrColor } from '@/lib/metas';
 import { TierIcon } from '@/components/TierIcon';
 import type { PlayerStats } from '@/lib/compare';
-import type { MetricKey } from '@/lib/compare';
 
 export interface RankRow {
   id: string;
@@ -32,7 +31,7 @@ const COLUMNS: { key: SortKey; label: string; fmt: (r: RankRow) => string; bette
   { key: 'adr', label: 'ADR', fmt: (r) => String(Math.round(r.stats.adr)), better: 'high' },
   { key: 'hsPct', label: 'HS%', fmt: (r) => `${r.stats.hsPct.toFixed(1)}%`, better: 'high' },
   { key: 'games', label: 'Partidas', fmt: (r) => `${r.stats.wins}–${r.stats.losses}`, better: 'high' },
-  { key: 'rr', label: 'RR neto', fmt: (r) => (r.stats.rrTotal == null ? '—' : `${r.stats.rrTotal > 0 ? '+' : ''}${r.stats.rrTotal}`), better: 'high' },
+  { key: 'rr', label: 'RR neto', fmt: (r) => (r.stats.rrTotal == null ? '—' : `${r.stats.rrTotal > 0 ? '+' : ''}${r.stats.rrTotal}${r.stats.rrMissing > 0 ? '~' : ''}`), better: 'high' },
 ];
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -50,7 +49,24 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
     return (va - vb) * dir;
   });
 
-  const withRank = sorted.map((r, i) => ({ ...r, pos: i + 1 }));
+  // Medallas solo en orden descendente (mejor-primero): en ascendente el
+  // primero es el peor y la 🥇 mentía. Los empates comparten medalla
+  // (ranking de competición: 1, 1, 3…).
+  const desc = !asc[sortKey];
+  const vals = sorted.map((r) => metricValue(r, sortKey));
+  const withRank = sorted.map((r, i) => {
+    const v = vals[i];
+    let medal = 0;
+    if (desc && v != null) {
+      let rank = 1;
+      for (let j = 0; j < i; j++) {
+        const u = vals[j];
+        if (u != null && u > v) rank += 1;
+      }
+      medal = rank <= 3 ? rank : 0;
+    }
+    return { ...r, pos: i + 1, medal };
+  });
 
   return (
     <div className="table-scroll">
@@ -74,7 +90,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                   onSortKey(c.key);
                   setAsc((a) => ({ ...a, [c.key]: !a[c.key] }));
                 }}
-                title={`Ordenar por ${c.label}`}
+                title={c.key === 'rr' ? 'Ordenar por RR neto (~ = parcial: hay partidas sin dato de RR)' : `Ordenar por ${c.label}`}
               >
                 {sortKey === c.key ? (asc[c.key] ? '↑ ' : '↓ ') : ''}{c.label}
               </th>
@@ -84,7 +100,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
         <tbody>
           {withRank.map((r) => (
             <tr key={r.id}>
-              <td className="pos">{sortKey === primaryOf(sortKey) ? (MEDALS[r.pos - 1] ?? r.pos) : r.pos}</td>
+              <td className="pos">{r.medal ? MEDALS[r.medal - 1] : r.pos}</td>
               <td>
                 <span className="icon-cell">
                   <span className="p-dot" style={{ background: r.color }} />
@@ -99,9 +115,9 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                   <td
                     key={c.key}
                     className={`num${isBest && val != null ? ' stat-ok' : ''}${sortKey === c.key ? ' col-sorted' : ''}`}
-                    title={c.label}
+                    title={c.key === 'rr' && r.stats.rrMissing > 0 ? `RR de ${r.stats.games - r.stats.rrMissing}/${r.stats.games} partidas (${r.stats.rrMissing} sin dato)` : c.label}
                   >
-                    {(sortKey === c.key ? (MEDALS[r.pos - 1] ? `${MEDALS[r.pos - 1]} ` : '') : '') + c.fmt(r)}
+                    {(r.medal ? `${MEDALS[r.medal - 1]} ` : '') + c.fmt(r)}
                   </td>
                 );
               })}
@@ -114,10 +130,6 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
       </table>
     </div>
   );
-}
-
-function primaryOf(k: SortKey): SortKey {
-  return k;
 }
 
 function metricValue(r: RankRow, k: SortKey): number | null {

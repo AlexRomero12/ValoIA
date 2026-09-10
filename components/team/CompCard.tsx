@@ -15,7 +15,9 @@ const ROLE_COLOR: Record<string, string> = {
 };
 
 function PickStat({ pick }: { pick: AgentPick }) {
-  const losses = pick.games - pick.wins;
+  const draws = pick.draws ?? 0;
+  const losses = pick.games - pick.wins - draws;
+  const record = `${pick.wins}V–${losses}D${draws ? `–${draws}E` : ''}`;
   const srcLabel =
     pick.source === 'map' ? 'WR con este agente en este mapa'
       : pick.source === 'agent' ? 'WR global del agente (sin datos en este mapa)'
@@ -23,14 +25,14 @@ function PickStat({ pick }: { pick: AgentPick }) {
   return (
     <span
       className="comp-wr"
-      title={`${esc(pick.agent)} ${pick.games ? `— ${srcLabel}: ${pick.wins}V-${losses}D · K/D ${pick.kd.toFixed(2)}` : '— sin muestra'}`}
+      title={`${esc(pick.agent)} ${pick.games ? `— ${srcLabel}: ${record} · K/D ${pick.kd.toFixed(2)}` : '— sin muestra'}`}
     >
       {pick.source !== 'map' && pick.games > 0 && <span className="global-badge">global</span>}
       <span className="wr-num" style={{ color: wrColor(pick.wr) }}>
         {pick.games > 0 ? pick.wr.toFixed(0) : '—'}%
       </span>
       <span className="comp-sub" style={{ color: 'var(--faint)' }}>
-        {pick.games > 0 ? `${pick.games}p · ${pick.wins}V–${losses}D` : 'sin muestra'}
+        {pick.games > 0 ? `${pick.games}p · ${record}` : 'sin muestra'}
       </span>
       <span className="comp-sub" style={{ color: 'var(--faint)' }}>
         {pick.games > 0 ? `K/D ${pick.kd.toFixed(2)}` : ''}

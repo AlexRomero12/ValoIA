@@ -3,18 +3,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { TopBar } from '@/components/TopBar';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { FiltersBar, type WindowValue } from '@/components/compare/FiltersBar';
 import { RankingTable, type RankRow, type SortKey } from '@/components/compare/RankingTable';
 import { TrendCompare } from '@/components/compare/TrendCompare';
 import { AgentHeatmap } from '@/components/compare/AgentHeatmap';
 import { AgentStatsTable } from '@/components/compare/AgentStatsTable';
+import { ProfilePicker } from '@/components/profiles/ProfilePicker';
+import { ProfileForm } from '@/components/profiles/ProfileForm';
 import { useCooldown } from '@/lib/useCooldown';
-import { DEFAULT_LIMIT, nextLimit, MAX_LIMIT } from '@/lib/hooks';
-import { getTeam, memberAccounts } from '@/lib/team';
+import { DEFAULT_LIMIT, nextLimit, MAX_LIMIT, useProfiles } from '@/lib/hooks';
+import { memberAccounts, profileColor, type Profile } from '@/lib/profileTypes';
 import {
   applyFilters,
   buildTimeline,
   mergeAccountSummaries,
+  resolveGranularity,
   statsFromMatches,
   unionOf,
   tierShort,
@@ -25,25 +29,6 @@ import {
   DEFAULT_FILTERS,
 } from '@/lib/compare';
 import type { ValSummary } from '@/lib/types';
-
-const TEAM = getTeam();
-// Cuentas por miembro (principal + alternativas) para la mezcla de stats.
-const ACCOUNTS = TEAM.map((m) => memberAccounts(m));
-const QUERY_RANGES = (() => {
-  const ranges: { start: number; count: number }[] = [];
-  let s = 0;
-  for (const accs of ACCOUNTS) {
-    ranges.push({ start: s, count: accs.length });
-    s += accs.length;
-  }
-  return ranges;
-})();
-const COLORS: Record<string, string> = {
-  player: '#ff4655',
-  player2: '#35b6ff',
-  player3: '#e8c97a',
-  player4: '#2fd08a',
-};
 
 type WinValue = WindowValue;
 
@@ -57,22 +42,58 @@ function sleep(ms: number): Promise<void> {
 export default function ComparativoPage() {
   const [win, setWin] = useState<WinValue>('season');
   const [filters, setFilters] = useState<CompareFilters>(DEFAULT_FILTERS);
-  const [gran, setGran] = useState<Granularity>('week');
+  const [gran, setGran] = useState<Granularity>('auto');
   const [metric, setMetric] = useState<MetricKey>('wr');
   const [sortKey, setSortKey] = useState<SortKey>('wr');
   const [want, setWant] = useState<number>(DEFAULT_LIMIT);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
+  const [userSelected, setUserSelected] = useState<string[] | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const cooldown = useCooldown(15);
 
+  const profilesQ = useProfiles();
+  const allProfiles = useMemo(() => profilesQ.data ?? [], [profilesQ.data]);
+
+  // Selección derivada: los visibles por defecto; el usuario puede ajustarla
+  // (incluso dejarla vacía) y esa elección manda una vez existe.
+  const defaultSelected = useMemo(() => {
+    const visibles = allProfiles.filter((p) => p.visible).map((p) => p.id);
+    return visibles.length ? visibles : allProfiles.map((p) => p.id);
+  }, [allProfiles]);
+  const selectedIds = userSelected ?? defaultSelected;
+
+  const selected = useMemo(
+    () => selectedIds.map((id) => allProfiles.find((p) => p.id === id)).filter((p): p is Profile => p != null),
+    [selectedIds, allProfiles],
+  );
+
+  const colorOf = useMemo(() => {
+    const map = new Map<string, string>();
+    allProfiles.forEach((p, i) => map.set(p.id, profileColor(p, i)));
+    return map;
+  }, [allProfiles]);
+
+  const accounts = useMemo(() => selected.map((m) => memberAccounts(m)), [selected]);
+  const queryRanges = useMemo(() => {
+    const ranges: { start: number; count: number }[] = [];
+    let s = 0;
+    for (const accs of accounts) {
+      ranges.push({ start: s, count: accs.length });
+      s += accs.length;
+    }
+    return ranges;
+  }, [accounts]);
+
   const queries = useQueries({
-    queries: ACCOUNTS.flatMap((accs, mi) =>
-      accs.map((_, ai) => ({
-        queryKey: ['compare', TEAM[mi].id, ai, win, want],
+    queries: selected.flatMap((profile, mi) =>
+      accounts[mi].map((_, ai) => ({
+        queryKey: ['compare', profile.id, ai, win, want],
         queryFn: async () => {
           const qs = win === 'season' ? 'season=current' : `days=${win}`;
           const res = await fetch(
-            `/api/valorant/summary?${qs}&limit=${want}&player=${encodeURIComponent(TEAM[mi].id)}&account=${ai}`,
+            `/api/valorant/summary?${qs}&limit=${want}&player=${encodeURIComponent(profile.id)}&account=${ai}`,
           );
           const json = await res.json();
           if (!res.ok || json.error) throw Object.assign(new Error(json.error || 'Error de red'), { code: json.code });
@@ -84,16 +105,20 @@ export default function ComparativoPage() {
   });
 
   const refresh = async () => {
-    if (isRefreshing || cooldown.locked) return;
+    if (isRefreshing || cooldown.locked || selected.length === 0) return;
     setIsRefreshing(true);
     setRefreshError(null);
-    const before = queries.map((q) => (q.data as ValSummary | undefined)?.window.syncedAt ?? null);
+    setRefreshProgress({ done: 0, total: queries.length });
+    const before = queries.map((q) => {
+      const w = (q.data as ValSummary | undefined)?.window;
+      return `${w?.syncedAt ?? ''}|${(w as { mmrSyncedAt?: string | null } | undefined)?.mmrSyncedAt ?? ''}`;
+    });
     try {
       await Promise.all(
-        ACCOUNTS.flatMap((accs, mi) =>
-          accs.map((_, ai) =>
+        selected.flatMap((profile, mi) =>
+          accounts[mi].map((_, ai) =>
             fetch(
-              `/api/valorant/refresh?player=${encodeURIComponent(TEAM[mi].id)}&scope=all&limit=${want}&account=${ai}`,
+              `/api/valorant/refresh?player=${encodeURIComponent(profile.id)}&scope=all&limit=${want}&account=${ai}`,
               { method: 'POST' },
             ),
           ),
@@ -104,8 +129,13 @@ export default function ComparativoPage() {
       while (!done && Date.now() < deadline) {
         await sleep(POLL_MS);
         const results = await Promise.all(queries.map((q) => q.refetch()));
-        const synced = results.map((r) => (r.data as ValSummary | undefined)?.window.syncedAt ?? null);
-        done = synced.every((s, i) => s == null || s !== before[i]);
+        const synced = results.map((r) => {
+          const w = (r.data as ValSummary | undefined)?.window;
+          return `${w?.syncedAt ?? ''}|${(w as { mmrSyncedAt?: string | null } | undefined)?.mmrSyncedAt ?? ''}`;
+        });
+        const okCount = synced.filter((s, i) => s === '|' || s !== before[i]).length;
+        setRefreshProgress({ done: okCount, total: synced.length });
+        done = okCount === synced.length || synced.every((s, i) => s === '|' || s !== before[i]);
         if (done) break;
       }
       if (!done) {
@@ -115,11 +145,14 @@ export default function ComparativoPage() {
       setRefreshError('No se pudo iniciar la actualización del equipo.');
     } finally {
       setIsRefreshing(false);
+      setRefreshProgress(null);
       cooldown.trigger();
     }
   };
 
-  const allLoaded = queries.every((q) => q.data);
+  const totalAccounts = queries.length;
+  const loadedAccounts = queries.filter((q) => q.data).length;
+  const allLoaded = queries.every((q) => q.data) && totalAccounts > 0;
   const canLoadMore =
     allLoaded && queries[0].data != null &&
     queries.every((q) => {
@@ -129,30 +162,28 @@ export default function ComparativoPage() {
     (queries[0].data as ValSummary).window.fetchedMatches < MAX_LIMIT && nextLimit(want) != null;
 
   const entries = useMemo(() => {
-    return TEAM.map((m, mi) => {
-      const { start, count } = QUERY_RANGES[mi];
+    return selected.map((m, mi) => {
+      const { start, count } = queryRanges[mi];
       const qs = queries.slice(start, start + count);
       const merged = mergeAccountSummaries(qs.map((q) => q.data));
       return {
         member: m,
         accounts: count,
+        color: colorOf.get(m.id) ?? '#93a4b3',
         data: merged,
         error: qs.find((q) => q.error)?.error,
         isLoading: qs.some((q) => q.isLoading),
       };
     });
-  }, [queries]);
+  }, [queries, selected, queryRanges, colorOf]);
 
   const anyLoading = entries.some((e) => e.isLoading);
   const loaded = entries.filter((e) => e.data);
 
-  const filteredPerPlayer = useMemo(
-    () => entries.map((e) => applyFilters(e.data?.matches ?? [], filters)),
-    [entries, filters],
-  );
+  const filteredPerPlayer = entries.map((e) => applyFilters(e.data?.matches ?? [], filters));
 
-  const agents = useMemo(() => unionOf(loaded.map((e) => e.data?.matches ?? []), (m) => m.agent), [entries]);
-  const maps = useMemo(() => unionOf(loaded.map((e) => e.data?.matches ?? []), (m) => m.map), [entries]);
+  const agents = unionOf(loaded.map((e) => e.data?.matches ?? []), (m) => m.agent);
+  const maps = unionOf(loaded.map((e) => e.data?.matches ?? []), (m) => m.map);
 
   const toggleAgent = (name: string) =>
     setFilters((f) => ({
@@ -170,7 +201,7 @@ export default function ComparativoPage() {
           const row: RankRow & { matchesCount: number } = {
             id: e.member.id,
             label: e.member.label,
-            color: COLORS[e.member.id] ?? '#93a4b3',
+            color: e.color,
             tier: e.data.currentTier,
             elo: e.data.currentElo ?? null,
             rr: e.data.currentRR ?? null,
@@ -184,37 +215,90 @@ export default function ComparativoPage() {
     [entries, filteredPerPlayer, filters.minGames],
   );
 
+  // Rango efectivo del filtro (para granularidad auto + relleno de días).
+  const rangeInfo = useMemo(() => {
+    const fromTs = filters.from ? Date.parse(`${filters.from}T00:00:00`) : null;
+    const toTs = filters.to ? Date.parse(`${filters.to}T00:00:00`) + 86_400_000 - 1 : null;
+    let min = Infinity;
+    let max = -Infinity;
+    for (const list of filteredPerPlayer) for (const m of list) {
+      if (m.timestamp < min) min = m.timestamp;
+      if (m.timestamp > max) max = m.timestamp;
+    }
+    if (!Number.isFinite(min)) {
+      for (const e of entries) for (const m of e.data?.matches ?? []) {
+        if (m.timestamp < min) min = m.timestamp;
+        if (m.timestamp > max) max = m.timestamp;
+      }
+    }
+    let start: number | null = fromTs;
+    let end: number | null = toTs;
+    let spanDays: number;
+    if (fromTs != null && toTs != null) {
+      spanDays = Math.max(1, Math.round((toTs - fromTs + 1) / 86_400_000));
+    } else if (win !== 'season' && fromTs == null && toTs == null) {
+      spanDays = Number(win);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      end = today.getTime() + 86_400_000 - 1;
+      start = today.getTime() - (spanDays - 1) * 86_400_000;
+    } else {
+      start = fromTs ?? (Number.isFinite(min) ? min : null);
+      end = toTs ?? (Number.isFinite(max) ? max : null);
+      if (win !== 'season') spanDays = Number(win);
+      else if (start != null && end != null) spanDays = Math.max(1, Math.round((end - start) / 86_400_000) + 1);
+      else spanDays = 30;
+    }
+    return { fromTs: start, toTs: end, spanDays };
+  }, [entries, filteredPerPlayer, filters.from, filters.to, win]);
+
+  const effGran = resolveGranularity(gran, rangeInfo.spanDays);
+
   const trendSeries = useMemo(
     () =>
-      TEAM.map((m, i) => {
+      selected.map((m, i) => {
         if (!loaded.some((e) => e.member.id === m.id)) return null;
         const ms = filteredPerPlayer[i];
         if (ms.length < filters.minGames && filters.minGames > 0) return null;
-        const points = buildTimeline(ms, gran, metric).filter((p) => p.value != null);
-        if (!points.length) return null;
+        const fill = effGran === 'day' && metric !== 'rank' && rangeInfo.spanDays <= 31;
+        const points = buildTimeline(ms, effGran, metric, {
+          fillEmptyDays: fill,
+          fromTs: fill ? rangeInfo.fromTs : null,
+          toTs: fill ? rangeInfo.toTs : null,
+        });
+        if (!points.some((p) => p.value != null)) return null;
         return {
           id: m.id,
           label: m.label,
-          color: COLORS[m.id] ?? '#93a4b3',
+          color: colorOf.get(m.id) ?? '#93a4b3',
           points,
         };
       }).filter((s): s is NonNullable<typeof s> => s != null),
-    [entries, filteredPerPlayer, filters.minGames, gran, metric],
+    [selected, loaded, filteredPerPlayer, filters.minGames, effGran, metric, rangeInfo, colorOf],
   );
 
-  // Líneas de cuadrícula de la métrica de rango: un tier por línea, desde P3.
+  // Líneas de cuadrícula de la métrica de rango: un tier por línea.
+  const rankFloor = useMemo(() => {
+    const vs = trendSeries.flatMap((s) => s.points.map((p) => p.value).filter((v): v is number => v != null));
+    const floor = vs.length ? Math.floor(Math.min(...vs) / 100) * 100 : RANK_AXIS_MIN;
+    return Math.min(RANK_AXIS_MIN, floor);
+  }, [trendSeries]);
   const rankTicks = useMemo(() => {
     const vs = trendSeries.flatMap((s) => s.points.map((p) => p.value ?? 0));
     const top = vs.length ? Math.max(...vs) : RANK_AXIS_MIN;
     const ticks: number[] = [];
-    for (let t = RANK_AXIS_MIN; t <= top + 100; t += 100) ticks.push(t);
+    for (let t = rankFloor; t <= top + 100; t += 100) ticks.push(t);
     return ticks;
-  }, [trendSeries]);
+  }, [trendSeries, rankFloor]);
 
   const fmtMetric = (v: number) => {
     if (metric === 'kd') return v.toFixed(2);
     if (metric === 'wr') return `${v.toFixed(0)}%`;
     if (metric === 'rank') {
+      if (v >= 27 * 100) {
+        const rr = Math.round(v - 27 * 100);
+        return rr > 0 ? `RAD · ${rr}` : 'RAD';
+      }
       const tier = Math.floor(v / 100);
       const rr = Math.round(v % 100);
       const name = tierShort(tier);
@@ -225,30 +309,55 @@ export default function ComparativoPage() {
 
   const oldestTs = useMemo(() => {
     let min = Infinity;
-    for (const list of filteredPerPlayer) for (const m of list) min = Math.min(min, m.timestamp);
+    for (const e of entries) for (const m of e.data?.matches ?? []) min = Math.min(min, m.timestamp);
     return Number.isFinite(min) ? new Date(min) : null;
-  }, [filteredPerPlayer]);
+  }, [entries]);
+  const anyTruncated = entries.some((e) => e.data?.window.truncated === true);
 
   useEffect(() => () => setFilters(DEFAULT_FILTERS), [win]);
+
+  const loadingProfiles = profilesQ.isLoading;
+  const coldLoad = selected.length > 0 && anyLoading && loadedAccounts === 0;
 
   return (
     <div className="wrap">
       <TopBar
         accent="red"
         title="Comparar"
-        subtitle={['Equipo', 'Cuarteto']}
+        subtitle={['Equipo', 'Perfiles']}
         chip={
           <span className="chip-red">
-            {anyLoading
-              ? 'cargando equipo…'
-              : `${rankRows.length}/4 perfiles · ${filteredPerPlayer.reduce((a, l) => a + l.length, 0)} partidas`}
+            {loadingProfiles || coldLoad
+              ? `cargando ${loadedAccounts}/${totalAccounts}…`
+              : `${rankRows.length}/${selected.length} perfiles · ${filteredPerPlayer.reduce((a, l) => a + l.length, 0)} partidas`}
           </span>
         }
         updated={null}
         onRefresh={refresh}
         loading={isRefreshing}
-        disabled={cooldown.locked}
+        disabled={cooldown.locked || selected.length === 0}
         activePage="comparar"
+      />
+
+      <LoadingOverlay
+        open={loadingProfiles}
+        title="Cargando perfiles"
+        message="Leyendo los perfiles configurados"
+        blocking
+      />
+      <LoadingOverlay
+        open={coldLoad}
+        title="Cargando perfiles seleccionados"
+        message={`Partidas y MMR de ${selected.length} perfil(es) — la primera carga puede tardar`}
+        progress={{ done: loadedAccounts, total: totalAccounts }}
+        blocking
+      />
+      <LoadingOverlay
+        open={isRefreshing}
+        title="Actualizando perfiles"
+        message="Sincronizando partidas y MMR (throttle ~18 req/min)"
+        progress={refreshProgress}
+        hint={refreshProgress && refreshProgress.done < refreshProgress.total ? 'No cierres la pestaña: el progreso se confirma perfil a perfil.' : undefined}
       />
 
       {refreshError && (
@@ -256,36 +365,54 @@ export default function ComparativoPage() {
       )}
 
       <div className="controls" style={{ marginTop: 20 }}>
-        {entries.map((e, i) => (
-          <span
-            key={e.member.id}
-            className={`mini-card${e.isLoading ? ' skel' : ''}`}
-            title={
-              e.accounts > 1
-                ? ACCOUNTS[i].map((a, ai) => `cuenta ${ai + 1}: ${a.name}#${a.tag}`).join(' · ')
-                : undefined
-            }
-          >
-            <span className="p-dot" style={{ background: COLORS[e.member.id] }} />
-            <b>{TEAM[i].label}{e.accounts > 1 ? ` · ${e.accounts} cuentas` : ''}</b>
-            {e.data ? (
-              <span className="mini-stats">
-                {statsFromMatches(filteredPerPlayer[i]).games}p · WR{' '}
-                {statsFromMatches(filteredPerPlayer[i]).wr.toFixed(0)}%
-              </span>
-            ) : (
-              <span className="mini-stats">…</span>
-            )}
-          </span>
-        ))}
+        <label>Perfiles</label>
+        <ProfilePicker
+          profiles={allProfiles}
+          selected={selectedIds}
+          onChange={setUserSelected}
+          onAddProfile={() => setFormOpen(true)}
+        />
       </div>
 
-      {ACCOUNTS.some((accs) => accs.length > 1) && (
+      {selected.length === 0 && !loadingProfiles ? (
+        <div className="panel">
+          <p className="empty">Selecciona al menos un perfil para comparar (o agrega uno nuevo).</p>
+        </div>
+      ) : null}
+
+      {entries.length > 0 ? (
+        <div className="controls" style={{ marginTop: 8 }}>
+          {entries.map((e, i) => (
+            <span
+              key={e.member.id}
+              className={`mini-card${e.isLoading ? ' skel' : ''}`}
+              title={
+                e.accounts > 1
+                  ? accounts[i].map((a, ai) => `cuenta ${ai + 1}: ${a.name}#${a.tag}`).join(' · ')
+                  : undefined
+              }
+            >
+              <span className="p-dot" style={{ background: e.color }} />
+              <b>{e.member.label}{e.accounts > 1 ? ` · ${e.accounts} cuentas` : ''}</b>
+              {e.data ? (
+                <span className="mini-stats">
+                  {statsFromMatches(filteredPerPlayer[i]).games}p · WR{' '}
+                  {statsFromMatches(filteredPerPlayer[i]).wr.toFixed(0)}%
+                </span>
+              ) : (
+                <span className="mini-stats">…</span>
+              )}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {accounts.some((accs) => accs.length > 1) && (
         <p className="window-info" style={{ margin: '8px 0 0', paddingLeft: 4 }}>
           stats mezcladas por jugador:{' '}
-          {ACCOUNTS.map((accs, i) =>
+          {accounts.map((accs, i) =>
             accs.length > 1
-              ? `${TEAM[i].label} (${accs.map((a) => `${a.name}#${a.tag}`).join(' + ')})`
+              ? `${selected[i].label} (${accs.map((a) => `${a.name}#${a.tag}`).join(' + ')})`
               : null,
           )
             .filter(Boolean)
@@ -309,6 +436,7 @@ export default function ComparativoPage() {
       {oldestTs && (
         <p className="window-info" style={{ margin: '10px 0 0', paddingLeft: 4 }}>
           cobertura de datos desde {oldestTs.toLocaleDateString('es')} — el rango custom filtra dentro de lo consultado
+          {anyTruncated ? ' · ventana truncada: puede haber más partidas fuera de lo sincronizado' : ''}
         </p>
       )}
 
@@ -326,11 +454,11 @@ export default function ComparativoPage() {
       </div>
 
       <div className="panel">
-        <h2>Evolución por {gran === 'day' ? 'día' : 'semana'} · métrica {metric === 'rank' ? 'RANGO' : metric.toUpperCase()}</h2>
+        <h2>Evolución por {effGran === 'day' ? 'día' : 'semana'}{gran === 'auto' ? ' (auto)' : ''} · métrica {metric === 'rank' ? 'RANGO' : metric.toUpperCase()}</h2>
         <TrendCompare
           series={trendSeries}
           fmt={fmtMetric}
-          minValue={metric === 'rank' ? RANK_AXIS_MIN : undefined}
+          minValue={metric === 'rank' ? rankFloor : undefined}
           ticks={metric === 'rank' ? rankTicks : undefined}
         />
       </div>
@@ -346,13 +474,25 @@ export default function ComparativoPage() {
           players={entries.map((e) => ({
             id: e.member.id,
             label: e.member.label,
-            color: COLORS[e.member.id] ?? '#93a4b3',
+            color: e.color,
             matches: e.data?.matches ?? [],
           }))}
           filters={filters}
           minGames={filters.minGames}
         />
       </div>
+
+      {formOpen && (
+        <ProfileForm
+          profile={null}
+          profiles={allProfiles}
+          onClose={() => setFormOpen(false)}
+          onSaved={(list) => {
+            const created = list.find((p) => !allProfiles.some((x) => x.id === p.id));
+            if (created) setUserSelected([...selectedIds, created.id]);
+          }}
+        />
+      )}
     </div>
   );
 }

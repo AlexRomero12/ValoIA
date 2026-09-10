@@ -32,13 +32,13 @@ type SortKey = 'games' | 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct' | 'rr';
 
 const COLUMNS: { key: SortKey; label: string; fmt: (s: PlayerStats) => string; bar?: boolean }[] = [
   { key: 'games', label: 'Partidas', fmt: (s) => String(s.games) },
-  { key: 'games', label: 'W-L', fmt: (s) => `${s.wins}–${s.losses}` },
+  { key: 'games', label: 'W-L', fmt: (s) => `${s.wins}–${s.losses}${s.draws ? `–${s.draws}E` : ''}` },
   { key: 'wr', label: 'WR%', fmt: (s) => `${s.wr.toFixed(1)}%`, bar: true },
   { key: 'kd', label: 'K/D', fmt: (s) => s.kd.toFixed(2) },
   { key: 'acs', label: 'ACS', fmt: (s) => String(Math.round(s.acs)), bar: true },
   { key: 'adr', label: 'ADR', fmt: (s) => String(Math.round(s.adr)), bar: true },
   { key: 'hsPct', label: 'HS%', fmt: (s) => `${s.hsPct.toFixed(1)}%`, bar: true },
-  { key: 'rr', label: 'RR neto', fmt: (s) => (s.rrTotal == null ? '—' : `${s.rrTotal > 0 ? '+' : ''}${s.rrTotal}`) },
+  { key: 'rr', label: 'RR neto', fmt: (s) => (s.rrTotal == null ? '—' : `${s.rrTotal > 0 ? '+' : ''}${s.rrTotal}${s.rrMissing > 0 ? '~' : ''}`) },
 ];
 
 function sortValue(s: PlayerStats, k: SortKey): number {

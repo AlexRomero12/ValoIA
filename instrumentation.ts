@@ -1,13 +1,14 @@
 import { env } from './lib/env';
 import { warmAllPlayers } from './lib/warm';
 import { watchStoreAndNotify } from './lib/storeWatch';
+import { watchWeeklyAudit } from './lib/auditWatch';
 
 /**
  * Mantenimiento en background del dashboard (opcional, opt-in):
  *  VAL_BACKGROUND_REFRESH=1  activa el cron
  *  VAL_REFRESH_INTERVAL_MIN=15  (por defecto)
  *
- * Cada ciclo sincroniza el bucket de partidas + MMR de los 4 jugadores,
+ * Cada ciclo sincroniza el bucket de partidas + MMR de los perfiles visibles,
  * secuencialmente. El sync incremental suele costar 1 request por jugador,
  * así el abrir el dashboard cuesta $0 requests de Henrik. Cada partida nueva
  * detectada también se archiva en el archivo acumulativo (lib/archive.ts),
@@ -16,6 +17,9 @@ import { watchStoreAndNotify } from './lib/storeWatch';
  * La tienda diaria se vigila con frecuencia menor (cada 60 min): si hay skins
  * favoritas y suscripciones push, se refresca el storefront (local o RSO) y se
  * notifica cuando una favorita aparece en la tienda (una vez por día por skin).
+ *
+ * La auditoría semanal (lunes por la mañana, dedupe semanal) manda un push por
+ * perfil con cortes ignorados/violaciones de pool (VAL_AUDIT_PUSH=0 lo apaga).
  */
 export function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
@@ -59,4 +63,23 @@ export function register() {
   // Vigilancia de tienda: cada 60 min (la tienda rota cada 24h, con 1h basta).
   setTimeout(() => void storeCycle(), 45_000);
   setInterval(() => void storeCycle(), 60 * 60 * 1000);
+
+  // Aviso semanal de auditoría: revisa cada 60 min y envía una vez por semana.
+  let auditRunning = false;
+  const auditCycle = async () => {
+    if (auditRunning) return;
+    auditRunning = true;
+    try {
+      const result = await watchWeeklyAudit();
+      if (result.checked && result.sent > 0) {
+        console.log(`[audit] resumen semanal ${result.week}: ${result.sent} push enviado(s)`);
+      }
+    } catch (e) {
+      console.error(`[audit] aviso semanal falló: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      auditRunning = false;
+    }
+  };
+  setTimeout(() => void auditCycle(), 90_000);
+  setInterval(() => void auditCycle(), 60 * 60 * 1000);
 }

@@ -2,10 +2,12 @@ import { getFavorites } from './favorites';
 import { refreshStoreFront } from './riotClient';
 import { getSubscriptions, pushEnabled, sendPush } from './push';
 import { readData, writeData } from './persist';
+import { getPrimaryProfile } from './profiles';
 
 /**
  * Vigilancia de la tienda (la ejecuta el cron de instrumentation.ts):
  *  - refresca el storefront (local primero, RSO como respaldo)
+ *  - verifica que la sesión sea del PERFIL PRINCIPAL (si no, no notifica)
  *  - compara las favoritas con la tienda de hoy
  *  - si hay coincidencias NO notificadas hoy, envía un Web Push por cada una
  *    (dedupe en data/store-notified.json para no spamear cada hora)
@@ -50,6 +52,17 @@ export async function watchStoreAndNotify(): Promise<WatchResult> {
   const front = await refreshStoreFront();
   if (front.source === 'none' || front.daily.length === 0) {
     return { checked: false, source: 'none', daily: 0, favorites: 0, matches: [], notified: [], sent: 0, failed: 0, skipped: 'tienda no disponible' };
+  }
+
+  // Solo la tienda del perfil principal: si la sesión conectada es otra cuenta, no notificar.
+  if (front.account) {
+    const primary = getPrimaryProfile();
+    const same =
+      front.account.name.toLowerCase() === primary.name.toLowerCase() &&
+      (front.account.tag ?? '').toLowerCase() === primary.tag.toLowerCase();
+    if (!same) {
+      return { checked: false, source: front.source, daily: front.daily.length, favorites: favorites.length, matches: [], notified: [], sent: 0, failed: 0, skipped: 'tienda de otra cuenta' };
+    }
   }
 
   const favIds = new Set(favorites.map((f) => f.offerId));

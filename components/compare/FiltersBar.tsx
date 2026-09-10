@@ -62,6 +62,7 @@ export function FiltersBar(p: FiltersBarProps) {
       <div className="ctl-group">
         <label>Granularidad</label>
         <select value={p.gran} onChange={(e) => p.onGran(e.target.value as Granularity)}>
+          <option value="auto">Auto (según rango)</option>
           <option value="day">Por día</option>
           <option value="week">Por semana</option>
         </select>

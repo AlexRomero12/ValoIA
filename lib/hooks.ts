@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ValStatus, ValSummary, AgentIconInfo } from './types';
 import type { MatchDetail } from './matchDetail';
+import type { Profile, AuditRules } from './profileTypes';
 import { useCooldown } from './useCooldown';
 
 export type ValWindowMode =
@@ -24,7 +25,7 @@ export function summaryUrl(mode: ValWindowMode, playerId: string, limit: number,
   return `/api/valorant/summary?${qs}&limit=${limit}&player=${encodeURIComponent(playerId)}${refresh ? '&refresh=1' : ''}`;
 }
 
-export function useValSummary(mode: ValWindowMode, playerId: string, limit = DEFAULT_LIMIT) {
+export function useValSummary(mode: ValWindowMode, playerId: string, limit = DEFAULT_LIMIT, enabled = true) {
   const url = summaryUrl(mode, playerId, limit);
   return useQuery<ValSummary & { error?: string; code?: string }>({
     queryKey: ['val-summary', url],
@@ -37,6 +38,7 @@ export function useValSummary(mode: ValWindowMode, playerId: string, limit = DEF
       return json;
     },
     staleTime: 10 * 60 * 1000,
+    enabled,
   });
 }
 
@@ -57,6 +59,9 @@ export function useBackgroundRefresh(opts: {
   summaryUrl: string;
   /** Último syncedAt conocido (window.syncedAt) */
   getSyncedAt: () => string | null | undefined;
+  /** Último mmrSyncedAt conocido (window.mmrSyncedAt): sin él, un refresh de
+   *  solo-MMR nunca "confirmaba" porque syncedAt (bucket) no se movía. */
+  getMmrSyncedAt?: () => string | null | undefined;
   refetch: () => Promise<unknown>;
 }) {
   const cooldown = useCooldown(15);
@@ -77,6 +82,7 @@ export function useBackgroundRefresh(opts: {
       }
 
       const beforeSynced = opts.getSyncedAt();
+      const beforeMmr = opts.getMmrSyncedAt?.();
       const deadline = Date.now() + POLL_TIMEOUT_MS;
       let done = false;
       let sawSynced = beforeSynced != null;
@@ -85,11 +91,12 @@ export function useBackgroundRefresh(opts: {
         await sleep(POLL_MS);
         const r = await fetch(url, { cache: 'no-store' });
         if (!r.ok) continue;
-        const json = (await r.json().catch(() => null)) as ({ window?: { syncedAt?: string | null } } | null);
+        const json = (await r.json().catch(() => null)) as ({ window?: { syncedAt?: string | null; mmrSyncedAt?: string | null } } | null);
         const synced = json?.window?.syncedAt ?? null;
+        const mmrSynced = json?.window?.mmrSyncedAt ?? null;
         if (synced != null) {
           sawSynced = true;
-          done = synced !== beforeSynced;
+          done = synced !== beforeSynced || mmrSynced !== beforeMmr;
         } else if (!sawSynced) {
           // Proveedor sin syncedAt (Riot): el primer GET tras la invalidación
           // ya es la respuesta fresca.
@@ -173,4 +180,63 @@ export function useTierIcons() {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 7 * 24 * 60 * 60 * 1000,
   });
+}
+
+// ---------- Perfiles ----------
+
+export const PROFILES_KEY = ['val-profiles'] as const;
+
+export function useProfiles() {
+  return useQuery<Profile[]>({
+    queryKey: PROFILES_KEY,
+    queryFn: async () => {
+      const res = await fetch('/api/valorant/profiles');
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || 'No se pudieron cargar los perfiles');
+      return (json.profiles ?? []) as Profile[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export interface ProfileMutation {
+  /** true si guardó/borró; error si falló */
+  ok: boolean;
+  error?: string;
+  profiles?: Profile[];
+}
+
+export type ProfileInput = Omit<Partial<Profile>, 'audit'> & { name: string; tag: string; audit?: AuditRules | null };
+
+/** Acciones de perfiles contra la API + invalidación de la caché local. */
+export function useProfileActions() {
+  const client = useQueryClient();
+
+  const upsert = async (profile: ProfileInput): Promise<ProfileMutation> => {
+    const res = await fetch('/api/valorant/profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'upsert', profile }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) return { ok: false, error: (json as { error?: string }).error || 'No se pudo guardar el perfil' };
+    const profiles = (json.profiles ?? []) as Profile[];
+    client.setQueryData(PROFILES_KEY, profiles);
+    return { ok: true, profiles };
+  };
+
+  const remove = async (id: string): Promise<ProfileMutation> => {
+    const res = await fetch('/api/valorant/profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) return { ok: false, error: (json as { error?: string }).error || 'No se pudo borrar el perfil' };
+    const profiles = (json.profiles ?? []) as Profile[];
+    client.setQueryData(PROFILES_KEY, profiles);
+    return { ok: true, profiles };
+  };
+
+  return { upsert, remove };
 }

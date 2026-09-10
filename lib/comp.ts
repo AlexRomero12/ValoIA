@@ -1,5 +1,5 @@
 import type { MatchRow } from './types';
-import { agentRole } from './roles';
+import { agentRole, ROLES } from './roles';
 import { metaPickOf, ROTATION_MAPS } from './proneta';
 
 /**
@@ -22,6 +22,7 @@ export interface AgentPick {
   role: string | null;
   games: number;
   wins: number;
+  draws: number;
   wr: number;
   kd: number;
   /** De dónde sale el WR mostrado: mapa concreto / global agente / (sin muestra) */
@@ -55,9 +56,9 @@ export interface CompTeam {
   id: string;
   label: string;
   color: string;
-  /** Roles declarados del jugador en lib/team.ts (p. ej. "Duelist/Sentinel") */
+  /** Roles declarados del perfil (p. ej. "Duelist/Sentinel") */
   role?: string;
-  /** Preferencias manuales agente por mapa (lib/team.ts) */
+  /** Preferencias manuales agente por mapa (perfil) */
   prefs?: { map: string; agents: string[] }[];
   matches: MatchRow[];
 }
@@ -70,16 +71,19 @@ interface Acc {
   /** recuento real (para mostrar "12p") */
   games: number;
   wins: number;
+  /** Empates: no cuentan ni como victoria ni como derrota (como en el resto del dash) */
+  draws: number;
   kills: number;
   deaths: number;
   /** recuento con descuento temporal (para WR/score) */
   wGames: number;
   wWins: number;
+  wDraws: number;
   wKills: number;
   wDeaths: number;
 }
 
-const newAcc = (): Acc => ({ games: 0, wins: 0, kills: 0, deaths: 0, wGames: 0, wWins: 0, wKills: 0, wDeaths: 0 });
+const newAcc = (): Acc => ({ games: 0, wins: 0, draws: 0, kills: 0, deaths: 0, wGames: 0, wWins: 0, wDraws: 0, wKills: 0, wDeaths: 0 });
 
 /** Encoge WR de muestras pequeñas hacia 50% (100% con 2p ≈ 80%, 50% con 0p...). */
 function shrunken(wr: number, games: number): number {
@@ -116,12 +120,15 @@ function buildPlayer(team: CompTeam): PlayerModel {
   const add = (a: Acc, m: MatchRow) => {
     const ageDays = Math.max(0, (now - m.timestamp) / 86_400_000);
     const w = Math.exp(-ageDays / RECENT_HALF_LIFE_DAYS);
+    const isDraw = m.roundsWon === m.roundsLost;
     a.games += 1;
-    if (m.won) a.wins += 1;
+    if (isDraw) a.draws += 1;
+    else if (m.won) a.wins += 1;
     a.kills += m.kills;
     a.deaths += m.deaths;
     a.wGames += w;
-    if (m.won) a.wWins += w;
+    if (isDraw) a.wDraws += w;
+    else if (m.won) a.wWins += w;
     a.wKills += m.kills * w;
     a.wDeaths += m.deaths * w;
   };
@@ -172,8 +179,6 @@ function makePick(player: PlayerModel, agent: string, map: string, roles: Map<st
   const mapAcc = player.mapAgent.get(`${map}::${agent}`);
   const agentAcc = player.agent.get(agent);
   const metaPick = metaPickOf(map, agent);
-  const hasMap = mapAcc != null && mapAcc.games >= MIN_MAP_GAMES;
-  const hasAgent = agentAcc != null && agentAcc.games >= MIN_AGENT_GAMES;
 
   // WR del mapa con respaldo: si en el mapa la muestra es chica (<3h efectivas),
   // se presta — al 35% — el WR del agente en el resto de mapas. Así una racha
@@ -183,25 +188,30 @@ function makePick(player: PlayerModel, agent: string, map: string, roles: Map<st
   const hasAgentGames = (agentAcc?.games ?? 0) >= MIN_AGENT_GAMES;
   const source: AgentPick['source'] = hasMapGames ? 'map' : hasAgentGames ? 'agent' : 'player';
 
-  const mN = mapAcc?.wGames ?? 0;
+  const mN = (mapAcc?.wGames ?? 0) - (mapAcc?.wDraws ?? 0);
   const mW = mapAcc?.wWins ?? 0;
-  const eN = Math.max(0, (agentAcc?.wGames ?? 0) - mN);
+  const eN = Math.max(0, ((agentAcc?.wGames ?? 0) - (agentAcc?.wDraws ?? 0)) - mN);
   const eW = Math.max(0, (agentAcc?.wWins ?? 0) - mW);
   const BORROW = 0.35;
   const effN = mN + eN * BORROW;
   const effW = mW + eW * BORROW;
   // Sin datos del agente en absoluto: WR global del jugador contado como 1 sola
   // muestra (50% + 25%·WR) — un agente que nunca jugó no cobra la racha global.
-  const evalWr = effN > 0 ? (effW / effN) * 100 : player.all.wGames > 0 ? (player.all.wWins / player.all.wGames) * 100 : 0;
+  const evalWr = effN > 0 ? (effW / effN) * 100 : player.all.wGames - player.all.wDraws > 0 ? (player.all.wWins / (player.all.wGames - player.all.wDraws)) * 100 : 0;
   const evalN = effN > 0 ? effN : player.all.wGames > 0 ? 1 : 0;
 
   const shownGames = hasMapGames ? (mapAcc?.games ?? 0) : agentAcc?.games ?? 0;
   const shownWins = hasMapGames ? (mapAcc?.wins ?? 0) : agentAcc?.wins ?? 0;
+  const shownDraws = hasMapGames ? (mapAcc?.draws ?? 0) : agentAcc?.draws ?? 0;
+  const shownDecisive = shownGames - shownDraws;
   const kdSrc = mapAcc ?? agentAcc;
   const shown = {
     games: shownGames,
     wins: shownWins,
-    wr: effN > 0 ? evalWr : 0,
+    // El % mostrado es siempre el de la muestra mostrada (V-D decisivo):
+    // antes se pintaba el WR mezclado con préstamo junto al V-D crudo
+    // (p. ej. "~30% · 2p · 0V–2D"). El mezclado sigue alimentando el score interno.
+    wr: shownDecisive > 0 ? (shownWins / shownDecisive) * 100 : 0,
     kd: kdSrc && kdSrc.wDeaths > 0 ? kdSrc.wKills / kdSrc.wDeaths : kdSrc && kdSrc.deaths ? kdSrc.kills / kdSrc.deaths : 0,
   };
 
@@ -225,6 +235,7 @@ function makePick(player: PlayerModel, agent: string, map: string, roles: Map<st
     role: roleOf(agent, roles),
     games: shown.games,
     wins: shown.wins,
+    draws: shownDraws,
     wr: shown.wr,
     kd: shown.kd,
     source,
@@ -264,13 +275,11 @@ function candidatesFor(
 }
 
 /**
- * Reparto rol primero: los 4 roles (Duelist/Controller/Sentinel/Initiator) se
- * asignan a los 4 jugadores maximizando score — con bonus fuerte al rol
- * declarado del perfil y castigo a salirse de él. Así Player se queda de
- * duelista, Player2 de sentinel, Player3 de controller y Player4 de iniciador
- * cuando los datos lo soportan; dentro del rol, elige el mejor agente.
+ * Reparto rol primero: con 4 jugadores, los 4 roles se asignan maximizando
+ * score — con bonus fuerte al rol declarado del perfil y castigo a salirse de
+ * él. Con otro número de jugadores (N != 4) se salta: la búsqueda libre ya
+ * cubre cualquier N respetando las reglas de composición.
  */
-const ROLES = ['Duelist', 'Controller', 'Sentinel', 'Initiator'] as const;
 const IN_ROLE_BONUS = 6;
 const OUT_ROLE_PENALTY = -10;
 
@@ -281,6 +290,7 @@ function assignRoles(
   roles: Map<string, RoleInfo>,
   owners: Map<string, { player: PlayerModel; wGames: number }>,
 ): { pools: AgentPick[][]; roleOf: (string | undefined)[] } | null {
+  if (models.length !== ROLES.length) return null;
   // Mejor pick de cada jugador en cada rol.
   const best: (AgentPick | null)[][] = models.map(() => ROLES.map(() => null));
   for (let i = 0; i < models.length; i++) {

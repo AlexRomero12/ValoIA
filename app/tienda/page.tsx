@@ -96,8 +96,17 @@ export default function TiendaPage() {
   };
 
   const updated = status ? `actualizado ${new Date(status.fetchedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null;
-  const chipLabel = loading ? 'Cargando…' : status ? `Tienda · ${status.sourceDetail}` : 'Tienda —';
+  const chipLabel = loading
+    ? 'Cargando…'
+    : status
+      ? status.matchesPrimary === false
+        ? 'Tienda · otra cuenta'
+        : status.matchesPrimary === true
+          ? `Tienda de ${status.profile.label} · ${status.sourceDetail}`
+          : `Tienda · ${status.sourceDetail}`
+      : 'Tienda —';
   const needsCode = !!status?.rso.needsCode;
+  const wrongAccount = Boolean(status && status.matchesPrimary === false && status.account);
 
   return (
     <div className="wrap">
@@ -115,6 +124,15 @@ export default function TiendaPage() {
 
       {error ? <div className="banner error">{error instanceof Error ? error.message : String(error)}</div> : null}
       {status?.error ? <div className="banner error">{status.error}</div> : null}
+
+      {wrongAccount && status ? (
+        <div className="banner warn">
+          <b>La tienda conectada es de {status.account!.name}{status.account!.tag ? `#${status.account!.tag}` : ''}, no del perfil principal.</b>{' '}
+          El perfil principal es <b>{status.profile.label} ({status.profile.name}#{status.profile.tag})</b> —
+          configura la tienda con esa cuenta (Riot Client abierto con ella o su cookie ssid) y pulsa Actualizar.
+          Por seguridad no se muestra la tienda de otra cuenta.
+        </div>
+      ) : null}
 
       {status?.push ? <PushPanel status={status.push} onChanged={() => void reload()} /> : null}
 
@@ -174,16 +192,18 @@ export default function TiendaPage() {
 
       {status ? (
         <div className="two-col">
-          <StorePanel
-            daily={status.daily}
-            dailyRemainingSec={status.dailyRemainingSec}
-            fetchedAt={status.fetchedAt}
-            source={status.source}
-            sourceDetail={status.sourceDetail}
-            bundle={status.bundle}
-            favoriteIds={new Set(status.favorites.map((f) => f.offerId))}
-            onToggleFavorite={toggleFavorite}
-          />
+          {wrongAccount ? null : (
+            <StorePanel
+              daily={status.daily}
+              dailyRemainingSec={status.dailyRemainingSec}
+              fetchedAt={status.fetchedAt}
+              source={status.source}
+              sourceDetail={status.matchesPrimary === true ? `Tienda de ${status.profile.label} · ${status.sourceDetail}` : status.sourceDetail}
+              bundle={status.bundle}
+              favoriteIds={new Set(status.favorites.map((f) => f.offerId))}
+              onToggleFavorite={toggleFavorite}
+            />
+          )}
           <div className="col">
             <FavoritesPanel
               favorites={status.favorites}

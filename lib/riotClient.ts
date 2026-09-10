@@ -54,6 +54,8 @@ export interface StoreFront {
   daily: StoreDailyItem[];
   dailyRemainingSec: number;
   bundle: StoreBundle | null;
+  /** Riot ID de la sesión que sirvió la tienda (si se pudo identificar). */
+  account?: { name: string; tag: string } | null;
 }
 
 const STORE_TTL_MS = 60 * 60 * 1000;
@@ -108,6 +110,28 @@ async function fetchClientVersion(): Promise<string> {
     if (!v) throw new Error('version vacía');
     return v;
   });
+}
+
+// ---------- Identidad de la sesión (para atar la tienda al perfil principal) ----------
+
+/**
+ * Riot ID de la sesión a partir del access token (local o RSO). El token de la
+ * sesión es el de la cuenta conectada; userinfo devuelve acct.game_name/tag_line.
+ */
+async function fetchRiotId(accessToken: string): Promise<{ name: string; tag: string } | null> {
+  try {
+    const res = await fetch('https://auth.riotgames.com/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { acct?: { game_name?: string; tag_line?: string } };
+    const name = json?.acct?.game_name;
+    if (!name) return null;
+    return { name, tag: json.acct?.tag_line ?? '' };
+  } catch {
+    return null;
+  }
 }
 
 // ---------- Fuente local: API del Riot Client ----------
@@ -588,6 +612,7 @@ export async function fetchStoreFrontFresh(): Promise<StoreFront> {
     try {
       const front = await fetchStorefront(local);
       front.source = 'local';
+      front.account = await fetchRiotId(local.accessToken);
       return front;
     } catch (e) {
       console.error(`[store] storefront local falló: ${e instanceof Error ? e.message : String(e)}`);
@@ -599,13 +624,14 @@ export async function fetchStoreFrontFresh(): Promise<StoreFront> {
     try {
       const front = await fetchStorefront(rsoTokens);
       front.source = 'rso';
+      front.account = await fetchRiotId(rsoTokens.accessToken);
       return front;
     } catch (e) {
       console.error(`[store] storefront RSO falló: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  return { source: 'none', fetchedAt: Date.now(), daily: [], dailyRemainingSec: 0, bundle: null };
+  return { source: 'none', fetchedAt: Date.now(), daily: [], dailyRemainingSec: 0, bundle: null, account: null };
 }
 
 /** Storefront con caché de 1h (para la página). */

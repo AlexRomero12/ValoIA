@@ -1,11 +1,12 @@
 import { env } from './env';
-import { cached, cacheSet } from './cache';
+import { cached, cacheSet, cacheUpdatedAt } from './cache';
 import { getArchiveMatches } from './archive';
 import {
   HENRIK_CONFIG,
   getHenrikAccount,
   getMatchesBucket,
   getHenrikMmrHistory,
+  henrikMmrKey,
   henrikMatchId,
   henrikMatchTimestamp,
   henrikRoundsPlayed,
@@ -13,7 +14,7 @@ import {
   type HenrikMatch,
   type HenrikMatchPlayer,
 } from './henrik';
-import { resolvePlayer } from './team';
+import { getProfile } from './profiles';
 
 export const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
@@ -325,6 +326,12 @@ export interface MatchSummary {
   shots?: number;
   tier: number;
   tierChange: number;
+  /**
+   * Tier sin respaldo del mmr-history (viene del detalle del match, que es el
+   * tier previo al partido): el punto de rango es aproximado y en la frontera
+   * con historial puede saltar ±1 tier de más. El cliente lo marca con ~.
+   */
+  tierApprox?: boolean;
   durationMin: number;
   rrDelta?: number | null;
   rr?: number | null;
@@ -392,7 +399,7 @@ function finishGroup(g: GroupStat) {
 export interface ValSummary {
   generatedAt: string;
   account: ValAccount;
-  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; eloTotal?: number | null; syncedAt?: string | null };
+  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; rrMissing?: number; eloTotal?: number | null; syncedAt?: string | null; mmrSyncedAt?: string | null; truncated?: boolean };
   kpis: ReturnType<typeof finishGroup> & { wins: number; losses: number };
   currentTier: number;
   startTier: number;
@@ -411,7 +418,7 @@ export interface AggregateOptions {
   refresh?: boolean;
   /** 'current' = filtrar por la temporada del partido más reciente; o un season.short concreto */
   season?: string;
-  /** id del miembro del equipo (lib/team.ts); default = player */
+  /** id del perfil (lib/profiles.ts); default = primer perfil */
   playerId?: string;
   /** Cuenta específica de un miembro multi-cuenta; default = su cuenta principal */
   accountName?: string;
@@ -445,7 +452,7 @@ export async function getValSummary(opts: AggregateOptions): Promise<ValSummary>
 const henrikTimestamp = henrikMatchTimestamp;
 
 async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> {
-  const member = resolvePlayer(opts.playerId);
+  const member = getProfile(opts.playerId);
   const acctName = opts.accountName ?? member.name;
   const acctTag = opts.accountTag ?? member.tag;
   const account = await getHenrikAccount(acctName, acctTag);
@@ -474,6 +481,14 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     seenIds.add(id);
     matches.push(m);
   }
+  // Ventana posiblemente recortada: en modo días, si el bucket llegó al tope
+  // pedido y ni el archivo cubre hasta `sinceMs`, hay partidas fuera de lo
+  // sincronizado y los KPIs/RR se presentan como ventana completa sin serlo.
+  const oldestCovered = [...bucket.matches, ...archived]
+    .map(henrikMatchTimestamp)
+    .filter((t) => t > 0)
+    .reduce((a, b) => Math.min(a, b), Infinity);
+  const truncated = !seasonMode && bucket.matches.length >= want && !(oldestCovered <= sinceMs);
 
   let seasonShort: string | null = null;
   if (seasonMode) {
@@ -571,7 +586,12 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     if (!mapGroups.has(map)) mapGroups.set(map, newAcc());
     add(mapGroups.get(map)!, me, won, rds, isDraw);
 
-    const tier: number = me.tier?.id ?? prevTier ?? 0;
+    const hist = rrByMatch.get(m.metadata?.match_id ?? '');
+    // El mmr-history es post-partida y por tanto autoritativo: en promociones y
+    // deranks me.tier trae el tier PREVIO al partido. Mezclar ese tier con el RR
+    // nuevo desplaza 100 pts (ej. D1 previo + 10 RR de D2 = "D1·10" en vez de
+    // "D2·10", y al revés oculta los deranks). El tier post-partida + su RR van juntos.
+    const tier: number = hist?.tier?.id ?? me.tier?.id ?? prevTier ?? 0;
     const tierChange = prevTier != null ? tier - prevTier : 0;
     prevTier = tier;
 
@@ -584,7 +604,6 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     const roundsLost = roundsLost0;
     const lengthMin = Math.round((m.metadata?.game_length_in_ms ?? 0) / 60000);
 
-    const hist = rrByMatch.get(m.metadata?.match_id ?? '');
     const elo = hist?.elo ?? null;
     const eloDelta = elo != null && prevElo != null ? elo - prevElo : null;
     if (elo != null) prevElo = elo;
@@ -611,6 +630,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       shots,
       tier,
       tierChange,
+      tierApprox: hist?.tier?.id == null,
       durationMin: lengthMin,
       rrDelta: hist?.last_change ?? null,
       rr: hist?.rr ?? null,
@@ -627,13 +647,24 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const firstMatch = summaries[summaries.length - 1];
   const lastMatch = summaries[0];
   const rrTotal = summaries.reduce((acc, m) => acc + (m.rrDelta ?? 0), 0);
+  // La API solo devuelve RR de las partidas recientes: si alguna no trae dato,
+  // el total es parcial y se marca (el cliente lo muestra con ~).
+  const rrMissing = summaries.filter((m) => m.rrDelta == null).length;
   const firstElo = firstMatch?.elo ?? null;
   const lastElo = lastMatch?.elo ?? null;
   const eloTotal = firstElo != null && lastElo != null ? lastElo - firstElo : null;
 
   // Rango actual: el mmr-history es la fuente autoritativa (el bucket puede
   // no haber sincronizado la última partida y mostrar un rango viejo).
-  const latestMmr = mmrHistory[0] ?? null;
+  // Se ordena por fecha y se filtra por temporada: la API no garantiza el
+  // orden y el primer elemento podría ser de otro acto o el más viejo.
+  const byDateDesc = [...mmrHistory].sort(
+    (a, b) => Date.parse(b.date ?? '') - Date.parse(a.date ?? ''),
+  );
+  const seasonMmr = seasonShort
+    ? byDateDesc.filter((h) => h.season?.short === seasonShort || h.season?.id === seasonShort)
+    : byDateDesc;
+  const latestMmr = seasonMmr[0] ?? null;
 
   // ---------- Arsenal: uso de armas desde el kill feed ($0 requests) ----------
   const killsBy = new Map<string, number>();
@@ -689,8 +720,14 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       archivedMatches: archived.length,
       seasonShort,
       rrTotal,
+      rrMissing,
       eloTotal,
       syncedAt: new Date(bucket.updatedAt).toISOString(),
+      mmrSyncedAt: (() => {
+        const t = cacheUpdatedAt(henrikMmrKey(acctName, acctTag));
+        return t != null ? new Date(t).toISOString() : null;
+      })(),
+      truncated,
     },
     kpis: { ...kpis, wins: group.wins, losses: group.matches - group.wins - group.draws },
     currentTier: latestMmr?.tier?.id ?? lastMatch?.tier ?? 0,
@@ -711,10 +748,12 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
 // ---------- Proveedor Riot oficial ----------
 
 export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
-  if (opts.playerId && resolvePlayer(opts.playerId).id !== 'player') {
+  const profile = getProfile(opts.playerId);
+  // El proveedor Riot oficial solo conoce la cuenta del .env (VAL_NAME/VAL_TAG).
+  if (opts.playerId && (profile.name !== VAL_CONFIG.name() || profile.tag !== VAL_CONFIG.tag())) {
     throw new RiotApiError(
       'NOT_FOUND',
-      'Perfiles del equipo solo disponibles con proveedor Henrik (la API oficial de Riot no da match history con keys de desarrollo)',
+      'Con el proveedor Riot oficial solo se puede consultar la cuenta del .env; configura HENRIK_API_KEY para ver otros perfiles',
     );
   }
   const account = await getAccount();

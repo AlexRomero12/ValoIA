@@ -55,8 +55,11 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
               {streak ? ` · racha ${streak}` : ''}
             </span>
           </div>
-          <div className={`md-rr ${rrCls}`}>
-            {day.rrTotal != null ? `${day.rrTotal > 0 ? '+' : ''}${day.rrTotal} RR` : '—'}
+          <div
+            className={`md-rr ${rrCls}`}
+            title={day.rrMissing > 0 ? `RR de ${day.matches - day.rrMissing}/${day.matches} partidas (${day.rrMissing} sin dato)` : undefined}
+          >
+            {day.rrTotal != null ? `${day.rrTotal > 0 ? '+' : ''}${day.rrTotal}${day.rrMissing > 0 ? '~' : ''} RR` : '—'}
           </div>
         </header>
 

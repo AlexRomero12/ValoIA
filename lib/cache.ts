@@ -46,23 +46,60 @@ function sanitizeKey(key: string): string {
   return key.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
+/** Hash corto y estable (FNV-1a) para desambiguar claves sanitizadas. */
+function keyHash(key: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
 function fileFor(key: string): string {
   // Los ':' (y cualquier otro carácter raro) van a '_': en Windows los ':' en
   // nombre de archivo son inválidos/ADS y rompían la capa de disco (L2).
-  return path.join(CACHE_DIR, `${sanitizeKey(key)}.json`);
+  // El sufijo hash evita colisiones entre claves distintas que sanitizan
+  // igual (p. ej. cuentas `Player4` y `Player3 十六` → guiones). Nota: la caché
+  // en disco anterior se invalida una vez (miss) tras este cambio.
+  return path.join(CACHE_DIR, `${sanitizeKey(key)}_${keyHash(key)}.json`);
 }
 
-function readDisk(key: string): Entry | null {
-  ensureDir();
-  if (!dirReady) return null;
+function readEntryFile(file: string): Entry | null {
   try {
-    const raw = fs.readFileSync(fileFor(key), 'utf8');
+    const raw = fs.readFileSync(file, 'utf8');
     const parsed = JSON.parse(raw) as Entry;
     if (!parsed || typeof parsed.expires !== 'number') return null;
     return parsed;
   } catch {
     return null;
   }
+}
+
+function legacyFileFor(key: string): string {
+  return path.join(CACHE_DIR, `${sanitizeKey(key)}.json`);
+}
+
+function readDisk(key: string): Entry | null {
+  ensureDir();
+  if (!dirReady) return null;
+  const direct = readEntryFile(fileFor(key));
+  if (direct) return direct;
+  // Compat con el formato anterior (sin sufijo hash): se adopta la entrada
+  // y se reescribe con el nombre nuevo. Evita un miss masivo (y tormenta de
+  // requests) al desplegar este cambio con volúmenes ya poblados.
+  const legacyFile = legacyFileFor(key);
+  if (legacyFile === fileFor(key)) return null;
+  const legacy = readEntryFile(legacyFile);
+  if (!legacy) return null;
+  mem.set(key, legacy);
+  writeDisk(key, legacy);
+  try {
+    fs.rmSync(legacyFile);
+  } catch {
+    /* noop */
+  }
+  return legacy;
 }
 
 let writeQueue = Promise.resolve();
@@ -123,13 +160,27 @@ export function cacheSet(key: string, value: unknown, ttlMs: number): void {
   mem.set(key, entry);
   writeDisk(key, entry);
 }
-
 /** Lectura sin respetar la expiración (stale si venció); null si nunca existió. */
 export function peek<T>(key: string): T | null {
   const hit = mem.get(key);
   if (hit) return hit.value as T;
   const disk = readDisk(key);
   return disk ? (disk.value as T) : null;
+}
+
+/**
+ * Última escritura conocida de una clave en disco (mtime), o null si no hay
+ * archivo. Sirve como señal de frescura por fuente (p. ej. mmr-history vs
+ * bucket tienen TTLs distintos y un solo syncedAt mentía).
+ */
+export function cacheUpdatedAt(key: string): number | null {
+  ensureDir();
+  if (!dirReady) return null;
+  try {
+    return fs.statSync(fileFor(key)).mtimeMs;
+  } catch {
+    return null;
+  }
 }
 
 /**

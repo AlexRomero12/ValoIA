@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { esc } from '@/lib/metas';
 import type { MatchRow } from '@/lib/types';
-import { isDraw, STOP_KD, type AuditDay, type AuditMatchRow } from '@/lib/audit';
+import { isDraw, STOP_KD, type AuditDay, type AuditMatchRow, type PickClass } from '@/lib/audit';
+import type { AuditRules } from '@/lib/profileTypes';
 import type { MatchComment } from '@/lib/matchComments';
 
 interface AuditDayProps {
@@ -12,6 +13,8 @@ interface AuditDayProps {
   onSaveComment: (matchId: string, text: string) => Promise<void>;
   /** Abierto por defecto (sugerencia: solo el día más reciente). */
   defaultOpen?: boolean;
+  /** Reglas del perfil (para el umbral de K/D mostrado). */
+  rules?: AuditRules;
 }
 
 const W = 940;
@@ -31,11 +34,21 @@ function resultBadge(m: AuditMatchRow): { cls: string; text: string } {
   return m.match.won ? { cls: 'w', text: 'V' } : { cls: 'l', text: 'D' };
 }
 
+/** Badge de la clasificación del pick contra el pool del perfil. */
+function pickBadge(p: PickClass): { cls: string; text: string; title: string } | null {
+  if (p === 'main') return { cls: 'main', text: 'M', title: 'Principal del mapa' };
+  if (p === 'backup') return { cls: 'backup', text: 'B', title: 'Backup' };
+  if (p === 'off') return { cls: 'pool', text: 'P', title: 'Fuera de pool' };
+  if (p === 'banned') return { cls: 'banned', text: 'X', title: 'Prohibido (agente o rol vetado)' };
+  return null;
+}
+
 function fmtRR(v: number | null): string {
   return v == null ? '—' : `${v > 0 ? '+' : ''}${v}`;
 }
 
-export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: AuditDayProps) {
+export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, rules }: AuditDayProps) {
+  const stopKd = rules?.stop.kdBelow ?? STOP_KD;
   const [open, setOpen] = useState(defaultOpen);
   const rows = day.matches;
   const n = Math.max(1, rows.length);
@@ -74,6 +87,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: 
         <span className="audit-day-date">{day.label}</span>
         <span className="audit-day-record">
           {wins}V-{losses}D{draws ? `-${draws}E` : ''}
+          {day.storedMatches != null && day.storedMatches > rows.length ? ` · RR de ${day.storedMatches}p` : ''}
         </span>
         <span className={`audit-day-rr ${(day.realRR ?? 0) < 0 ? 'loss' : 'win'}`}>{fmtRR(day.realRR)} RR</span>
         <span className="audit-day-meta">
@@ -83,7 +97,9 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: 
             </span>
           ) : null}
           {day.violationCount > 0 ? (
-            <span className="audit-pool-badge">{day.violationCount} fuera de pool</span>
+            <span className="audit-pool-badge">
+              {day.violationCount} fuera de pool{day.bannedCount ? ` · ${day.bannedCount} prohibidos` : ''}
+            </span>
           ) : null}
           {day.stored ? (
             <span className="audit-warn" title="RR recuperado del snapshot guardado (la API ya no lo devuelve)">guardado</span>
@@ -112,7 +128,16 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: 
             {day.violationCount > 0 ? (
               <div className="audit-stat">
                 <span className="audit-stat-lbl">Costo pool</span>
-                <span className="audit-stat-val loss">{fmtRR(day.violationCost)}</span>
+                <span
+                  className="audit-stat-val loss"
+                  title={
+                    day.violationGain
+                      ? `Balance neto ${fmtRR(day.violationCost)} (ganado fuera de pool: +${day.violationGain})`
+                      : 'RR perdido en partidas fuera de pool'
+                  }
+                >
+                  {fmtRR(day.violationLoss)}
+                </span>
               </div>
             ) : null}
             <div className="audit-stat">
@@ -293,6 +318,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: 
               <tbody>
                 {[...rows].reverse().map((r) => {
                   const badge = resultBadge(r);
+                  const pick = pickBadge(r.pickClass);
                   return (
                     <tr key={r.match.matchId} className={`${r.cutPoint ? 'audit-cut-row' : ''}${r.afterCut ? 'row-skip' : ''}`}>
                       <td>{new Date(r.match.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</td>
@@ -305,7 +331,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: 
                       <td className="num">{r.match.roundsWon}–{r.match.roundsLost}</td>
                       <td>
                         <span className={`res-badge ${badge.cls}`}>{badge.text}</span>
-                        {r.violation ? <span className="res-badge pool" title="Agente fuera de pool">P</span> : null}
+                        {pick ? <span className={`res-badge ${pick.cls}`} title={pick.title}>{pick.text}</span> : null}
                       </td>
                       <td className={`num${r.kd >= 1 ? ' stat-ok' : ''}`}>{r.kd.toFixed(2)}</td>
                       <td className={`num ${r.match.rrDelta == null ? '' : r.match.rrDelta > 0 ? 'stat-win' : 'stat-loss'}`}>
@@ -313,7 +339,17 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: 
                       </td>
                       <td className={`num ${r.cutPoint ? 'audit-cut-num' : ''}`}>{r.afterCut ? '—' : r.counterAfter}</td>
                       <td className="audit-note-cell">
-                        {r.cutPoint ? 'CORTE AQUÍ' : r.afterCut ? 'no debiste jugarla' : r.violation ? 'fuera de pool' : !r.match.won && !isDraw(r.match) && r.kd >= STOP_KD ? 'kd ok · no suma' : ''}
+                        {r.cutPoint
+                          ? 'CORTE AQUÍ'
+                          : r.afterCut
+                            ? 'no debiste jugarla'
+                            : r.pickClass === 'banned'
+                              ? 'prohibido'
+                              : r.violation
+                                ? 'fuera de pool'
+                                : !r.match.won && !isDraw(r.match) && r.kd >= stopKd
+                                  ? 'kd ok · no suma'
+                                  : ''}
                       </td>
                       <td>
                         <NoteCell
@@ -334,58 +370,99 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false }: 
   );
 }
 
+function niceStep(range: number): number {
+  const raw = range / 5;
+  for (const s of [2, 5, 10, 20, 25, 50, 100]) if (raw <= s) return s;
+  return 200;
+}
+
 function AuditCumulative({ day }: { day: AuditDay }) {
   const rows = day.matches;
   const n = Math.max(1, rows.length);
   const plotW = W - PL - PR;
   const slotW = plotW / n;
   const cx = (i: number) => PL + slotW * i + slotW / 2;
-  const yOf = (v: number) => Math.min(182, Math.max(24, 30 + Math.abs(v) * 2.5));
+  // Eje con cero real: los valores positivos van ARRIBA de la línea de 0 y los
+  // negativos debajo (antes se usaba Math.abs y ±57 caían en el mismo punto).
+  const TOP = 26;
+  const BOTTOM = 172;
   const H = 190;
 
-  let cum = 0;
-  const realPts: [number, number][] = [];
-  const planPts: [number, number][] = [];
-  let cutIdx = -1;
+  const realPts: { x: number; v: number }[] = [];
+  const planPts: { x: number; v: number }[] = [];
+  let cumReal = 0;
+  let cumPlan = 0;
   rows.forEach((r, i) => {
-    if (r.cutPoint) cutIdx = i;
     const d = r.match.rrDelta ?? 0;
-    if (!r.afterCut) cum += d;
-    realPts.push([cx(i), yOf(cum)]);
-    if (cutIdx === -1) planPts.push([cx(i), yOf(cum)]);
+    cumReal += d; // real: todo lo jugado, incluidas las posteriores al corte
+    if (!r.afterCut) cumPlan += d; // plan: hasta el corte (la del corte sí suma)
+    realPts.push({ x: cx(i), v: cumReal });
+    planPts.push({ x: cx(i), v: cumPlan });
   });
-  const planEndY = planPts.length ? planPts[planPts.length - 1][1] : yOf(0);
-  if (cutIdx >= 0) planPts.push([cx(n - 1) + slotW / 2, planEndY]);
+  if (rows.some((r) => r.afterCut)) {
+    planPts.push({ x: cx(n - 1) + slotW / 2, v: cumPlan });
+  }
+  // Ancla en 0 al inicio para que la línea parta de la base.
+  realPts.unshift({ x: PL, v: 0 });
+  planPts.unshift({ x: PL, v: 0 });
 
+  const values = [...realPts, ...planPts].map((p) => p.v);
+  let min = Math.min(0, ...values);
+  let max = Math.max(0, ...values);
+  if (min === max) {
+    min = -10;
+    max = 10;
+  }
+  const pad = Math.max(4, (max - min) * 0.12);
+  min -= pad;
+  max += pad;
+  const yOf = (v: number) => TOP + (BOTTOM - TOP) * (1 - (v - min) / (max - min));
+
+  const step = niceStep(max - min);
+  const ticks: number[] = [];
+  for (let t = Math.ceil(min / step) * step; t <= max + 0.001; t += step) ticks.push(t);
+
+  const path = (pts: { x: number; v: number }[]) => `M${pts.map((p) => `${p.x},${yOf(p.v)}`).join(' L')}`;
+  const cutIdx = rows.findIndex((r) => r.cutPoint);
   const lastReal = realPts[realPts.length - 1];
   const lastPlan = planPts[planPts.length - 1];
+  const sameEnd = lastReal && lastPlan && Math.abs(yOf(lastReal.v) - yOf(lastPlan.v)) < 0.5;
 
   return (
     <div className="audit-svg-scroll" style={{ marginTop: 8 }}>
       <svg viewBox={`0 0 ${W} ${H + 20}`} role="img" aria-label="RR acumulado real vs plan">
-        {[0, -10, -20, -30, -40, -50, -60].map((v) => (
+        {ticks.map((v) => (
           <g key={v}>
-            <line x1={PL} y1={yOf(v)} x2={W - PR} y2={yOf(v)} stroke="#20303f" strokeWidth="1" />
-            <text x={PL - 6} y={yOf(v) + 3} fontSize="9" fill="#5d7080" textAnchor="end">{v}</text>
+            <line
+              x1={PL}
+              y1={yOf(v)}
+              x2={W - PR}
+              y2={yOf(v)}
+              stroke={v === 0 ? '#34495e' : '#20303f'}
+              strokeWidth={v === 0 ? 1.2 : 1}
+            />
+            <text x={PL - 6} y={yOf(v) + 3} fontSize="9" fill={v === 0 ? '#93a4b3' : '#5d7080'} textAnchor="end">
+              {v > 0 ? `+${v}` : v}
+            </text>
           </g>
         ))}
         {cutIdx >= 0 ? (
           <line x1={cx(cutIdx) + slotW / 2} y1={22} x2={cx(cutIdx) + slotW / 2} y2={H + 8} stroke="#e8c97a" strokeWidth="1.2" strokeDasharray="5 4" />
         ) : null}
         {planPts.length > 1 ? (
-          <path d={`M${planPts.map((p) => p.join(',')).join(' L')}`} fill="none" stroke="#e8c97a" strokeWidth="1.6" strokeDasharray="6 4" opacity="0.9" />
+          <path d={path(planPts)} fill="none" stroke="#e8c97a" strokeWidth="1.6" strokeDasharray="6 4" opacity="0.9" />
         ) : null}
         {realPts.length > 1 ? (
-          <path d={`M${realPts.map((p) => p.join(',')).join(' L')}`} fill="none" stroke="#ece8e1" strokeWidth="2" />
+          <path d={path(realPts)} fill="none" stroke="#ece8e1" strokeWidth="2" />
         ) : null}
-        {lastReal ? <circle cx={lastReal[0]} cy={lastReal[1]} r="3.5" fill="#ece8e1" /> : null}
+        {lastReal ? <circle cx={lastReal.x} cy={yOf(lastReal.v)} r="3.5" fill="#ece8e1" /> : null}
         {lastReal ? (
-          <text x={lastReal[0] + 6} y={lastReal[1] + 4} fontSize="10" fontWeight="700" fill="#ece8e1">
+          <text x={lastReal.x + 6} y={yOf(lastReal.v) + 4} fontSize="10" fontWeight="700" fill="#ece8e1">
             {day.realRR == null ? 'RR?' : `${day.realRR > 0 ? '+' : ''}${day.realRR} real`}
           </text>
         ) : null}
-        {lastPlan && lastPlan[1] !== lastReal?.[1] ? (
-          <text x={lastPlan[0] + 6} y={lastPlan[1] + 4} fontSize="10" fontWeight="700" fill="#e8c97a">
+        {lastPlan && !sameEnd ? (
+          <text x={lastPlan.x + 6} y={yOf(lastPlan.v) + 4} fontSize="10" fontWeight="700" fill="#e8c97a">
             {day.planRR == null ? 'RR?' : `${day.planRR > 0 ? '+' : ''}${day.planRR} con regla`}
           </text>
         ) : null}

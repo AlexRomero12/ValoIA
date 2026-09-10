@@ -1,5 +1,8 @@
 const KNOWN = new Set(['Duelist', 'Initiator', 'Controller', 'Sentinel']);
 
+/** Roles jugables, en orden de display (y reparto de composiciones). */
+export const ROLES = ['Duelist', 'Initiator', 'Controller', 'Sentinel'] as const;
+
 /** Fallback por nombre de agente si el catálogo de contenido no pudo dar el rol. */
 const FALLBACK: Record<string, string> = {
   Jett: 'Duelist',

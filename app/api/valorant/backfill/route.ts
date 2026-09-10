@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { backfillPlayer, type BackfillPlayerOptions } from '@/lib/refresh';
 import { getProvider } from '@/lib/valorant';
 import { getArchiveStats } from '@/lib/archive';
-import { getTeam, isValidPlayer, resolvePlayer, memberAccounts } from '@/lib/team';
+import { getProfile, isValidProfile, listProfiles } from '@/lib/profiles';
+import { memberAccounts } from '@/lib/profileTypes';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,18 +19,18 @@ let backfillQueue: Promise<unknown> = Promise.resolve();
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const playerParam = sp.get('player');
-  if (!isValidPlayer(playerParam)) {
-    return Response.json({ error: `Jugador desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
+  if (!isValidProfile(playerParam)) {
+    return Response.json({ error: `Perfil desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
   }
   // Cuenta concreta de un miembro multi-cuenta (para sondeo por cuenta).
   const rawAccount = sp.get('account');
   let account: { name: string; tag: string } | null = null;
   if (rawAccount != null) {
-    const accs = memberAccounts(resolvePlayer(playerParam || undefined));
+    const accs = memberAccounts(getProfile(playerParam || undefined));
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) account = accs[idx];
   }
-  const members = playerParam ? [resolvePlayer(playerParam)] : getTeam();
+  const members = playerParam ? [getProfile(playerParam)] : listProfiles();
   const players = members.flatMap((m) => {
     const accs = account ? [account] : memberAccounts(m);
     return accs.map((a, i) => ({
@@ -57,8 +58,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const playerParam = sp.get('player');
-  if (!isValidPlayer(playerParam)) {
-    return Response.json({ error: `Jugador desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
+  if (!isValidProfile(playerParam)) {
+    return Response.json({ error: `Perfil desconocido: ${playerParam}`, code: 'BAD_PLAYER' }, { status: 400 });
   }
   if (getProvider() !== 'henrik') {
     return Response.json(
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
   let account: { name: string; tag: string } | undefined;
   const rawAccount = sp.get('account');
   if (rawAccount != null) {
-    const accs = memberAccounts(resolvePlayer(playerParam || undefined));
+    const accs = memberAccounts(getProfile(playerParam || undefined));
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) account = accs[idx];
   }

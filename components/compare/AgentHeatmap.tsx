@@ -21,13 +21,16 @@ export function AgentHeatmap({ players, filters, minGames }: AgentHeatmapProps) 
   for (const p of perPlayer) for (const m of p.filtered) agentSet.add(m.agent);
   const agents = [...agentSet];
 
-  const cell = new Map<string, { games: number; wins: number }>();
+  const cell = new Map<string, { games: number; wins: number; draws: number }>();
   for (const p of perPlayer) {
     for (const m of p.filtered) {
       const key = `${p.id}|${m.agent}`;
-      const c = cell.get(key) ?? { games: 0, wins: 0 };
+      const c = cell.get(key) ?? { games: 0, wins: 0, draws: 0 };
       c.games += 1;
-      if (m.won) c.wins += 1;
+      // Empate = marcador igualado: no cuenta ni como victoria ni como derrota
+      // (misma regla que statsFromMatches en lib/compare.ts).
+      if (m.roundsWon === m.roundsLost) c.draws += 1;
+      else if (m.won) c.wins += 1;
       cell.set(key, c);
     }
   }
@@ -72,9 +75,12 @@ export function AgentHeatmap({ players, filters, minGames }: AgentHeatmapProps) 
                 if (!c || c.games === 0 || c.games < Math.max(1, minGames)) {
                   return <td key={p.id} className="num hm-empty">—</td>;
                 }
-                const wr = (c.wins / c.games) * 100;
+                const decisive = c.games - c.draws;
+                const losses = decisive - c.wins;
+                const wr = decisive ? (c.wins / decisive) * 100 : 0;
+                const record = `${c.wins}V–${losses}D${c.draws ? `–${c.draws}E` : ''}`;
                 return (
-                  <td key={p.id} className="num" title={`${wr.toFixed(1)}% · ${c.wins}V–${c.games - c.wins}D`}>
+                  <td key={p.id} className="num" title={`${wr.toFixed(1)}% · ${record}`}>
                     <span
                       className="hm-val"
                       style={{ background: `rgba(236,232,225,${(0.04 + Math.min(wr, 100) / 100 * 0.16).toFixed(3)})`, borderColor: wrColor(wr) }}

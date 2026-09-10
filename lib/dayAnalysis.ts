@@ -84,6 +84,8 @@ export interface DayStats {
   adr: number;
   hsPct: number;
   rrTotal: number | null;
+  /** Partidas del día sin dato de RR (rrTotal parcial si > 0). */
+  rrMissing: number;
   minutes: number;
   /** Partidas del día, más recientes primero */
   rows: MatchRow[];
@@ -104,6 +106,7 @@ export function dayStats(group: DayGroup): DayStats {
   let headshots = 0;
   let shots = 0;
   let rrTotal: number | null = null;
+  let rrMissing = 0;
   let minutes = 0;
 
   const agents = new Map<string, SubAgg>();
@@ -122,6 +125,7 @@ export function dayStats(group: DayGroup): DayStats {
     headshots += m.headshots ?? 0;
     shots += m.shots ?? 0;
     if (m.rrDelta != null) rrTotal = (rrTotal ?? 0) + m.rrDelta;
+    else rrMissing += 1;
     minutes += m.durationMin || 0;
 
     const a = agents.get(m.agent) ?? newSub(m.agent, m.agentIcon ?? null);
@@ -163,6 +167,7 @@ export function dayStats(group: DayGroup): DayStats {
     adr: rounds ? Math.round(damage / rounds) : 0,
     hsPct: shots ? Math.round((headshots / shots) * 1000) / 10 : 0,
     rrTotal,
+    rrMissing,
     minutes,
     rows: group.matches,
     byAgent: [...agents.values()].map(finishSub).sort((a, b) => b.games - a.games),

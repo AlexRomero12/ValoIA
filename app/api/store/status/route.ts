@@ -4,6 +4,7 @@ import { getFavorites, type FavoriteSkin } from '@/lib/favorites';
 import { getSkinsCatalog } from '@/lib/skins';
 import { pushEnabled, pushConfig, getSubscriptions } from '@/lib/push';
 import { notifiedToday } from '@/lib/storeWatch';
+import { getPrimaryProfile } from '@/lib/profiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,12 @@ export interface StoreStatusResponse {
   sourceDetail: string;
   fetchedAt: number;
   dailyRemainingSec: number;
+  /** Perfil principal (el único cuya tienda se muestra). */
+  profile: { id: string; label: string; name: string; tag: string };
+  /** Riot ID de la sesión conectada (null si no se pudo identificar). */
+  account: { name: string; tag: string } | null;
+  /** true = la sesión es del principal; false = es otra cuenta; null = sin identificar. */
+  matchesPrimary: boolean | null;
   daily: Array<{
     offerId: string;
     price: number;
@@ -96,11 +103,20 @@ export async function GET(req: NextRequest) {
           ? 'Respaldo RSO'
           : 'Sin conexión';
 
+    const primary = getPrimaryProfile();
+    const account = front.account ?? null;
+    const matchesPrimary = account
+      ? account.name.toLowerCase() === primary.name.toLowerCase() && (account.tag ?? '').toLowerCase() === primary.tag.toLowerCase()
+      : null;
+
     const response: StoreStatusResponse = {
       source: front.source,
       sourceDetail,
       fetchedAt: front.fetchedAt,
       dailyRemainingSec: front.dailyRemainingSec,
+      profile: { id: primary.id, label: primary.label, name: primary.name, tag: primary.tag },
+      account,
+      matchesPrimary,
       daily,
       bundle,
       favorites: favoritesEnriched,
