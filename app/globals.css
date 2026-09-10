@@ -248,7 +248,7 @@ select {
   padding: 18px 20px 20px;
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
 }
-.panel > h2, .panel > .panel-h2 {
+.panel > h2 {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -260,7 +260,7 @@ select {
   text-transform: uppercase;
   color: var(--bone);
 }
-.panel > h2::before, .panel > .panel-h2::before {
+.panel > h2::before {
   content: '';
   width: 5px;
   height: 14px;
@@ -278,21 +278,6 @@ select {
 .two-col .panel { height: 100%; }
 @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
 
-.focus-card { box-shadow: inset 3px 0 0 var(--accent-focus, var(--blue)); }
-.focus-card .msg { font-size: 13.5px; margin: 0 0 12px; color: var(--bone); }
-.rec { font-size: 12.5px; padding: 9px 0; border-top: 1px solid rgba(38, 56, 74, 0.55); }
-.rec:first-of-type { border-top: none; }
-.rec .sc { color: var(--bone); font-weight: 600; }
-.rec .meta { color: var(--faint); font-size: 11.5px; margin-top: 1px; }
-
-.skill-row { display: flex; align-items: center; gap: 12px; padding: 6px 0; font-size: 13px; }
-.skill-row + .skill-row { border-top: 1px solid rgba(38, 56, 74, 0.45); }
-.skill-row .name { width: 96px; color: var(--mute); font-size: 12px; text-transform: capitalize; }
-.skill-row .track { flex: 1; height: 6px; background: var(--steel-2); overflow: hidden; }
-.skill-row .fill { height: 100%; }
-.skill-row .val { width: 40px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; }
-
-.chart-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .chart-wrap svg { width: 100%; height: auto; display: block; }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11.5px; color: var(--faint); margin-top: 12px; align-items: center; }
 .legend .sw { display: inline-block; width: 12px; height: 8px; vertical-align: middle; margin-right: 6px; }
@@ -1020,16 +1005,6 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
   pointer-events: none;
 }
 .cellbar-num { position: relative; z-index: 1; }
-
-.grid-aim {
-  display: grid;
-  grid-template-columns: minmax(300px, 360px) 1fr;
-  gap: 14px;
-  margin-top: 18px;
-  align-items: start;
-}
-.grid-aim > .col { display: flex; flex-direction: column; gap: 14px; }
-@media (max-width: 900px) { .grid-aim { grid-template-columns: 1fr; } }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(8px); }

@@ -12,8 +12,7 @@ export const MIN_MAP_GAMES = 1;
 export const MIN_AGENT_GAMES = 1;
 /** Máximo de candidatos por jugador (producto 4 × 8 ≈ 4,1k combos por mapa). */
 const MAX_CANDIDATES = 8;
-/** Pick pro ≥ 20% = meta fuerte del mapa; ≥ 10% = viable. */
-export const META_STRONG = 20;
+/** Pick pro ≥ 10% = viable. */
 export const META_MIN = 10;
 
 export interface AgentPick {

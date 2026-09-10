@@ -31,10 +31,6 @@ export async function getComments(): Promise<Record<string, MatchComment>> {
   return readComments();
 }
 
-export function getComment(matchId: string): MatchComment | null {
-  return readComments()[matchId] ?? null;
-}
-
 /**
  * Guarda o reemplaza el comentario de una partida. Texto vacío = borra la nota.
  * Devuelve el estado completo de comentarios.

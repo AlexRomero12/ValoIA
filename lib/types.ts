@@ -122,13 +122,6 @@ export interface ValSummary {
   arsenal?: ValArsenal;
 }
 
-export interface ValStatus {
-  keyConfigured: boolean;
-  provider: 'henrik' | 'riot' | null;
-  ok: boolean;
-  error?: { code: string; message: string };
-}
-
 export interface AgentIconInfo {
   name: string;
   icon: string | null;

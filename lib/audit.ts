@@ -15,17 +15,6 @@ import { poolRuleFor, type AuditRules } from './profileTypes';
  * las reglas del perfil (`AuditRules`); fuera y prohibido son violación.
  */
 
-export interface AuditPool {
-  main: string[];
-  backup: string[];
-}
-
-/** Pool por defecto (histórico de Player) cuando el perfil no define reglas. */
-export const AUDIT_POOL: AuditPool = {
-  main: ['Jett', 'Raze', 'Chamber'],
-  backup: ['Sage', 'Astra'],
-};
-
 /** Clasificación de un pick contra las reglas del perfil. */
 export type PickClass = 'main' | 'backup' | 'off' | 'banned' | 'flex';
 
@@ -53,11 +42,6 @@ export function classifyPick(m: MatchRow, rules?: AuditRules): PickClass {
   if (rule.main.includes(m.agent)) return 'main';
   if (rule.backup.includes(m.agent)) return 'backup';
   return 'off';
-}
-
-/** Violación de pool plana (compat): agente fuera de main+backup. */
-export function isPoolViolation(m: MatchRow, pool: AuditPool = AUDIT_POOL): boolean {
-  return !pool.main.includes(m.agent) && !pool.backup.includes(m.agent);
 }
 
 export interface AuditMatchRow {

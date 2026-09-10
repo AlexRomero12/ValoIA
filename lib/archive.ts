@@ -31,8 +31,6 @@ import { fetchMatchesPage, henrikMatchId, henrikMatchTimestamp, HENRIK_CONFIG, P
  *    {name}_{tag}/{matchId}.json     -> HenrikMatch (payload completo)
  */
 
-export const ARCHIVE_VERSION = 'v1';
-
 const BACKFILL_DEFAULT_PAGES = 40; // ~400 partidas competitivas por pasada
 const BACKFILL_MAX_PAGES = 150; // techo duro por ejecución (~25 min con throttle)
 

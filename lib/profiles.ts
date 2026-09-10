@@ -1,6 +1,6 @@
 import { readData, writeData } from './persist';
 import type { AuditPoolRule, AuditRules, Profile, ProfileAccount } from './profileTypes';
-import { memberAccounts, slugifyId } from './profileTypes';
+import { slugifyId } from './profileTypes';
 
 /**
  * Store de perfiles (server-only, usa `node:fs`).
@@ -154,8 +154,6 @@ export function isValidProfile(id?: string | null): boolean {
   return listProfiles().some((p) => p.id === id);
 }
 
-export { memberAccounts };
-
 function cleanAccounts(accounts: unknown): ProfileAccount[] | undefined {
   if (!Array.isArray(accounts)) return undefined;
   const out = accounts
@@ -276,9 +274,4 @@ export function deleteProfile(id: string): Profile[] {
   if (next.length === 0) throw new Error('No puedes borrar el último perfil');
   writeFile(next);
   return next;
-}
-
-/** Reglas de auditoría de un perfil (undefined = sin pool configurado). */
-export function auditRulesOf(profile: Profile): AuditRules | undefined {
-  return profile.audit;
 }
