@@ -19,11 +19,11 @@ export function MobileNav({ activePage }: { activePage: NavPage }) {
       </Link>
       <Link href="/team" className={activePage === 'team' ? 'active' : ''} aria-current={activePage === 'team' ? 'page' : undefined}>
         <TeamIcon />
-        <span>Team</span>
+        <span>Equipo</span>
       </Link>
       <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''} aria-current={activePage === 'auditoria' ? 'page' : undefined}>
         <ShieldIcon />
-        <span>Auditoría</span>
+        <span>Reglas</span>
       </Link>
       <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''} aria-current={activePage === 'tienda' ? 'page' : undefined}>
         <BagIcon />

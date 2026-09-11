@@ -5,7 +5,7 @@
 export function AuditIntro({ hasRules }: { hasRules: boolean }) {
   return (
     <details className="panel audit-intro" open={!hasRules}>
-      <summary>¿Qué mide la auditoría y cómo se configura?</summary>
+      <summary>¿Qué son las reglas de sesión y cómo se configuran?</summary>
       <div className="audit-intro-body">
         <ul>
           <li>
@@ -24,7 +24,7 @@ export function AuditIntro({ hasRules }: { hasRules: boolean }) {
           </li>
         </ul>
         <p className="window-info">
-          Se configura en <b>Perfiles → tu perfil → Auditoría</b> (pool por mapa, prohibidos, corte y metas). Solo se
+          Se configura en <b>Perfiles → tu perfil → Reglas de sesión</b> (pool por mapa, prohibidos, corte y metas). Solo se
           audita tu perfil principal y cambiar reglas no reescribe semanas ya guardadas.
         </p>
       </div>

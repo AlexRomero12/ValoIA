@@ -4,7 +4,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [1.13.0] — 2026-09-11
 
-Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, export/import y ayudas inline.
+Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, export/import, ayudas inline y Comparar adaptado a móvil.
 
 ### Added
 - **Login claro**: qué es ValoIA, aviso de aprobación con pasos (envías → el admin aprueba → contraseña temporal), ayuda "¿Olvidaste tu contraseña?" y estado "pendiente de aprobación" (sin correos)
@@ -13,8 +13,9 @@ Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, ex
 - **Rol del perfil como multi-select** (Duelist/Initiator/Controller/Sentinel) con explicación de para qué sirve (composiciones de Team)
 - **Auditoría guiada**: panel explicativo (qué mide, cómo, dónde se configura) y **propuesta inicial de reglas** calculada de tus partidas (pool por mapa, prohibidos por WR, metas del plan) con vista previa y aplicación en un clic
 - **Export/import de perfiles**: archivo `.valoia.json` con etiqueta, Riot ID, cuentas, preferencias y reglas (sin RSO ni notas); importar crea perfiles nuevos respetando el tope
-- **Ayudas inline `(?)`** en los KPIs (WR, K/D, ACS, HS%, ADR, FB, FD) y renombres: "Ventana" → "Periodo", "Cont" → "Parada"
+- **Ayudas inline `(?)`** en los KPIs (WR, K/D, ACS, HS%, ADR, FB, FD) y renombres: "Ventana" → "Periodo", "Cont" → "Parada", "Auditoría" → "Reglas de sesión" (nav "Reglas") y "Team" → "Equipo"
 - **Winrate · Agente colapsable**: muestra los 6 agentes más jugados con botón **Ver más (N agentes más)** / **Ver menos** para desplegar el resto, dejando el panel a la par de **Winrate · Mapa**; añade una pista de que cada fila filtra «Partidas recientes»
+- **Comparar en móvil**: filtros colapsables con contador (Periodo y Métrica siempre a la vista), selector de perfiles en chips que envuelven, **Ranking en tarjetas** por jugador con orden por selector y badge «mejor en…», pestañas **Resumen | Agentes** y agentes en tarjetas con sub-vista **Por jugador / Por agente** (el heatmap y el detalle con tablas quedan en escritorio); iconos de agente de 40px
 
 ### Changed
 - **Orden en Ranked**: «Partidas recientes» pasa delante de Arsenal y Trend de rango (menos scroll hasta el detalle)

@@ -30,9 +30,9 @@ interface ComboRow {
 type Mode = 'all' | 'best';
 type SortKey = 'games' | 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct' | 'rr';
 
-const COLUMNS: { key: SortKey; label: string; fmt: (s: PlayerStats) => string; bar?: boolean }[] = [
+const COLUMNS: { key: SortKey; label: string; fmt: (s: PlayerStats) => string; bar?: boolean; sortable?: boolean }[] = [
   { key: 'games', label: 'Partidas', fmt: (s) => String(s.games) },
-  { key: 'games', label: 'W-L', fmt: (s) => `${s.wins}–${s.losses}${s.draws ? `–${s.draws}E` : ''}` },
+  { key: 'games', label: 'W-L', fmt: (s) => `${s.wins}–${s.losses}${s.draws ? `–${s.draws}E` : ''}`, sortable: false },
   { key: 'wr', label: 'WR%', fmt: (s) => `${s.wr.toFixed(1)}%`, bar: true },
   { key: 'kd', label: 'K/D', fmt: (s) => s.kd.toFixed(2) },
   { key: 'acs', label: 'ACS', fmt: (s) => String(Math.round(s.acs)), bar: true },
@@ -149,15 +149,19 @@ export function AgentStatsTable({ players, filters, minGames }: AgentStatsTableP
               {COLUMNS.map((c, i) => (
                 <th
                   key={`${c.key}-${i}`}
-                  className={`num sortable${sortKey === c.key ? ' sorted' : ''}`}
-                  onClick={() => {
-                    setSortKey(c.key);
-                    setAsc((a) => ({ ...a, [c.key]: !a[c.key] }));
-                  }}
-                  title={`Ordenar por ${c.label}`}
+                  className={`num${c.sortable === false ? '' : ' sortable'}${c.sortable !== false && sortKey === c.key ? ' sorted' : ''}`}
+                  onClick={
+                    c.sortable === false
+                      ? undefined
+                      : () => {
+                          setSortKey(c.key);
+                          setAsc((a) => ({ ...a, [c.key]: !a[c.key] }));
+                        }
+                  }
+                  title={c.sortable === false ? c.label : `Ordenar por ${c.label}`}
                 >
                   {c.label}
-                  {sortKey === c.key ? (asc[c.key] ? ' ↑' : ' ↓') : ''}
+                  {c.sortable !== false && sortKey === c.key ? (asc[c.key] ? ' ↑' : ' ↓') : ''}
                 </th>
               ))}
             </tr>
@@ -184,7 +188,7 @@ export function AgentStatsTable({ players, filters, minGames }: AgentStatsTableP
                     </span>
                   </td>
                   {COLUMNS.map((c, i) => {
-                    const isSortedCol = sortKey === c.key;
+                    const isSortedCol = c.sortable !== false && sortKey === c.key;
                     const val = sortValue(r.stats, c.key);
                     const pct = c.bar && val > 0 ? Math.min(100, (val / (maxes[c.key] ?? 1)) * 100) : 0;
                     return (

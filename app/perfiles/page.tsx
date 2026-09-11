@@ -140,7 +140,7 @@ export default function PerfilesPage() {
         <div className="banner warn locked-banner">
           <b>Cambia tu contraseña para desbloquear el panel.</b>
           <span>
-            Hasta que la cambies, <b>todo está bloqueado</b>: Ranked, Comparar, Team, Tienda y Auditoría.
+            Hasta que la cambies, <b>todo está bloqueado</b>: Ranked, Comparar, Equipo, Tienda y Reglas de sesión.
             Solo esta página está disponible.
           </span>
           <button type="button" className="f-chip" onClick={goToPassword}>Cambiar contraseña ahora</button>
@@ -193,7 +193,7 @@ export default function PerfilesPage() {
         </div>
         <p className="window-info" style={{ marginTop: 8 }}>
           Elige el <b>perfil principal</b> (★): es el único que se audita. Los <b>visibles</b> aparecen en Ranked;
-          Comparar y Team pueden usar cualquiera de tus perfiles. Exportar/Importar solo incluye la configuración de
+          Comparar y Equipo pueden usar cualquiera de tus perfiles. Exportar/Importar solo incluye la configuración de
           tus perfiles (nunca RSO ni notas).
         </p>
         {importMsg ? <p className="banner warn" style={{ marginTop: 10 }}>{importMsg}</p> : null}
@@ -229,13 +229,13 @@ export default function PerfilesPage() {
                   </div>
                   <div className="profile-card-actions">
                     {p.primary ? (
-                      <button className="f-chip player-on" disabled title="Perfil principal (Auditoría y Tienda)">★ Principal</button>
+                      <button className="f-chip player-on" disabled title="Perfil principal (Reglas de sesión y Tienda)">★ Principal</button>
                     ) : (
                       <button
                         className="f-chip"
                         onClick={() => void makePrimary(p)}
                         disabled={busyId === p.id || mustChange}
-                        title={mustChange ? 'Bloqueado: cambia tu contraseña para usar esta acción' : 'Usar este perfil en Auditoría y Tienda'}
+                        title={mustChange ? 'Bloqueado: cambia tu contraseña para usar esta acción' : 'Usar este perfil en Reglas de sesión y Tienda'}
                       >
                         Hacer principal
                       </button>

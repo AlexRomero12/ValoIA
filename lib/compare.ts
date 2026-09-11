@@ -105,6 +105,83 @@ export type ResolvedGranularity = 'day' | 'week';
 export type Granularity = ResolvedGranularity | 'auto';
 export type MetricKey = 'wr' | 'acs' | 'kd' | 'rank';
 
+/** Fila jugador × agente con stats completas (detalle de escritorio y tarjetas móviles). */
+export interface AgentCombo {
+  playerId: string;
+  agent: string;
+  stats: PlayerStats;
+}
+
+/** Agrupa las partidas filtradas de cada jugador por agente y calcula sus stats. */
+export function agentCombos(
+  players: { id: string; matches: MatchRow[] }[],
+  filters: CompareFilters,
+  minGames: number,
+): AgentCombo[] {
+  const out: AgentCombo[] = [];
+  for (const p of players) {
+    const filtered = applyFilters(p.matches, filters);
+    const byAgent = new Map<string, MatchRow[]>();
+    for (const m of filtered) {
+      const list = byAgent.get(m.agent);
+      if (list) list.push(m);
+      else byAgent.set(m.agent, [m]);
+    }
+    for (const [agent, ms] of byAgent) {
+      const stats = statsFromMatches(ms);
+      if (stats.games < minGames) continue;
+      out.push({ playerId: p.id, agent, stats });
+    }
+  }
+  return out;
+}
+
+/** Celda de la matriz agente × jugador (heatmap de escritorio y vista "Por agente" móvil). */
+export interface AgentMatrixCell {
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  wr: number;
+}
+
+export interface AgentMatrix {
+  /** Agentes ordenados por partidas totales (desc). */
+  agents: string[];
+  /** Clave `jugador|agente` → celda. */
+  cells: Map<string, AgentMatrixCell>;
+  /** Partidas totales por agente. */
+  totals: Map<string, number>;
+}
+
+export function agentMatrix(
+  players: { id: string; matches: MatchRow[] }[],
+  filters: CompareFilters,
+): AgentMatrix {
+  const cells = new Map<string, AgentMatrixCell>();
+  const totals = new Map<string, number>();
+  for (const p of players) {
+    const filtered = applyFilters(p.matches, filters);
+    for (const m of filtered) {
+      const key = `${p.id}|${m.agent}`;
+      const c = cells.get(key) ?? { games: 0, wins: 0, losses: 0, draws: 0, wr: 0 };
+      c.games += 1;
+      // Empate: no cuenta como victoria ni derrota (misma regla que statsFromMatches).
+      if (m.roundsWon === m.roundsLost) c.draws += 1;
+      else if (m.won) c.wins += 1;
+      cells.set(key, c);
+      totals.set(m.agent, (totals.get(m.agent) ?? 0) + 1);
+    }
+  }
+  for (const c of cells.values()) {
+    const decisive = c.games - c.draws;
+    c.losses = decisive - c.wins;
+    c.wr = decisive ? (c.wins / decisive) * 100 : 0;
+  }
+  const agents = [...totals.keys()].sort((a, b) => (totals.get(b) ?? 0) - (totals.get(a) ?? 0));
+  return { agents, cells, totals };
+}
+
 /**
  * Granularidad efectiva para el modo "auto": rango corto (<=31 días) → día
  * (se ven todos los días), rango grande → semana (pocos puntos en el eje X).

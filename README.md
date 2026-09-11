@@ -10,7 +10,7 @@ Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de H
 app/                  Páginas (/valorant, /comparativo, /team, /tienda, /auditoria, /perfiles) + API routes
 components/           TopBar, KpiGrid, WrPanel, TierChart, MatchesTable, MatchDetailModal, LoadingOverlay, InfoTip
 components/audit/     Auditoría: intro y propuesta de reglas, día auditado, recomendaciones con acción
-components/compare/   Filtros, ranking, trend, heatmap y tabla jugador × agente
+components/compare/   Filtros, ranking, trend, heatmap, tabla jugador × agente y tarjetas móviles de agente
 components/profiles/  Formulario de perfil, selector, editor de reglas de auditoría y selector de agentes
 components/store/     Tienda de hoy, favoritas y panel de notificaciones
 lib/                  Clientes Henrik/Riot, perfiles, agregación, auditoría, propuesta de reglas, export/import, cache L1+L2, hooks
@@ -24,7 +24,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Login con usuarios**: la app entera queda detrás de sesión (`proxy.ts` de Next 16). Páginas sin sesión → `/login?next=…`; API → 401; `/sw.js` y estáticos quedan libres. El login explica qué es ValoIA y el flujo de alta (solicitud → aprobación → contraseña temporal)
 - **Solicitudes de acceso con aprobación**: desde `/login` se puede pedir cuenta (rate-limit por IP); el admin aprueba/rechaza en **Perfiles → Solicitudes** y la aprobación genera una contraseña temporal con cambio forzado al entrar
 - **Contraseñas**: mínimo 8 (mejor frase de 12+), repetir con validación y ver/ocultar; con contraseña temporal el **panel queda bloqueado** (solo Perfiles) hasta cambiarla, con aviso y acceso directo al formulario
-- **Aislamiento por dueño**: cada perfil tiene `owner`; cada usuario (incluido el admin) ve y edita **solo sus perfiles** en Ranked, Comparar, Team, Auditoría y Perfiles, sus favoritas, su tienda y sus notas. El admin solo añade la gestión de usuarios; **no ve perfiles, tiendas ni favoritas ajenas**
+- **Aislamiento por dueño**: cada perfil tiene `owner`; cada usuario (incluido el admin) ve y edita **solo sus perfiles** en Ranked, Comparar, Equipo, Reglas de sesión y Perfiles, sus favoritas, su tienda y sus notas. El admin solo añade la gestión de usuarios; **no ve perfiles, tiendas ni favoritas ajenas**
 - **Sesiones revocables**: registry `data/sessions.json` con dispositivo/IP/último uso; tope 5 por usuario y 3 por IP; panel **Sesiones** para cerrar una o las demás; cambiar contraseña o borrar usuario revoca sus sesiones
 - Contraseñas con **scrypt** + sal por usuario en `data/users.json`; sesiones firmadas **HMAC-SHA256** con `AUTH_SECRET` (cookie `HttpOnly` + `SameSite=Lax` + `Secure`, 30 días)
 - **Límites**: login 5/10min por IP+usuario, 10/15min por usuario y 30/15min por IP (429 + `Retry-After`); solicitudes 3/h por IP; refresh 10s por usuario; máx. 10 perfiles por usuario (20 el admin); **backfill solo admin**
@@ -50,20 +50,21 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Heatmap jugador × agente** y tabla analítica estilo VLR con mini-barras por celda (modo todos / mejores combos); columna de rango con **badge del tier + RR**
 - Filtros combinables: ventana (temporada o 7/14/30/90 días), rango de fechas custom, mapa y **filtro de agentes por iconitos**
 - Filtro de mínimo de partidas y leyenda de cobertura de datos
+- **Móvil ≤720px**: filtros colapsables con contador, ranking en tarjetas por jugador (WR grande, stats clave y «mejor en…») con selector de orden, pestañas **Resumen | Agentes** y, dentro de agentes, tarjetas con sub-vista **Por jugador** (agentes de cada uno, top 4 + ver todos) y **Por agente** (WR de cada jugador por agente, el heatmap en formato legible); heatmap y detalle con tablas quedan en escritorio
 
-### Página Team (`/team`)
+### Página Equipo (`/team`)
 - **Composiciones por mapa** para los perfiles que selecciones (eligiendo desde `/perfiles` o con “Agregar perfil”)
 - Con 4 jugadores reparte 1 rol por jugador; con otro número busca la mejor combinación libre respetando las reglas (máx 2 por rol, sin dos roles duplicados)
 - Prioriza la meta pro (VCT) y las preferencias manuales agente-mapa del perfil; backups por pick
 
 ### Página Perfiles (`/perfiles`)
 - **CRUD de perfiles**: etiqueta, Riot ID, **roles multi-select** (Duelist/Initiator/Controller/Sentinel), color, cuentas alternativas (stats mezcladas), preferencias agente por mapa y flags **visible** (Ranked) y **principal** (★)
-- **Perfil principal**: solo puede haber uno; Auditoría audita únicamente a él, la Tienda muestra únicamente su tienda y el push semanal es solo suyo
-- **Reglas de auditoría por persona**: pool por mapa (principal/backup) con selector de agentes por iconos, prohibidos (agentes y roles, p. ej. Initiator), regla de parada, pausa de sesión y metas semanales
+- **Perfil principal**: solo puede haber uno; las Reglas de sesión auditan únicamente a él, la Tienda muestra únicamente su tienda y el push semanal es solo suyo
+- **Reglas de sesión por persona**: pool por mapa (principal/backup) con selector de agentes por iconos, prohibidos (agentes y roles, p. ej. Initiator), regla de parada, pausa de sesión y metas semanales
 - Copiar reglas de otro perfil y **exportar/importar perfiles** en un archivo `.valoia.json` (etiqueta, Riot ID, cuentas, preferencias y reglas; nunca RSO ni notas) — importar crea perfiles nuevos respetando el tope
 - Persistencia en `data/profiles.json` (volumen `valo-data`, externo al cache)
 
-### Página Auditoría (`/auditoria`)
+### Página Reglas de sesión (`/auditoria`)
 - Audita **solo el perfil principal** (se elige en `/perfiles`, sin selector aquí) contra sus reglas: pool por mapa (principal/backup/prohibido), regla de parada (N derrotas con K/D < X) y separación por sesiones (pausa configurable)
 - **Guía integrada**: panel explicativo (qué mide, cómo funciona y dónde se configura) y **propuesta inicial de reglas** calculada desde tus últimas partidas (pool por mapa, prohibidos por WR y metas) con vista previa y aplicación en un clic
 - Hero semanal con **RR real vs "Con regla" vs "Regla + pool"**, cortes totales/ignorados, fuera de pool y prohibidos
@@ -191,7 +192,7 @@ Oracle Cloud Always Free (ARM) con `docker-compose.prod.yml` + Caddy
 | `POST /api/valorant/refresh?player=perfilId&scope=all\|matches\|mmr&limit=` | Revalidación en background del bucket/MMR/cuenta; responde `{started:true}` al instante |
 | `POST /api/valorant/backfill?player=perfilId&mode=season\|all&maxPages=&force=` | Backfill profundo del historial (fire-and-forget); el detalle de cada partida vieja queda en el archivo |
 | `GET /api/valorant/backfill?player=perfilId` | Estado del archivo por perfil/cuenta: total archivado, rango de fechas y último backfill |
-| `GET /api/valorant/profiles` | Lista de perfiles guardados (Riot ID, rol, visible, reglas de auditoría) |
+| `GET /api/valorant/profiles` | Lista de perfiles guardados (Riot ID, rol, visible, reglas de sesión) |
 | `POST /api/valorant/profiles` | `{action: upsert, profile}` / `{action: delete, id}` — CRUD de perfiles |
 | `GET /api/valorant/match?id=&player=perfilId` | Detalle completo de una partida cacheada |
 | `GET /api/valorant/agents` | Catálogo de agentes con iconos y rol (cache 24 h) |

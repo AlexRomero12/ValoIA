@@ -75,8 +75,8 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
         <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''}>Perfiles</Link>
         <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''}>Ranked</Link>
         <Link href="/comparativo" className={activePage === 'comparar' ? 'active' : ''}>Comparar</Link>
-        <Link href="/team" className={activePage === 'team' ? 'active' : ''}>Team</Link>
-        <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''}>Auditoría</Link>
+        <Link href="/team" className={activePage === 'team' ? 'active' : ''}>Equipo</Link>
+        <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''}>Reglas</Link>
         <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>
       </nav>
 

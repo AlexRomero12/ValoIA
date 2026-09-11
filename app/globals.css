@@ -886,6 +886,11 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .rank-table th.sorted { color: var(--red); }
 .rank-table td.col-sorted { background: rgba(255, 70, 85, 0.05); }
 .rank-table td.pos { color: var(--mute); font-weight: 700; width: 34px; }
+
+/* Ranking en móvil: tarjetas por jugador (la tabla ancha se oculta ≤720px). */
+.rank-mobile { display: none; }
+/* Agentes en móvil: tarjetas Por jugador / Por agente (las tablas se ocultan). */
+.agent-mobile { display: none; }
 .p-dot {
   width: 9px;
   height: 9px;
@@ -2389,31 +2394,174 @@ body { overflow-x: clip; }
 
 @media (max-width: 720px) {
   /* --- Comparar --- */
+  /* Filtros: Periodo y Métrica siempre a la vista; el resto se despliega. */
+  .compare-controls { row-gap: 10px; }
   .compare-controls .ctl-group { flex: 1 1 100%; }
+  .compare-controls .ctl-periodo,
+  .compare-controls .ctl-metrica { flex: 1 1 calc(50% - 6px); min-width: 132px; }
+  .compare-controls .ctl-periodo { order: 1; }
+  .compare-controls .ctl-metrica { order: 2; }
+  .compare-controls .ctl-toggle { order: 3; }
+  .compare-controls .ctl-rango { order: 4; }
+  .compare-controls .ctl-mapa { order: 5; }
+  .compare-controls .ctl-gran { order: 6; }
+  .compare-controls .ctl-min { order: 7; }
+  .compare-controls .ctl-clear { order: 8; }
+  .compare-controls .ctl-agents { order: 9; }
+  .compare-controls select,
+  .compare-controls .date-input { width: 100%; }
+  .compare-controls .ctl-toggle {
+    flex: 1 1 100%;
+    justify-content: center;
+    gap: 6px;
+    min-height: var(--touch);
+  }
+  .ctl-chevron { font-size: 10px; }
+  .compare-controls:not(.filters-open) .ctl-rango,
+  .compare-controls:not(.filters-open) .ctl-mapa,
+  .compare-controls:not(.filters-open) .ctl-gran,
+  .compare-controls:not(.filters-open) .ctl-min,
+  .compare-controls:not(.filters-open) .ctl-clear,
+  .compare-controls:not(.filters-open) .ctl-agents { display: none; }
+
   .inline-pair { display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; }
   .inline-pair .date-input { min-width: 0; }
   .combo-toolbar { flex-wrap: wrap; gap: 8px; }
   .pill-toggle button { min-height: 40px; }
 
-  .rank-table,
-  .agent-stats,
-  .heatmap { table-layout: auto; min-width: 760px; }
-  .rank-table th:first-child,
-  .rank-table td:first-child,
-  .agent-stats th:first-child,
-  .agent-stats td:first-child,
-  .heatmap th:first-child,
-  .heatmap td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    background: var(--steel);
-  }
-  .heatmap thead th { position: sticky; top: 0; z-index: 3; background: var(--steel); }
-  .heatmap thead th:first-child { z-index: 4; }
-  .compare-controls .table-scroll {
+  /* Iconos de agente: objetivo táctil real (40px) */
+  .agent-icon-btn { width: 40px; height: 40px; }
+  .agent-icon-btn img,
+  .agent-icon-btn .agent-letter { width: 32px; height: 32px; }
+
+  /* Tablas anchas (heatmap/detalle son solo escritorio): sombra de scroll en paneles */
+  .panel .table-scroll {
     box-shadow: inset -14px 0 12px -12px rgba(0, 0, 0, 0.55);
   }
+
+  /* Ranking en tarjetas */
+  .rank-desktop { display: none; }
+  .rank-mobile { display: flex; flex-direction: column; gap: 10px; }
+  .rc-sort { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--mute); }
+  .rc-sort > span { white-space: nowrap; }
+  .rc-sort select { flex: 1 1 auto; min-width: 0; min-height: 40px; }
+  .rc-dir { justify-content: center; min-width: 42px; min-height: 40px; }
+  .rank-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 13px;
+    background: var(--steel);
+    border: 1px solid var(--line);
+  }
+  .rc-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .rc-pos { width: 24px; text-align: center; font-weight: 800; color: var(--mute); }
+  .rc-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
+  .rc-rank { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; white-space: nowrap; }
+  .rc-main { display: flex; align-items: baseline; gap: 10px; }
+  .rc-wr { font-size: 30px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .rc-wr small { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--faint); }
+  .rc-record { color: var(--mute); font-size: 12px; }
+  .rc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 6px; }
+  .rc-stat { display: flex; flex-direction: column; gap: 2px; }
+  .rc-stat span {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .rc-stat b { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .rc-best {
+    align-self: flex-start;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bone);
+    background: rgba(255, 70, 85, 0.12);
+    border: 1px solid rgba(255, 70, 85, 0.4);
+  }
+
+  /* Tabs móviles Resumen | Por agente */
+  .cmp-tabs { width: 100%; margin-top: 12px; }
+  .cmp-tabs button { flex: 1 1 0; justify-content: center; min-height: var(--touch); }
+  .cmp-pane.off { display: none; }
+  .cmp-minis { display: none !important; }
+
+  /* Agentes en móvil: tarjetas legibles en vez de heatmap + tabla */
+  .agent-desktop { display: none; }
+  .agent-mobile { display: block; }
+  .agent-mobile.off { display: none; }
+  .agent-mobile-tabs { width: 100%; margin-bottom: 10px; }
+  .agent-mobile-tabs button { flex: 1 1 0; justify-content: center; min-height: var(--touch); }
+  .agent-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 12px 13px;
+    background: var(--steel);
+    border: 1px solid var(--line);
+  }
+  .agent-card:last-child { margin-bottom: 0; }
+  .ac-head,
+  .ag-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .ac-head b,
+  .ag-head b {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+  }
+  .ac-best {
+    flex: none;
+    max-width: 58%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--bone);
+    background: rgba(255, 70, 85, 0.12);
+    border: 1px solid rgba(255, 70, 85, 0.4);
+  }
+  .ag-total { color: var(--faint); font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .ac-head .agent-icon,
+  .ag-head .agent-icon,
+  .ac-agent .agent-icon { width: 22px; height: 22px; margin: 0; }
+  .ac-row,
+  .ag-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(38, 56, 74, 0.4);
+  }
+  .ac-row:last-of-type,
+  .ag-row:last-child { border-bottom: none; }
+  .ac-agent,
+  .ag-player { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .ac-agent b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-agent small { color: var(--faint); font-size: 10.5px; white-space: nowrap; }
+  .ac-wr,
+  .ag-wr { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .ag-player b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-sub { grid-column: 1 / -1; color: var(--mute); font-size: 11px; }
+  .ag-sub { grid-column: 2; text-align: right; color: var(--faint); font-size: 10.5px; white-space: nowrap; }
+  .ac-more { justify-content: center; min-height: 38px; }
 
   /* --- Team --- */
   .comp-row { row-gap: 6px; }

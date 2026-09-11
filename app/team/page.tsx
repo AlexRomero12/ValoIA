@@ -158,7 +158,7 @@ export default function TeamPage() {
     <div className="wrap">
       <TopBar
         accent="red"
-        title="Team"
+        title="Equipo"
         subtitle={['Composiciones', 'por mapa']}
         chip={
           <span className="chip-red">

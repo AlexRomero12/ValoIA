@@ -138,7 +138,7 @@ export default function TiendaPage() {
 
       {noProfile ? (
         <div className="banner warn">
-          Primero crea tu perfil principal en <Link href="/perfiles"><b>Perfiles</b></Link> para vincular tu tienda y tu auditoría.
+          Primero crea tu perfil principal en <Link href="/perfiles"><b>Perfiles</b></Link> para vincular tu tienda y tus reglas de sesión.
         </div>
       ) : null}
 

@@ -199,7 +199,7 @@ export function UsersPanel() {
           <div>
             <b>Cuenta bloqueada: cambia tu contraseña para desbloquear el panel.</b>
             <p className="window-info" style={{ margin: '4px 0 0' }}>
-              Mientras no la cambies, Ranked, Comparar, Team, Tienda y Auditoría quedan bloqueadas; solo esta
+              Mientras no la cambies, Ranked, Comparar, Equipo, Tienda y Reglas de sesión quedan bloqueadas; solo esta
               página está disponible. Usa el formulario de abajo.
             </p>
           </div>

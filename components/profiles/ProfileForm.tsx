@@ -157,7 +157,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
               })}
             </div>
             <p className="pf-help">
-              Los roles que sueles jugar: ordenan las propuestas de composición en Team. Puedes elegir varios o
+              Los roles que sueles jugar: ordenan las propuestas de composición en Equipo. Puedes elegir varios o
               ninguno.
             </p>
           </div>
@@ -190,7 +190,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
             <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
             <span>Visible en Ranked</span>
           </label>
-          <p className="pf-help">El perfil principal (★) es el único que se audita en la página Auditoría.</p>
+          <p className="pf-help">El perfil principal (★) es el único que se audita en Reglas de sesión.</p>
         </section>
 
         <section className="pf-section">
@@ -229,7 +229,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
               + Añadir preferencia
             </button>
           </div>
-          <p className="window-info">Gana sobre el score automático en las composiciones de Team (agentes separados por coma).</p>
+          <p className="window-info">Gana sobre el score automático en las composiciones de Equipo (agentes separados por coma).</p>
           {prefs.map((p, i) => (
             <div key={i} className="pf-inline">
               <select
@@ -257,7 +257,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
 
         <section className="pf-section">
           <div className="pf-section-head">
-            <h4>Auditoría</h4>
+            <h4>Reglas de sesión</h4>
             {audit ? (
               <button type="button" className="f-chip" onClick={() => setAudit(null)}>Quitar reglas</button>
             ) : (

@@ -258,8 +258,8 @@ export default function AuditoriaPage() {
     <div className="wrap">
       <TopBar
         accent="red"
-        title="Auditoría"
-        subtitle={['Reglas de', 'sesión']}
+        title="Reglas de sesión"
+        subtitle={['Cortes, pausas', 'y pool']}
         chip={
           <span className="chip-red">
             {loadingProfiles || coldLoad ? 'cargando…' : `${wt.matches} competitivas · ${fmtRR(wt.realRR)} RR (semana)`}

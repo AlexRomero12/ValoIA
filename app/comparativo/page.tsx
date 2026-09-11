@@ -9,6 +9,7 @@ import { RankingTable, type RankRow, type SortKey } from '@/components/compare/R
 import { TrendCompare } from '@/components/compare/TrendCompare';
 import { AgentHeatmap } from '@/components/compare/AgentHeatmap';
 import { AgentStatsTable } from '@/components/compare/AgentStatsTable';
+import { AgentByPlayerCards, AgentByAgentCards } from '@/components/compare/AgentCards';
 import { ProfilePicker } from '@/components/profiles/ProfilePicker';
 import { ProfileForm } from '@/components/profiles/ProfileForm';
 import { useCooldown } from '@/lib/useCooldown';
@@ -51,6 +52,8 @@ export default function ComparativoPage() {
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
   const [userSelected, setUserSelected] = useState<string[] | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [tab, setTab] = useState<'resumen' | 'agentes'>('resumen');
+  const [agentTab, setAgentTab] = useState<'jugador' | 'agente'>('jugador');
   const cooldown = useCooldown(15);
 
   const profilesQ = useProfiles();
@@ -318,6 +321,12 @@ export default function ComparativoPage() {
 
   const loadingProfiles = profilesQ.isLoading;
   const coldLoad = selected.length > 0 && anyLoading && loadedAccounts === 0;
+  const agentPlayers = entries.map((e) => ({
+    id: e.member.id,
+    label: e.member.label,
+    color: e.color,
+    matches: e.data?.matches ?? [],
+  }));
 
   return (
     <div className="wrap">
@@ -364,7 +373,7 @@ export default function ComparativoPage() {
         <div className="banner warn">{refreshError}</div>
       )}
 
-      <div className="controls" style={{ marginTop: 20 }}>
+      <div className="controls ranked-controls" style={{ marginTop: 20 }}>
         <label>Perfiles</label>
         <ProfilePicker
           profiles={allProfiles}
@@ -381,7 +390,7 @@ export default function ComparativoPage() {
       ) : null}
 
       {entries.length > 0 ? (
-        <div className="controls" style={{ marginTop: 8 }}>
+        <div className="controls cmp-minis" style={{ marginTop: 8 }}>
           {entries.map((e, i) => (
             <span
               key={e.member.id}
@@ -448,38 +457,93 @@ export default function ComparativoPage() {
         </div>
       )}
 
-      <div className="panel">
-        <h2>Ranking</h2>
-        <RankingTable rows={rankRows} sortKey={sortKey} onSortKey={setSortKey} />
+      <div className="pill-toggle cmp-tabs only-mobile" role="tablist" aria-label="Vista del comparativo">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'resumen'}
+          className={tab === 'resumen' ? 'on' : ''}
+          onClick={() => setTab('resumen')}
+        >
+          Resumen
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'agentes'}
+          className={tab === 'agentes' ? 'on' : ''}
+          onClick={() => setTab('agentes')}
+        >
+          Agentes
+        </button>
       </div>
 
-      <div className="panel">
-        <h2>Evolución por {effGran === 'day' ? 'día' : 'semana'}{gran === 'auto' ? ' (auto)' : ''} · métrica {metric === 'rank' ? 'RANGO' : metric.toUpperCase()}</h2>
-        <TrendCompare
-          series={trendSeries}
-          fmt={fmtMetric}
-          minValue={metric === 'rank' ? rankFloor : undefined}
-          ticks={metric === 'rank' ? rankTicks : undefined}
-        />
+      <div className={`cmp-pane${tab !== 'resumen' ? ' off' : ''}`}>
+        <div className="panel">
+          <h2>Ranking</h2>
+          <RankingTable rows={rankRows} sortKey={sortKey} onSortKey={setSortKey} />
+        </div>
+
+        <div className="panel">
+          <h2>Evolución por {effGran === 'day' ? 'día' : 'semana'}{gran === 'auto' ? ' (auto)' : ''} · métrica {metric === 'rank' ? 'RANGO' : metric.toUpperCase()}</h2>
+          <TrendCompare
+            series={trendSeries}
+            fmt={fmtMetric}
+            minValue={metric === 'rank' ? rankFloor : undefined}
+            ticks={metric === 'rank' ? rankTicks : undefined}
+          />
+        </div>
       </div>
 
-      <div className="panel">
-        <h2>Heatmap jugador × agente</h2>
-        <AgentHeatmap players={entries.map((e) => ({ id: e.member.id, label: e.member.label, matches: e.data?.matches ?? [] }))} filters={filters} minGames={filters.minGames} />
-      </div>
+      <div className={`cmp-pane${tab !== 'agentes' ? ' off' : ''}`}>
+        <div className="pill-toggle agent-mobile-tabs only-mobile" role="tablist" aria-label="Vista por agente">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={agentTab === 'jugador'}
+            className={agentTab === 'jugador' ? 'on' : ''}
+            onClick={() => setAgentTab('jugador')}
+          >
+            Por jugador
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={agentTab === 'agente'}
+            className={agentTab === 'agente' ? 'on' : ''}
+            onClick={() => setAgentTab('agente')}
+          >
+            Por agente
+          </button>
+        </div>
 
-      <div className="panel">
-        <h2>Detalle jugador × agente</h2>
-        <AgentStatsTable
-          players={entries.map((e) => ({
-            id: e.member.id,
-            label: e.member.label,
-            color: e.color,
-            matches: e.data?.matches ?? [],
-          }))}
-          filters={filters}
-          minGames={filters.minGames}
-        />
+        <div className={`agent-mobile${agentTab !== 'jugador' ? ' off' : ''}`}>
+          <AgentByPlayerCards players={agentPlayers} filters={filters} minGames={filters.minGames} />
+        </div>
+        <div className={`agent-mobile${agentTab !== 'agente' ? ' off' : ''}`}>
+          <AgentByAgentCards players={agentPlayers} filters={filters} minGames={filters.minGames} />
+        </div>
+
+        <div className="agent-desktop">
+          <div className="panel">
+            <h2>Heatmap jugador × agente</h2>
+            <AgentHeatmap players={entries.map((e) => ({ id: e.member.id, label: e.member.label, matches: e.data?.matches ?? [] }))} filters={filters} minGames={filters.minGames} />
+          </div>
+
+          <div className="panel">
+            <h2>Detalle jugador × agente</h2>
+            <AgentStatsTable
+              players={entries.map((e) => ({
+                id: e.member.id,
+                label: e.member.label,
+                color: e.color,
+                matches: e.data?.matches ?? [],
+              }))}
+              filters={filters}
+              minGames={filters.minGames}
+            />
+          </div>
+        </div>
       </div>
 
       {formOpen && (
