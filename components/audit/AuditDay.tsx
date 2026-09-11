@@ -351,7 +351,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
               <thead>
                 <tr>
                   <th>Hora</th><th>Mapa · Agente</th><th>Marcador</th><th>Resultado</th>
-                  <th className="num">K/D</th><th className="num">FB/FD</th><th className="num">RR</th><th className="num">Cont</th><th>Auditoría</th><th>Nota</th>
+                  <th className="num">K/D</th><th className="num">FB/FD</th><th className="num">RR</th><th className="num" title="Contador de la regla de parada (derrotas con K/D bajo)">Parada</th><th>Auditoría</th><th>Nota</th>
                 </tr>
               </thead>
               <tbody>

@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { useProfileActions, type ProfileInput } from '@/lib/hooks';
 import { ROTATION_MAPS } from '@/lib/proneta';
+import { ROLES } from '@/lib/roles';
 import {
   PROFILE_COLORS,
   cloneAuditRules,
   emptyAuditRules,
+  joinRoles,
+  parseRoles,
   type AuditRules,
   type Profile,
   type ProfileAccount,
@@ -28,7 +32,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
   const [label, setLabel] = useState(profile?.label ?? '');
   const [name, setName] = useState(profile?.name ?? '');
   const [tag, setTag] = useState(profile?.tag ?? '');
-  const [role, setRole] = useState(profile?.role ?? '');
+  const [roles, setRoles] = useState<string[]>(parseRoles(profile?.role));
   const [color, setColor] = useState(profile?.color ?? '');
   const [visible, setVisible] = useState(profile?.visible ?? true);
   const [accounts, setAccounts] = useState<ProfileAccount[]>(profile?.accounts ?? []);
@@ -68,7 +72,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
       label: label.trim() || name.trim(),
       name: name.trim(),
       tag: tag.trim(),
-      role: role.trim(),
+      role: joinRoles(roles),
       color: color.trim() || undefined,
       visible,
       accounts: accounts.filter((a) => a.name.trim() && a.tag.trim()),
@@ -108,7 +112,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
 
         <header className="pf-head">
           <h3>{profile ? `Editar ${profile.label}` : 'Nuevo perfil'}</h3>
-          <span className="window-info">Riot ID, rol y reglas de auditoría. Visible = aparece en Ranked/Auditoría.</span>
+          <span className="window-info">Tu Riot ID, los roles que sueles jugar y las reglas de auditoría.</span>
         </header>
 
         <section className="pf-section">
@@ -117,6 +121,9 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
             <label className="pf-field">
               <span>Etiqueta</span>
               <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Mi perfil" />
+              <span className="pf-help" style={{ margin: 0 }}>
+                Es el nombre con el que se te mostrará en la plataforma.
+              </span>
             </label>
             <label className="pf-field grow">
               <span>Nombre Riot</span>
@@ -126,11 +133,35 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
               <span>Tag</span>
               <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="0000" />
             </label>
-            <label className="pf-field grow">
-              <span>Rol</span>
-              <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Duelist/Sentinel" />
-            </label>
           </div>
+          <p className="pf-help">
+            El Riot ID (nombre + tag) se usa para consultar tus partidas.
+          </p>
+
+          <div className="pf-block">
+            <span className="pf-label">Rol</span>
+            <div className="role-chips">
+              {ROLES.map((r) => {
+                const on = roles.includes(r);
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    className={`f-chip${on ? ' player-on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => setRoles((cur) => (on ? cur.filter((x) => x !== r) : [...cur, r]))}
+                  >
+                    {r}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="pf-help">
+              Los roles que sueles jugar: ordenan las propuestas de composición en Team. Puedes elegir varios o
+              ninguno.
+            </p>
+          </div>
+
           <div className="pf-row">
             <span className="pf-label">Color</span>
             <div className="pf-colors">
@@ -157,8 +188,9 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
           </div>
           <label className="pf-check">
             <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
-            <span>Visible en Ranked y Auditoría</span>
+            <span>Visible en Ranked</span>
           </label>
+          <p className="pf-help">El perfil principal (★) es el único que se audita en la página Auditoría.</p>
         </section>
 
         <section className="pf-section">
@@ -243,7 +275,9 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
             />
           ) : (
             <p className="window-info">
-              Sin reglas: la auditoría de este perfil solo medirá cortes/pausas con los defaults (2 derrotas con K/D &lt; 0.9 · pausa 3 h).
+              Sin reglas: la auditoría solo medirá cortes/pausas con los defaults (2 derrotas con K/D &lt; 0.9 ·
+              pausa 3 h). <Link href="/auditoria">Genera una propuesta desde tus partidas</Link> y luego ajústala
+              aquí.
             </p>
           )}
         </section>

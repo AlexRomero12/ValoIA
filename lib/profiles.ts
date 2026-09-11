@@ -82,23 +82,19 @@ export function listProfiles(): Profile[] {
   return next;
 }
 
-/** QuiÃ©n consulta: el admin ve todo; cada usuario, solo sus perfiles. */
+/** QuiÃ©n consulta: cada usuario ve y gestiona solo sus perfiles (tambiÃ©n el admin). */
 export interface ProfileViewer {
   username: string;
   admin: boolean;
 }
 
 export function canAccessProfile(profile: Profile, viewer: ProfileViewer): boolean {
-  return viewer.admin || !profile.owner || profile.owner === viewer.username;
+  return profile.owner === viewer.username;
 }
 
-/** Perfiles visibles para un usuario (propios primero, para el principal). */
+/** Perfiles del usuario (solo propios). */
 export function listProfilesFor(viewer: ProfileViewer): Profile[] {
-  const all = listProfiles();
-  if (viewer.admin) {
-    return [...all.filter((p) => p.owner === viewer.username), ...all.filter((p) => p.owner !== viewer.username)];
-  }
-  return all.filter((p) => p.owner === viewer.username);
+  return listProfiles().filter((p) => p.owner === viewer.username);
 }
 
 export function listVisibleProfilesFor(viewer: ProfileViewer): Profile[] {
@@ -107,9 +103,6 @@ export function listVisibleProfilesFor(viewer: ProfileViewer): Profile[] {
 
 /** Filtra una lista en memoria segÃºn el visor (para respuestas tras mutar). */
 export function scopeProfiles(profiles: Profile[], viewer: ProfileViewer): Profile[] {
-  if (viewer.admin) {
-    return [...profiles.filter((p) => p.owner === viewer.username), ...profiles.filter((p) => p.owner !== viewer.username)];
-  }
   return profiles.filter((p) => p.owner === viewer.username);
 }
 
@@ -119,15 +112,14 @@ export function listVisibleProfiles(): Profile[] {
 }
 
 /** Perfil principal de un dueÃ±o (o el global si no se indica). */
-export function getPrimaryProfile(owner?: string | null): Profile {
+export function getPrimaryProfile(owner?: string | null): Profile | undefined {
   const profiles = listProfiles();
-  const scope = owner ? profiles.filter((p) => p.owner === owner) : profiles;
-  const list = scope.length > 0 ? scope : profiles;
+  const list = owner ? profiles.filter((p) => p.owner === owner) : profiles;
   return list.find((p) => p.primary) ?? list.find((p) => p.visible) ?? list[0];
 }
 
 /** Principal del admin: es el que manda en la Tienda (sesiÃ³n Riot Ãºnica). */
-export function getStorePrimaryProfile(): Profile {
+export function getStorePrimaryProfile(): Profile | undefined {
   return getPrimaryProfile(adminUsername());
 }
 
@@ -139,16 +131,22 @@ export function profileAccess(id: string | null | undefined, viewer: ProfileView
   return canAccessProfile(profile, viewer) ? 'ok' : 'forbidden';
 }
 
-/** Resuelve por id dentro de lo permitido; sin id (o desconocido) devuelve el primero permitido. */
-export function getProfile(id?: string | null, viewer?: ProfileViewer): Profile {
+/** Resuelve por id dentro de los perfiles propios; sin id devuelve el primero propio. */
+export function getProfile(id?: string | null, viewer?: ProfileViewer): Profile | undefined {
   const profiles = listProfiles();
-  const allowed = viewer ? profiles.filter((p) => canAccessProfile(p, viewer)) : profiles;
-  const list = allowed.length > 0 ? allowed : profiles;
+  const list = viewer ? profiles.filter((p) => p.owner === viewer.username) : profiles;
   if (id) {
     const found = list.find((p) => p.id === id);
     if (found) return found;
   }
   return list[0];
+}
+
+/** Igual que getProfile pero falla con NO_PROFILES si el usuario no tiene ninguno. */
+export function requireProfile(id?: string | null, viewer?: ProfileViewer): Profile {
+  const profile = getProfile(id, viewer);
+  if (!profile) throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NO_PROFILES' });
+  return profile;
 }
 
 export function isValidProfile(id?: string | null, viewer?: ProfileViewer): boolean {
@@ -249,7 +247,7 @@ function profileLimit(owner: string): number {
 /**
  * Crea o actualiza un perfil (match por id) para el visor.
  * - Nuevo: queda con `owner = visor.username` y respeta el tope de perfiles.
- * - Existente: el visor debe ser el dueño o admin.
+ * - Existente: el visor debe ser el dueño.
  * - `primary` se desmarca solo entre los perfiles del MISMO dueño.
  */
 export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer): Profile[] {

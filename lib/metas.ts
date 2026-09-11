@@ -8,6 +8,8 @@ export interface MetaDef {
   lowerIsBetter?: boolean;
   /** Texto del target para el pie de la tarjeta (default: "meta ≥ X"). */
   targetHint?: string;
+  /** Explicación corta para la ayuda (?) de la tarjeta. */
+  tip?: string;
 }
 
 export interface Kpis {
@@ -28,11 +30,39 @@ export interface Kpis {
 }
 
 export const METAS: MetaDef[] = [
-  { key: 'wr', label: 'Winrate', target: 55, fmt: (v) => v.toFixed(1) + '%', get: (k) => k.wr },
-  { key: 'kd', label: 'K/D', target: 1.05, fmt: (v) => v.toFixed(2), get: (k) => k.kd },
-  { key: 'acs', label: 'ACS', target: 220, fmt: (v) => Math.round(v).toString(), get: (k) => k.acs },
-  { key: 'hs', label: 'HS%', target: 25, fmt: (v) => v.toFixed(1) + '%', get: (k) => k.hsPct },
-  { label: 'ADR', key: 'adr', target: 150, fmt: (v) => Math.round(v).toString(), get: (k) => k.adr },
+  {
+    key: 'wr',
+    label: 'Winrate',
+    target: 55,
+    fmt: (v) => v.toFixed(1) + '%',
+    get: (k) => k.wr,
+    tip: 'Porcentaje de victorias en partidas decisivas: los empates no cuentan.',
+  },
+  { key: 'kd', label: 'K/D', target: 1.05, fmt: (v) => v.toFixed(2), get: (k) => k.kd, tip: 'Kills dividido por muertes.' },
+  {
+    key: 'acs',
+    label: 'ACS',
+    target: 220,
+    fmt: (v) => Math.round(v).toString(),
+    get: (k) => k.acs,
+    tip: 'Puntos de combate por ronda: tu impacto promedio en cada ronda.',
+  },
+  {
+    key: 'hs',
+    label: 'HS%',
+    target: 25,
+    fmt: (v) => v.toFixed(1) + '%',
+    get: (k) => k.hsPct,
+    tip: 'Porcentaje de impactos en la cabeza. Ojo: las partidas con Operator lo diluyen (dispara al cuerpo).',
+  },
+  {
+    label: 'ADR',
+    key: 'adr',
+    target: 150,
+    fmt: (v) => Math.round(v).toString(),
+    get: (k) => k.adr,
+    tip: 'Daño por ronda.',
+  },
   {
     key: 'fb',
     label: 'FB / partida',
@@ -40,6 +70,7 @@ export const METAS: MetaDef[] = [
     fmt: (v) => v.toFixed(1),
     get: (k) => k.fb,
     targetHint: 'meta ≥ 2.5',
+    tip: 'Primeras sangres por partida: rondas que abres con la primera kill.',
   },
   {
     key: 'fd',
@@ -49,6 +80,7 @@ export const METAS: MetaDef[] = [
     get: (k) => k.fd,
     lowerIsBetter: true,
     targetHint: 'meta ≤ 2.0',
+    tip: 'Primeras muertes por partida: rondas donde caes primero. A la 3.ª, modo "no regalar".',
   },
 ];
 

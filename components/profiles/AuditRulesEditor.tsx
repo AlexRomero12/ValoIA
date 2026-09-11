@@ -147,7 +147,12 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
       </div>
 
       <div className="rules-block">
-        <h4>Prohibidos</h4>
+        <div className="rules-block-head">
+          <h4>Prohibidos</h4>
+          <span className="window-info">
+            Cada ranked con un agente prohibido (o de un rol prohibido) cuenta como violación en la auditoría.
+          </span>
+        </div>
         <div className="pool-row">
           <span className="pool-tag ban">Agentes</span>
           <AgentPicker selected={rules.bannedAgents} onChange={(bannedAgents) => patch({ bannedAgents })} placeholder="Agregar prohibido…" />

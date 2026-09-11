@@ -21,13 +21,13 @@ export function MobileNav({ activePage }: { activePage: NavPage }) {
         <TeamIcon />
         <span>Team</span>
       </Link>
-      <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''} aria-current={activePage === 'tienda' ? 'page' : undefined}>
-        <BagIcon />
-        <span>Tienda</span>
-      </Link>
       <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''} aria-current={activePage === 'auditoria' ? 'page' : undefined}>
         <ShieldIcon />
         <span>Auditoría</span>
+      </Link>
+      <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''} aria-current={activePage === 'tienda' ? 'page' : undefined}>
+        <BagIcon />
+        <span>Tienda</span>
       </Link>
     </nav>
   );

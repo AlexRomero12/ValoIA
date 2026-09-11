@@ -19,6 +19,9 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: 'Ese perfil no es tuyo', code: 'FORBIDDEN' }, { status: 403 });
   }
   const member = getProfile(playerParam, viewer);
+  if (!member) {
+    return Response.json({ error: 'No tienes perfiles configurados', code: 'NO_PROFILES' }, { status: 404 });
+  }
   const provider = getProvider();
   const base = {
     keyConfigured: Boolean(provider),

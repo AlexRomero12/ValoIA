@@ -2,6 +2,31 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.13.0] — 2026-09-11
+
+Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, export/import y ayudas inline.
+
+### Added
+- **Login claro**: qué es ValoIA, aviso de aprobación con pasos (envías → el admin aprueba → contraseña temporal), ayuda "¿Olvidaste tu contraseña?" y estado "pendiente de aprobación" (sin correos)
+- **Contraseñas**: requisitos visibles (mín. 8, ideal frase de 12+), repetir contraseña con validación y botón ver/ocultar en login y cambio
+- **Bloqueo por contraseña temporal**: aviso destacado que explica que todo queda bloqueado hasta cambiarla (Ranked/Comparar/Team/Tienda/Auditoría), botón que baja al formulario, y acciones de perfiles/administración deshabilitadas
+- **Rol del perfil como multi-select** (Duelist/Initiator/Controller/Sentinel) con explicación de para qué sirve (composiciones de Team)
+- **Auditoría guiada**: panel explicativo (qué mide, cómo, dónde se configura) y **propuesta inicial de reglas** calculada de tus partidas (pool por mapa, prohibidos por WR, metas del plan) con vista previa y aplicación en un clic
+- **Export/import de perfiles**: archivo `.valoia.json` con etiqueta, Riot ID, cuentas, preferencias y reglas (sin RSO ni notas); importar crea perfiles nuevos respetando el tope
+- **Ayudas inline `(?)`** en los KPIs (WR, K/D, ACS, HS%, ADR, FB, FD) y renombres: "Ventana" → "Periodo", "Cont" → "Parada"
+- **Winrate · Agente colapsable**: muestra los 6 agentes más jugados con botón **Ver más (N agentes más)** / **Ver menos** para desplegar el resto, dejando el panel a la par de **Winrate · Mapa**; añade una pista de que cada fila filtra «Partidas recientes»
+
+### Changed
+- **Orden en Ranked**: «Partidas recientes» pasa delante de Arsenal y Trend de rango (menos scroll hasta el detalle)
+- Los endpoints de summary/status/refresh/backfill responden `404 NO_PROFILES` cuando el usuario aún no tiene perfiles (antes podían caer en los de otro al no haber propios)
+
+### Fixed
+- Feedback visual de chips seleccionados (roles prohibidos, Visible): el estilo solo existía dentro de `.player-chips`
+- Botones primarios encogidos en móvil por una regla del TopBar que aplicaba a todos los `button.primary-*`
+- Banner de bloqueo con hueco vertical en móvil (el `flex-basis` de la versión fila se interpretaba como altura)
+- Botón "Actualizar" con cooldown de 60 s anti-spam y contador visible; deshabilitado mientras la contraseña es temporal
+- **Aislamiento estricto de perfiles**: cada usuario (incluido el admin) ve y edita solo los suyos; antes el admin veía los de todos y quien no tenía perfiles podía terminar operando sobre el del admin
+
 ## [1.12.0] — 2026-09-11
 
 Vistas adaptadas a móvil, PWA instalable y vista previa de enlaces.

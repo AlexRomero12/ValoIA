@@ -88,7 +88,7 @@ docker compose version
 ```bash
 sudo mkdir -p /opt/valoia && sudo chown $USER /opt/valoia
 git clone https://github.com/TU_USUARIO/ValoIA.git /opt/valoia
-cd /opt/valoia/valo-dash-next
+cd /opt/valoia
 ```
 
 Si el repo es privado, usa un token (`https://<TOKEN>@github.com/...`) o sube
@@ -99,7 +99,7 @@ y `AUTH_SECRET`/`AUTH_USER`/`AUTH_PASSWORD`.
 
 ```powershell
 # Desde Windows (PowerShell), en la carpeta valo-dash-next:
-scp .env ubuntu@IP:/opt/valoia/valo-dash-next/.env
+scp .env ubuntu@IP:/opt/valoia/.env
 ```
 
 Añade al `.env` del servidor una línea con tu dominio:
@@ -167,7 +167,7 @@ Programa un cron diario:
 
 ```bash
 crontab -e
-# 0 4 * * * cd /opt/valoia/valo-dash-next && bash scripts/backup.sh >> /var/log/valoia-backup.log 2>&1
+# 0 4 * * * cd /opt/valoia && bash scripts/backup.sh >> /var/log/valoia-backup.log 2>&1
 ```
 
 Restaurar (detén el stack, extrae sobre los volúmenes y vuelve a levantar):
@@ -184,7 +184,7 @@ docker compose -f docker-compose.prod.yml up -d
 ## 9. Actualizar
 
 ```bash
-cd /opt/valoia/valo-dash-next
+cd /opt/valoia
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```

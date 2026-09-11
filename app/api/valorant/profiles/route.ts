@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
 
 /**
  * Acciones:
- *  - { action: 'upsert', profile }  crea (sin id) o actualiza (con id, solo dueño/admin)
- *  - { action: 'delete', id }       borra (solo dueño/admin)
+ *  - { action: 'upsert', profile }  crea (sin id) o actualiza (con id, solo del dueño)
+ *  - { action: 'delete', id }       borra (solo del dueño)
  */
 export async function POST(req: NextRequest) {
   const viewer = viewerFromRequest(req);

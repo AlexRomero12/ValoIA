@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { backfillPlayer, type BackfillPlayerOptions } from '@/lib/refresh';
 import { getProvider } from '@/lib/valorant';
 import { getArchiveStats } from '@/lib/archive';
-import { getProfile, listProfilesFor, profileAccess } from '@/lib/profiles';
+import { getProfile, listProfilesFor, profileAccess, requireProfile } from '@/lib/profiles';
 import { memberAccounts } from '@/lib/profileTypes';
 import { viewerFromRequest } from '@/lib/auth';
 
@@ -30,15 +30,19 @@ export async function GET(req: NextRequest) {
   if (access === 'forbidden') {
     return Response.json({ error: 'Ese perfil no es tuyo', code: 'FORBIDDEN' }, { status: 403 });
   }
+  const selected = playerParam ? getProfile(playerParam, viewer) : undefined;
+  if (playerParam && !selected) {
+    return Response.json({ error: 'No tienes perfiles configurados', code: 'NO_PROFILES' }, { status: 404 });
+  }
   // Cuenta concreta de un miembro multi-cuenta (para sondeo por cuenta).
   const rawAccount = sp.get('account');
   let account: { name: string; tag: string } | null = null;
-  if (rawAccount != null) {
-    const accs = memberAccounts(getProfile(playerParam || undefined, viewer));
+  if (rawAccount != null && selected) {
+    const accs = memberAccounts(selected);
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) account = accs[idx];
   }
-  const members = playerParam ? [getProfile(playerParam, viewer)] : listProfilesFor(viewer);
+  const members = selected ? [selected] : listProfilesFor(viewer);
   const players = members.flatMap((m) => {
     const accs = account ? [account] : memberAccounts(m);
     return accs.map((a, i) => ({
@@ -96,7 +100,7 @@ export async function POST(req: NextRequest) {
   let account: { name: string; tag: string } | undefined;
   const rawAccount = sp.get('account');
   if (rawAccount != null) {
-    const accs = memberAccounts(getProfile(playerParam || undefined, viewer));
+    const accs = memberAccounts(requireProfile(playerParam || undefined, viewer));
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) account = accs[idx];
   }

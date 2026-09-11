@@ -1,6 +1,7 @@
 'use client';
 
 import { METAS, type Kpis } from '@/lib/metas';
+import { InfoTip } from './InfoTip';
 
 interface KpiGridProps {
   kpis: Kpis;
@@ -27,7 +28,10 @@ export function KpiGrid({ kpis: k, accent }: KpiGridProps) {
           : Math.max(4, Math.min(100, (v / m.target) * 100));
         return (
           <div key={m.key} className={`kpi ${ok ? 'ok' : ''}`}>
-            <div className="label">{m.label}</div>
+            <div className="label">
+              {m.label}
+              {m.tip ? <InfoTip text={m.tip} label={`Qué es ${m.label}`} /> : null}
+            </div>
             <div className="value">{m.fmt(v)}</div>
             <div className="target">{m.targetHint ?? `meta ≥ ${m.fmt(m.target)}`}</div>
             <div className="meter">

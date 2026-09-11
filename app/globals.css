@@ -5,8 +5,8 @@
   --line: #26384a;
   --line-strong: #34495e;
   --bone: #ece8e1;
-  --mute: #93a4b3;
-  --faint: #5d7080;
+  --mute: #a7b7c5;
+  --faint: #74889b;
   --red: #ff4655;
   --blue: #35b6ff;
   --win: #2fd08a;
@@ -192,7 +192,7 @@ select {
   outline: none;
   max-width: 340px;
 }
-.window-info { color: var(--faint); font-size: 11.5px; letter-spacing: 0.03em; }
+.window-info { color: var(--mute); font-size: 11.5px; font-weight: 500; letter-spacing: 0.03em; }
 
 /* ---------- KPIs ---------- */
 .kpis {
@@ -236,7 +236,7 @@ select {
 }
 .kpi.ok .value { color: var(--win); }
 .kpi.bad .value { color: var(--loss); }
-.kpi .target { font-size: 10px; color: var(--faint); margin-top: 3px; letter-spacing: 0.02em; }
+.kpi .target { font-size: 10px; color: var(--mute); font-weight: 600; margin-top: 3px; letter-spacing: 0.02em; }
 .kpi .target b { color: var(--mute); font-weight: 600; }
 .kpi .meter { height: 4px; background: var(--steel-2); margin-top: auto; overflow: hidden; }
 .kpi .fill { height: 100%; transition: width 0.4s ease; }
@@ -283,6 +283,13 @@ select {
 .legend .sw { display: inline-block; width: 12px; height: 8px; vertical-align: middle; margin-right: 6px; }
 
 /* ---------- Tablas WR ---------- */
+.wr-hint {
+  margin: 6px 0 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--mute);
+  line-height: 1.5;
+}
 .wr-list { display: flex; flex-direction: column; }
 .wr-head {
   display: grid;
@@ -590,7 +597,23 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 }
 .f-chip:hover { border-color: var(--loss); color: #fff; }
 .f-chip b { color: var(--red); letter-spacing: 0.04em; }
-.player-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.player-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.player-chips::-webkit-scrollbar { display: none; }
+/* Fila de chips + acceso a Perfiles: el chip "add" queda fuera del scroll
+   para que no se pierda cuando hay muchos perfiles. */
+.player-row { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.player-row .player-chips { flex: 1 1 auto; }
+.player-row .profile-chip.add { flex: none; }
+.ranked-controls .player-row { flex: 1 1 auto; min-width: 0; }
 .player-chips .player-on { border-color: var(--red); color: #fff; background: rgba(255,70,85,0.15); font-weight: 700; }
 
 /* ---------- Días dentro de la tabla de partidas ---------- */
@@ -2019,8 +2042,10 @@ body { overflow-x: clip; }
   .brand h1 { font-size: 21px; }
   .brand .sub { display: none; }
 
-  button.primary-red,
-  button.primary-blue {
+  /* Solo el botón "Actualizar" del TopBar queda como icono cuadrado; los
+     primarios de contenido (Entrar, Guardar…) conservan su ancho normal. */
+  .topbar button.primary-red,
+  .topbar button.primary-blue {
     width: var(--touch);
     height: var(--touch);
     padding: 0;
@@ -2111,7 +2136,6 @@ body { overflow-x: clip; }
   /* Controles */
   .controls { gap: 8px 10px; }
   .controls select { min-height: var(--touch); flex: 1 1 auto; min-width: 0; }
-  .player-chips { flex-wrap: wrap; }
   .player-chips .f-chip { min-height: 38px; }
 
   /* Partidas: tabla fuera, tarjetas dentro */
@@ -2295,13 +2319,21 @@ body { overflow-x: clip; }
   /* iOS hace zoom al enfocar inputs con font-size < 16px */
   input, select, textarea { font-size: 16px; }
 
-  .audit-hero { grid-template-columns: 1fr; gap: 10px; }
-  .audit-hero-main { display: flex; align-items: baseline; gap: 10px; }
+  .audit-hero { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px 14px; }
+  .audit-hero-main { grid-row: auto; display: flex; align-items: baseline; gap: 10px; }
   .audit-hero-eyebrow { display: none; }
   .audit-hero-line { gap: 8px; }
-  .audit-hero-num { font-size: 38px; }
-  .audit-hero-deltas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .audit-hero-faltas { flex-wrap: wrap; }
+  .audit-hero-num { font-size: 36px; }
+  .audit-hero-deltas { grid-row: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+  .audit-hero-faltas {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 2px 14px;
+    padding-top: 8px;
+    margin-top: 2px;
+  }
 
   .audit-day-head { flex-wrap: wrap; min-height: 48px; row-gap: 4px; padding: 10px 12px; }
   .audit-day-date { flex: 1 1 auto; }
@@ -2426,4 +2458,267 @@ body { overflow-x: clip; }
 
 @supports (height: 100dvh) {
   .login-wrap { min-height: 100dvh; }
+}
+
+/* ==========================================================================
+   UX — claridad de acceso (fase 1): login, solicitud y contraseñas
+   ========================================================================== */
+
+.login-form { display: flex; flex-direction: column; gap: 12px; }
+.login-switch { justify-content: center; }
+.login-hint { margin: 0; font-size: 11.5px; color: var(--mute); font-weight: 500; line-height: 1.5; }
+.login-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--mute);
+  font-weight: 500;
+  line-height: 1.45;
+}
+.login-steps li::marker { color: var(--red); font-weight: 700; }
+.login-pending { display: flex; flex-direction: column; gap: 10px; }
+.login-pending b { font-size: 14px; }
+.login-pending p { margin: 0; font-size: 12px; color: var(--mute); font-weight: 500; line-height: 1.55; }
+.login-pending p b { color: var(--bone); font-size: 12px; }
+.btn-cd { font-weight: 800; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.locked-banner { flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.locked-banner > b { color: var(--bone); }
+.locked-banner > span { flex: 1 1 320px; }
+.locked-banner .f-chip { margin-left: auto; }
+
+.login-pw { display: flex; gap: 6px; align-items: stretch; }
+.login-pw input { flex: 1; min-width: 0; }
+.pw-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bone);
+  background: var(--steel-2);
+  border: 1px solid var(--line-strong);
+  cursor: pointer;
+}
+.pw-btn:hover { border-color: var(--mute); }
+
+/* ==========================================================================
+   UX — claridad de perfil (fase 2)
+   ========================================================================== */
+
+/* Estado seleccionado de chips fuera de .player-chips (roles, visible, etc.):
+   antes solo existía el estilo dentro de .player-chips y parecía "no funcionar". */
+.f-chip.player-on,
+.f-chip.on {
+  border-color: var(--red);
+  color: #fff;
+  background: rgba(255, 70, 85, 0.15);
+  font-weight: 700;
+}
+
+.pf-help {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--mute);
+  font-weight: 500;
+  line-height: 1.55;
+}
+.pf-block { margin-top: 14px; }
+.pf-block .pf-label { display: block; }
+.pf-block .role-chips { margin-top: 8px; }
+
+/* ==========================================================================
+   UX — auditoría (fase 3): explicación y propuesta inicial
+   ========================================================================== */
+
+.audit-intro { margin-top: 16px; }
+.audit-intro > summary,
+.audit-proposal-detail > summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--bone);
+}
+.audit-intro > summary::marker,
+.audit-proposal-detail > summary::marker { color: var(--red); }
+.audit-intro-body { margin-top: 10px; }
+.audit-intro-body ul {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--mute);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.audit-intro-body b { color: var(--bone); }
+
+.audit-proposal { margin-top: 16px; }
+.audit-proposal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.audit-proposal-head::-webkit-details-marker { display: none; }
+.audit-proposal-title { font-size: 14px; font-weight: 700; color: var(--bone); }
+.audit-proposal-head .window-info { margin-left: auto; text-align: right; }
+.audit-proposal-body { margin-top: 10px; }
+.audit-proposal-detail { margin-top: 10px; }
+.proposal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.proposal-map {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--steel-2);
+  font-size: 11.5px;
+  color: var(--mute);
+  font-weight: 500;
+}
+.proposal-map b { color: var(--bone); }
+
+@media (max-width: 720px) {
+  .proposal-grid { grid-template-columns: 1fr; }
+  .audit-proposal .rules-io-actions { flex-direction: column; align-items: stretch; }
+  .audit-proposal .rules-io-actions .f-chip { justify-content: center; }
+}
+
+/* ==========================================================================
+   UX — ayudas inline (?) y herramientas de perfiles (fase 5)
+   ========================================================================== */
+
+.profile-tools { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.infotip-btn {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  clip-path: none;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+.infotip-btn:hover { color: var(--bone); border-color: var(--mute); background: transparent; }
+.infotip-pop {
+  position: fixed;
+  z-index: 90;
+  width: max-content;
+  max-width: min(260px, 80vw);
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--steel-2);
+  color: var(--bone);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.45;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .infotip-btn { width: 22px; height: 22px; font-size: 12px; }
+  .profile-tools { width: 100%; }
+}
+
+/* ==========================================================================
+   MÓVIL — controles de Ranked: columna con etiquetas claras, sin apretujar
+   ========================================================================== */
+
+@media (max-width: 720px) {
+  .ranked-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 12px 12px 14px;
+    border: 1px solid var(--line);
+  }
+  .ranked-controls > label {
+    margin-top: 4px;
+    color: var(--mute);
+  }
+  /* En móvil no scrolleamos los chips (el último quedaba cortado): envuelven
+     en filas y el acceso a Perfiles cae debajo, pegado a la izquierda. */
+  .ranked-controls .player-row { display: contents; }
+  .ranked-controls .player-chips {
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .ranked-controls .player-chips .f-chip { flex: none; min-height: var(--touch); }
+  .ranked-controls .profile-chip.add { align-self: flex-start; }
+  .ranked-controls select { width: 100%; }
+  .ranked-controls .window-info {
+    width: 100%;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 720px) {
+  .pw-btn { min-height: var(--touch); }
+
+  /* Login en móvil: tarjeta más compacta y controles táctiles */
+  .login-card { padding: 22px 16px 20px; gap: 10px; }
+  .login-brand { font-size: 26px; }
+  .login-field input { min-height: var(--touch); }
+  .login-btn { width: 100%; min-height: var(--touch); }
+  .login-switch { min-height: var(--touch); }
+  .login-steps { font-size: 12.5px; }
+  .login-hint { font-size: 11.5px; }
+
+  /* Vista de contraseña bloqueada / perfiles en móvil: texto en línea y
+     botón debajo, sin el hueco que dejaba el flex-basis de la versión fila. */
+  .locked-banner { display: block; }
+  .locked-banner > b,
+  .locked-banner > span { display: inline; }
+  .locked-banner > span { margin-left: 4px; }
+  .locked-banner .f-chip { margin: 10px 0 0; width: 100%; justify-content: center; min-height: var(--touch); }
+
+  .pf-inline { flex-direction: column; align-items: stretch; }
+  .pf-inline .grow { flex: 1 1 auto; }
+  .pf-inline .pw-btn,
+  .pf-inline .primary-red { width: 100%; justify-content: center; min-height: var(--touch); }
+  .pf-inline .rule-clear { align-self: flex-end; min-height: 38px; }
+
+  .profile-card-actions .f-chip { flex: 1 1 auto; justify-content: center; min-height: var(--touch); }
+
+  /* Pestañas de Mi cuenta: 4 tabs no caben en una línea de 360px */
+  .pill-toggle { flex-wrap: wrap; max-width: 100%; }
+  .pill-toggle button { flex: 1 1 auto; justify-content: center; min-height: 40px; }
 }

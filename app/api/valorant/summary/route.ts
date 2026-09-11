@@ -28,13 +28,17 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: 'Ese perfil no es tuyo', code: 'FORBIDDEN' }, { status: 403 });
   }
   const playerId = playerParam || undefined;
+  const member = getProfile(playerId, viewer);
+  if (!member) {
+    return Response.json({ error: 'No tienes perfiles configurados', code: 'NO_PROFILES' }, { status: 404 });
+  }
 
   // Cuenta alternativa (jugadores multi-cuenta): `account` = índice en memberAccounts().
   let accountName: string | undefined;
   let accountTag: string | undefined;
   const rawAccount = sp.get('account');
   if (rawAccount != null) {
-    const accs = memberAccounts(getProfile(playerId, viewer));
+    const accs = memberAccounts(member);
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) {
       accountName = accs[idx].name;

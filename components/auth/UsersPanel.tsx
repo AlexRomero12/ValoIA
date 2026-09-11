@@ -41,6 +41,8 @@ export function UsersPanel() {
   const [pwdFor, setPwdFor] = useState<string | null>(null);
   const [pwdCurrent, setPwdCurrent] = useState('');
   const [pwdValue, setPwdValue] = useState('');
+  const [pwdRepeat, setPwdRepeat] = useState('');
+  const [pwdShow, setPwdShow] = useState(false);
   const [sessionsScope, setSessionsScope] = useState<string>('self');
 
   useEffect(() => {
@@ -57,9 +59,12 @@ export function UsersPanel() {
         const mine = (json.users ?? []).find((u: UserInfo) => u.username === json.self) as UserInfo | undefined;
         const params = new URLSearchParams(window.location.search);
         if (mine?.mustChangePassword || params.get('cambiar') === '1') {
-          setMustChange(mine?.mustChangePassword === true);
+          const must = mine?.mustChangePassword === true;
+          setMustChange(must);
           setPwdFor(json.self ?? null);
-          setMsg({ kind: 'error', text: 'Debes cambiar tu contraseña para seguir usando la app.' });
+          // Con mustChange el aviso propio ya explica el bloqueo; el mensaje
+          // extra solo hace falta si se llegó por ?cambiar=1 sin bloqueo.
+          if (!must) setMsg({ kind: 'error', text: 'Cambia tu contraseña para mantener tu cuenta segura.' });
         }
         // Badge de solicitudes pendientes (solo admin).
         if (json.admin === true) {
@@ -115,6 +120,14 @@ export function UsersPanel() {
   const savePassword = async () => {
     const target = pwdFor;
     if (!target || !pwdValue) return;
+    if (pwdValue.length < 8) {
+      setMsg({ kind: 'error', text: 'La contraseña debe tener al menos 8 caracteres.' });
+      return;
+    }
+    if (pwdValue !== pwdRepeat) {
+      setMsg({ kind: 'error', text: 'Las contraseñas no coinciden.' });
+      return;
+    }
     const ok = await call(
       {
         action: 'password',
@@ -128,6 +141,8 @@ export function UsersPanel() {
       setPwdFor(null);
       setPwdCurrent('');
       setPwdValue('');
+      setPwdRepeat('');
+      setPwdShow(false);
       if (target === self && mustChange) {
         router.replace('/');
         router.refresh();
@@ -145,6 +160,8 @@ export function UsersPanel() {
     setPwdFor(pwdFor === username ? null : username);
     setPwdCurrent('');
     setPwdValue('');
+    setPwdRepeat('');
+    setPwdShow(false);
     setMsg(null);
   };
 
@@ -154,7 +171,7 @@ export function UsersPanel() {
   };
 
   return (
-    <div className="panel users-panel">
+    <div className="panel users-panel" id="mi-cuenta">
       <div className="pf-section-head">
         <h2 style={{ margin: 0 }}>{admin ? 'Administración' : 'Mi cuenta'}</h2>
         <div className="pill-toggle">
@@ -179,7 +196,13 @@ export function UsersPanel() {
 
       {mustChange ? (
         <div className="banner warn" style={{ marginTop: 12 }}>
-          <b>Debes cambiar tu contraseña</b> para seguir usando la app.
+          <div>
+            <b>Cuenta bloqueada: cambia tu contraseña para desbloquear el panel.</b>
+            <p className="window-info" style={{ margin: '4px 0 0' }}>
+              Mientras no la cambies, Ranked, Comparar, Team, Tienda y Auditoría quedan bloqueadas; solo esta
+              página está disponible. Usa el formulario de abajo.
+            </p>
+          </div>
         </div>
       ) : null}
       {msg ? (
@@ -211,7 +234,12 @@ export function UsersPanel() {
                     {admin && u.createdIp ? <span className="window-info">IP {u.createdIp}</span> : null}
                   </div>
                   <div className="user-row-actions">
-                    <button className="f-chip" disabled={busy} onClick={() => openPassword(u.username)}>
+                    <button
+                      className="f-chip"
+                      disabled={busy || (mustChange && u.username !== self)}
+                      title={mustChange && u.username !== self ? 'Bloqueado: cambia tu contraseña para usar esta acción' : undefined}
+                      onClick={() => openPassword(u.username)}
+                    >
                       {pwdFor === u.username ? 'Cancelar' : 'Cambiar contraseña'}
                     </button>
                     {admin ? (
@@ -222,8 +250,14 @@ export function UsersPanel() {
                     {admin ? (
                       <button
                         className="f-chip"
-                        disabled={busy || u.username === self}
-                        title={u.username === self ? 'No puedes borrar tu propio usuario' : undefined}
+                        disabled={busy || u.username === self || mustChange}
+                        title={
+                          u.username === self
+                            ? 'No puedes borrar tu propio usuario'
+                            : mustChange
+                              ? 'Bloqueado: cambia tu contraseña para usar esta acción'
+                              : undefined
+                        }
                         onClick={() => void remove(u.username)}
                       >
                         Borrar
@@ -234,7 +268,7 @@ export function UsersPanel() {
                     <div className="pf-inline" style={{ width: '100%', flexWrap: 'wrap' }}>
                       {u.username === self ? (
                         <input
-                          type="password"
+                          type={pwdShow ? 'text' : 'password'}
                           placeholder="Contraseña actual"
                           autoComplete="current-password"
                           value={pwdCurrent}
@@ -246,20 +280,41 @@ export function UsersPanel() {
                         </span>
                       )}
                       <input
-                        type="password"
+                        id={u.username === self ? 'pwd-nueva' : undefined}
+                        type={pwdShow ? 'text' : 'password'}
                         className="grow"
-                        placeholder="Nueva contraseña (mín. 8)"
+                        placeholder="Nueva contraseña"
                         autoComplete="new-password"
                         value={pwdValue}
                         onChange={(e) => setPwdValue(e.target.value)}
                       />
+                      <input
+                        type={pwdShow ? 'text' : 'password'}
+                        className="grow"
+                        placeholder="Repite la nueva"
+                        autoComplete="new-password"
+                        value={pwdRepeat}
+                        onChange={(e) => setPwdRepeat(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="pw-btn"
+                        onClick={() => setPwdShow((v) => !v)}
+                        aria-label={pwdShow ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+                      >
+                        {pwdShow ? 'Ocultar' : 'Ver'}
+                      </button>
                       <button
                         className="primary-red"
-                        disabled={busy || pwdValue.length < 8 || (u.username === self && !pwdCurrent)}
+                        disabled={busy || pwdValue.length < 8 || pwdValue !== pwdRepeat || (u.username === self && !pwdCurrent)}
                         onClick={() => void savePassword()}
                       >
                         Guardar
                       </button>
+                      <p className="window-info" style={{ width: '100%', margin: 0 }}>
+                        Mínimo 8 caracteres; mejor una frase fácil de recordar (12+).
+                        {pwdRepeat && pwdValue !== pwdRepeat ? <b className="stat-loss"> Las contraseñas no coinciden.</b> : null}
+                      </p>
                     </div>
                   ) : null}
                 </div>
@@ -277,7 +332,12 @@ export function UsersPanel() {
                 <span>Contraseña temporal</span>
                 <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="mín. 8 caracteres" autoComplete="new-password" />
               </label>
-              <button className="primary-red" disabled={busy || !newUser.trim() || newPass.length < 8} onClick={() => void create()}>
+              <button
+                className="primary-red"
+                disabled={busy || mustChange || !newUser.trim() || newPass.length < 8}
+                title={mustChange ? 'Bloqueado: cambia tu contraseña para usar esta acción' : undefined}
+                onClick={() => void create()}
+              >
                 Crear usuario
               </button>
               <label className="rule-field check" style={{ gridColumn: '1 / -1' }}>

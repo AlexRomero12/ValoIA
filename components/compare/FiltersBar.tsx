@@ -32,7 +32,7 @@ export function FiltersBar(p: FiltersBarProps) {
   return (
     <div className="controls compare-controls">
       <div className="ctl-group">
-        <label>Ventana</label>
+        <label>Periodo</label>
         <select value={p.win} onChange={(e) => p.onWin(e.target.value as WindowValue)}>
           <option value="season">Temporada actual</option>
           <option value="7">7 días</option>

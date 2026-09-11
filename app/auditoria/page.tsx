@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { TopBar } from '@/components/TopBar';
 import { AuditDay } from '@/components/audit/AuditDay';
+import { AuditIntro } from '@/components/audit/AuditIntro';
+import { AuditProposal } from '@/components/audit/AuditProposal';
 import { AuditRecommendations } from '@/components/audit/AuditRecommendations';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { auditDay, groupAuditWeeks, mondayOf, type AuditDay as AuditDayT, type AuditWeek } from '@/lib/audit';
@@ -342,6 +344,9 @@ export default function AuditoriaPage() {
               {weekPartial ? <span className="audit-falta warn">RR parcial</span> : null}
             </div>
           </div>
+
+          <AuditIntro hasRules={Boolean(rules)} />
+          <AuditProposal matches={data.matches ?? []} hasRules={Boolean(rules)} onApply={applyRules} />
 
           <AuditRecommendations
             profile={profile}

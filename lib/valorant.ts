@@ -14,7 +14,7 @@ import {
   type HenrikMatch,
   type HenrikMatchPlayer,
 } from './henrik';
-import { getProfile, type ProfileViewer } from './profiles';
+import { requireProfile, type ProfileViewer } from './profiles';
 
 export const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
@@ -456,7 +456,7 @@ export async function getValSummary(opts: AggregateOptions): Promise<ValSummary>
 // ---------- Proveedor Henrik ----------
 
 async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> {
-  const member = getProfile(opts.playerId, opts.viewer);
+  const member = requireProfile(opts.playerId, opts.viewer);
   const acctName = opts.accountName ?? member.name;
   const acctTag = opts.accountTag ?? member.tag;
   const account = await getHenrikAccount(acctName, acctTag);
@@ -776,7 +776,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
 // ---------- Proveedor Riot oficial ----------
 
 export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
-  const profile = getProfile(opts.playerId, opts.viewer);
+  const profile = requireProfile(opts.playerId, opts.viewer);
   // El proveedor Riot oficial solo conoce la cuenta del .env (VAL_NAME/VAL_TAG).
   if (opts.playerId && (profile.name !== VAL_CONFIG.name() || profile.tag !== VAL_CONFIG.tag())) {
     throw new RiotApiError(

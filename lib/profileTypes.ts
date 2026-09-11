@@ -71,6 +71,21 @@ export function memberAccounts(profile: Profile): ProfileAccount[] {
   return [{ name: profile.name, tag: profile.tag }, ...(profile.accounts ?? [])];
 }
 
+/**
+ * `role` se guarda como string separado por `/` (p. ej. "Duelist/Sentinel"):
+ * parse/join mantienen compatibilidad con los perfiles ya guardados.
+ */
+export function parseRoles(role?: string | null): string[] {
+  return (role ?? '')
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function joinRoles(roles: string[]): string {
+  return roles.map((r) => r.trim()).filter(Boolean).join('/');
+}
+
 export const PROFILE_COLORS = [
   '#ff4655',
   '#35b6ff',

@@ -232,22 +232,24 @@ export default function ValorantPage() {
 
       {data && (
         <>
-          <div className="controls">
+          <div className="controls ranked-controls">
             <label>Jugador</label>
-            <div className="player-chips" style={{ ['--accent-row' as string]: '#ff4655' }}>
-              {profiles.map((t) => (
-                <button
-                  key={t.id}
-                  className={`f-chip${activeId === t.id ? ' player-on' : ''}`}
-                  title={`${t.name}#${t.tag}${t.role ? ` · ${t.role}` : ''}`}
-                  onClick={() => setPickedId(t.id)}
-                >
-                  {t.label}
-                </button>
-              ))}
+            <div className="player-row">
+              <div className="player-chips" style={{ ['--accent-row' as string]: '#ff4655' }}>
+                {profiles.map((t) => (
+                  <button
+                    key={t.id}
+                    className={`f-chip${activeId === t.id ? ' player-on' : ''}`}
+                    title={`${t.name}#${t.tag}${t.role ? ` · ${t.role}` : ''}`}
+                    onClick={() => setPickedId(t.id)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
               <Link className="f-chip profile-chip add" href="/perfiles" title="Gestionar perfiles">⚙ Perfiles</Link>
             </div>
-            <label htmlFor="window">Ventana</label>
+            <label htmlFor="window">Periodo</label>
             <select id="window" value={win} onChange={(e) => setWin(e.target.value as WindowValue)}>
               <option value="season">Temporada actual</option>
               <option value="7">Últimos 7 días</option>
@@ -267,15 +269,8 @@ export default function ValorantPage() {
           <KpiGrid kpis={data.kpis} accent="#ff4655" />
 
           <div className="two-col" style={{ ['--accent-row' as string]: '#ff4655' }}>
-            <WrPanel label="Agente" rows={agentRows} icons={agentIcons} active={fAgent} onPick={(name) => toggleFilter('agent', name)} />
+            <WrPanel label="Agente" rows={agentRows} icons={agentIcons} active={fAgent} onPick={(name) => toggleFilter('agent', name)} limit={6} />
             <WrPanel label="Mapa" rows={mapRows} icons={mapIcons} active={fMap} onPick={(name) => toggleFilter('map', name)} />
-          </div>
-
-          <ArsenalPanel arsenal={data.arsenal} />
-
-          <div className="panel">
-            <h2>Trend de rango</h2>
-            <TierChart matchesAsc={[...data.matches].reverse()} />
           </div>
 
           <MatchesTable
@@ -287,6 +282,13 @@ export default function ValorantPage() {
             canLoadMore={canLoadMore}
             onLoadMore={loadMore}
           />
+
+          <ArsenalPanel arsenal={data.arsenal} />
+
+          <div className="panel">
+            <h2>Trend de rango</h2>
+            <TierChart matchesAsc={[...data.matches].reverse()} />
+          </div>
         </>
       )}
     </div>

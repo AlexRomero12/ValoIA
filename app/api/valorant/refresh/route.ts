@@ -40,11 +40,16 @@ export async function POST(req: NextRequest) {
   const rawLimit = Number(sp.get('limit') ?? '');
   const limit = Number.isFinite(rawLimit) && rawLimit >= 1 && rawLimit <= 40 ? Math.floor(rawLimit) : undefined;
 
+  const member = getProfile(playerParam || undefined, viewer);
+  if (!member) {
+    return Response.json({ error: 'No tienes perfiles configurados', code: 'NO_PROFILES' }, { status: 404 });
+  }
+
   // Cuenta alternativa (jugadores multi-cuenta): `account` = índice en memberAccounts().
   let account: { name: string; tag: string } | undefined;
   const rawAccount = sp.get('account');
   if (rawAccount != null) {
-    const accs = memberAccounts(getProfile(playerParam || undefined, viewer));
+    const accs = memberAccounts(member);
     const idx = Number(rawAccount);
     if (Number.isInteger(idx) && idx >= 0 && idx < accs.length) {
       account = { name: accs[idx].name, tag: accs[idx].tag };

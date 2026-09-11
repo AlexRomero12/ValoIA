@@ -54,6 +54,9 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
     return { checked: false, week: null, sent: 0, failed: 0, skipped: 'push no configurado' };
   }
   const target = getStorePrimaryProfile();
+  if (!target) {
+    return { checked: false, week: null, sent: 0, failed: 0, skipped: 'sin perfiles' };
+  }
   const owner = target.owner ?? adminUsername() ?? '';
   if (getSubscriptions(owner).length === 0) {
     return { checked: false, week: null, sent: 0, failed: 0, skipped: 'sin suscripciones push' };
@@ -74,6 +77,9 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
 
   const weekEnd = lastMonday.getTime() + 7 * 86_400_000;
   const profile = getStorePrimaryProfile();
+  if (!profile) {
+    return { checked: false, week, sent: 0, failed: 0, skipped: 'sin perfiles' };
+  }
   const daysBack = Math.min(30, Math.ceil((now - lastMonday.getTime()) / 86_400_000) + 1);
 
   let matches: MatchRow[] = [];
