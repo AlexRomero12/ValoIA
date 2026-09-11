@@ -16,6 +16,8 @@ param(
   [int]$BootGB = 50,
   [string]$SshPublicKeyPath = '',
   [int]$WaitSeconds = 90,
+  [int]$RateLimitWaitSeconds = 300,
+  [int]$InitialDelaySeconds = 0,
   [string]$SubnetId = '',
   [string]$CompartmentId = ''
 )
@@ -106,7 +108,11 @@ $metaUri = 'file://' + ($metaFile -replace '\\', '/')
 
 Write-Output ""
 Write-Output "Intentando crear '$DisplayName' (A1.Flex $Ocpus OCPU / $MemoryGB GB) hasta que haya capacidad..."
-Write-Output "Deja esta ventana abierta; reintenta cada $WaitSeconds s. Ctrl+C para cancelar."
+Write-Output "Reintenta cada $WaitSeconds s (y $RateLimitWaitSeconds s si Oracle responde 429). Ctrl+C para cancelar."
+if ($InitialDelaySeconds -gt 0) {
+  Write-Output "Enfriamiento inicial: $InitialDelaySeconds s..."
+  Start-Sleep -Seconds $InitialDelaySeconds
+}
 Write-Output ""
 
 $attempt = 0
@@ -126,7 +132,8 @@ while ($true) {
     '--boot-volume-size-in-gbs', "$BootGB",
     '--metadata', $metaUri,
     '--wait-for-state', 'RUNNING',
-    '--wait-interval-seconds', '10'
+    '--wait-interval-seconds', '10',
+    '--no-retry'
   )
   $out = & $OCI @launch 2>&1 | Out-String
   $code = $LASTEXITCODE
@@ -151,7 +158,13 @@ while ($true) {
 
   if ($out -match 'Out.?of.?host.?capacity|OutOfCapacity|InternalError') {
     Write-Output "[$stamp] Intento ${attempt}: sin capacidad todavia. Reintento en $WaitSeconds s..."
-    Start-Sleep -Seconds $WaitSeconds
+    Start-Sleep -Seconds ($WaitSeconds + (Get-Random -Minimum 0 -Maximum 20))
+    continue
+  }
+
+  if ($out -match 'TooManyRequests|HTTP 429|"status": 429') {
+    Write-Output "[$stamp] Intento ${attempt}: Oracle aplico rate limit (429). Espero $RateLimitWaitSeconds s..."
+    Start-Sleep -Seconds ($RateLimitWaitSeconds + (Get-Random -Minimum 0 -Maximum 60))
     continue
   }
 
