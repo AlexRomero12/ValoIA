@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { wrColor } from '@/lib/metas';
+import { tierShort } from '@/lib/compare';
 import { TierIcon } from '@/components/TierIcon';
 import type { PlayerStats } from '@/lib/compare';
 
@@ -16,7 +17,7 @@ export interface RankRow {
   stats: PlayerStats;
 }
 
-export type SortKey = 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct' | 'games' | 'rr';
+export type SortKey = 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct' | 'games' | 'rr' | 'rank';
 
 interface RankingTableProps {
   rows: RankRow[];
@@ -36,9 +37,6 @@ const COLUMNS: { key: SortKey; label: string; fmt: (r: RankRow) => string; bette
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-/** Opciones del selector móvil: una por métrica única. */
-const SORT_OPTIONS = COLUMNS.filter((c, i, arr) => arr.findIndex((x) => x.key === c.key) === i);
-
 /** Badges "mejor en…" de las tarjetas móviles. */
 const BADGE_KEYS: { key: SortKey; label: string }[] = [
   { key: 'wr', label: 'WR' },
@@ -53,6 +51,33 @@ function rrText(r: RankRow): string {
   if (r.stats.rrTotal == null) return '—';
   return `${r.stats.rrTotal > 0 ? '+' : ''}${r.stats.rrTotal}${r.stats.rrMissing > 0 ? '~' : ''}`;
 }
+
+/** Valor grande de la tarjeta: la métrica activa (por defecto, WR). */
+function heroOf(r: RankRow, k: SortKey): { label: string; value: string; color?: string } {
+  switch (k) {
+    case 'wr': return { label: 'WR', value: `${r.stats.wr.toFixed(0)}%`, color: wrColor(r.stats.wr) };
+    case 'kd': return { label: 'K/D', value: r.stats.kd.toFixed(2) };
+    case 'acs': return { label: 'ACS', value: String(Math.round(r.stats.acs)) };
+    case 'adr': return { label: 'ADR', value: String(Math.round(r.stats.adr)) };
+    case 'hsPct': return { label: 'HS', value: `${r.stats.hsPct.toFixed(1)}%` };
+    case 'rr': return { label: 'RR', value: rrText(r) };
+    case 'games': return { label: 'Partidas', value: String(r.stats.games) };
+    case 'rank': {
+      const tier = r.tier > 0 ? tierShort(r.tier) : '—';
+      return { label: 'RANGO', value: r.rr != null ? `${tier} · ${r.rr}` : tier };
+    }
+  }
+}
+
+/** Stats secundarias del grid; la métrica grande se excluye para no duplicar. */
+const GRID_STATS: { key: SortKey; label: string; fmt: (r: RankRow) => string }[] = [
+  { key: 'wr', label: 'WR', fmt: (r) => `${r.stats.wr.toFixed(0)}%` },
+  { key: 'kd', label: 'K/D', fmt: (r) => r.stats.kd.toFixed(2) },
+  { key: 'acs', label: 'ACS', fmt: (r) => String(Math.round(r.stats.acs)) },
+  { key: 'adr', label: 'ADR', fmt: (r) => String(Math.round(r.stats.adr)) },
+  { key: 'hsPct', label: 'HS%', fmt: (r) => `${r.stats.hsPct.toFixed(1)}%` },
+  { key: 'rr', label: 'RR neto', fmt: (r) => rrText(r) },
+];
 
 export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
   const [asc, setAsc] = useState<Record<string, boolean>>({});
@@ -100,26 +125,12 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
 
   return (
     <div>
-      {/* Móvil: una tarjeta por jugador (la tabla ancha no se lee en teléfono). */}
+      {/* Móvil: una tarjeta por jugador (la tabla ancha no se lee en teléfono).
+          El orden lo manda la Métrica del gráfico; en escritorio también los encabezados. */}
       <div className="rank-mobile">
-        {rows.length > 1 ? (
-          <label className="rc-sort">
-            <span>Ordenar por</span>
-            <select value={sortKey} onChange={(e) => onSortKey(e.target.value as SortKey)}>
-              {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
-            <button
-              type="button"
-              className="f-chip rc-dir"
-              aria-label={desc ? 'Orden descendente (mejor primero)' : 'Orden ascendente'}
-              onClick={() => setAsc((a) => ({ ...a, [sortKey]: !a[sortKey] }))}
-            >
-              {desc ? '↓' : '↑'}
-            </button>
-          </label>
-        ) : null}
         {withRank.map((r) => {
           const best = bests.get(r.id) ?? [];
+          const hero = heroOf(r, sortKey);
           return (
             <article key={r.id} className="rank-card">
               <div className="rc-head">
@@ -132,19 +143,20 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                 </span>
               </div>
               <div className="rc-main">
-                <div className="rc-wr" style={{ color: wrColor(r.stats.wr) }}>
-                  {r.stats.wr.toFixed(0)}%<small> WR</small>
+                <div className="rc-hero" style={hero.color ? { color: hero.color } : undefined}>
+                  {hero.value}<small> {hero.label}</small>
                 </div>
                 <div className="rc-record">
                   {r.stats.wins}V–{r.stats.losses}{r.stats.draws ? `–${r.stats.draws}E` : ''} · {r.stats.games}p
                 </div>
               </div>
               <div className="rc-grid">
-                <div className="rc-stat"><span>K/D</span><b>{r.stats.kd.toFixed(2)}</b></div>
-                <div className="rc-stat"><span>ACS</span><b>{Math.round(r.stats.acs)}</b></div>
-                <div className="rc-stat"><span>ADR</span><b>{Math.round(r.stats.adr)}</b></div>
-                <div className="rc-stat"><span>HS%</span><b>{r.stats.hsPct.toFixed(1)}%</b></div>
-                <div className="rc-stat"><span>RR neto</span><b>{rrText(r)}</b></div>
+                {GRID_STATS.filter((s) => s.key !== sortKey).map((s) => (
+                  <div key={s.key} className="rc-stat">
+                    <span>{s.label}</span>
+                    <b>{s.fmt(r)}</b>
+                  </div>
+                ))}
               </div>
               {rows.length > 1 && best.length ? <span className="rc-best">Mejor en {best.join(' · ')}</span> : null}
             </article>
@@ -227,6 +239,7 @@ function metricValue(r: RankRow, k: SortKey): number | null {
     case 'hsPct': return r.stats.hsPct;
     case 'games': return r.stats.games || null;
     case 'rr': return r.stats.rrTotal ?? null;
+    case 'rank': return r.elo ?? (r.tier > 0 ? r.tier * 100 : null);
   }
 }
 

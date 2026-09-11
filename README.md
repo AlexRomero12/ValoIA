@@ -45,12 +45,12 @@ public/               Estáticos (incluye sw.js para Web Push)
 - Filtro por **temporada** o ventanas de 7/14/30/90 días
 
 ### Página Comparar (`/comparativo`)
-- **Perfiles lado a lado (los que elijas)**: selector multi-perfil + botón “Agregar perfil”; ranking ordenable (WR, K/D, ACS, ADR, HS%, RR neto) con columnas clickeables
+- **Perfiles lado a lado (los que elijas)**: selector multi-perfil + botón “Agregar perfil”; ranking ordenable (WR, K/D, ACS, ADR, HS%, RR neto) con columnas clickeables y, en móvil, tarjetas por jugador donde la **Métrica** elegida manda el orden y se pinta en grande
 - **Evolución comparada** en un solo gráfico: WR/ACS/K/D/**RANGO** por día o semana — la métrica RANGO muestra el tier + RR (ej. "D1 · 20") con el eje Y iniciando en Platinum 3 para no perder detalle
 - **Agentes en tarjetas**: sub-vista **Por jugador** (los agentes de cada uno con WR%, K/D, ACS y RR; top 4 + ver todos) y **Por agente** (WR de cada jugador con ese agente, ordenado por partidas; pie con total, WR global y mejor jugador) — sustituyen al heatmap y a la tabla densa en todas las vistas
-- Filtros combinables: ventana (temporada o 7/14/30/90 días), rango de fechas custom, mapa y **filtro de agentes por iconitos**
+- Filtros combinables: ventana (temporada o 7/14/30/90 días), rango de fechas custom, mapa y **filtro de agentes por iconitos**; Perfiles y filtros viven en un único bloque ordenado
 - Filtro de mínimo de partidas y leyenda de cobertura de datos
-- **Móvil ≤720px**: filtros colapsables con contador, ranking en tarjetas por jugador (WR grande, stats clave y «mejor en…») con selector de orden, pestañas **Resumen | Agentes** y tarjetas de agentes a una columna con sub-toggle a ancho completo
+- **Móvil ≤720px**: filtros colapsables con contador, el gráfico de Evolución siempre visible antes de las pestañas **Resumen | Agentes**, ranking en tarjetas con la métrica activa en grande y tarjetas de agentes a una columna (alto natural)
 
 ### Página Equipo (`/team`)
 - **Composiciones por mapa** para los perfiles que selecciones (eligiendo desde `/perfiles` o con “Agregar perfil”)

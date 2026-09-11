@@ -855,6 +855,10 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .muted-tag { color: var(--faint); font-size: 10.5px; margin-left: 5px; }
 
 /* ---------- Comparativo ---------- */
+/* Perfiles arriba y filtros justo debajo: un solo bloque ordenado. */
+.compare-top { margin-top: 20px; }
+.compare-top .ranked-controls { margin-top: 0; }
+.compare-top .compare-controls { margin-top: 12px; }
 .compare-controls {
   align-items: flex-end;
   gap: 12px 18px;
@@ -895,9 +899,12 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .agent-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-  /* Filas iguales: todas las tarjetas miden lo mismo, juegue quien juegue el agente. */
-  grid-auto-rows: 1fr;
   gap: 10px;
+}
+/* Escritorio: todas las tarjetas miden igual. Móvil: alto natural (varía según
+   cuántos jugadores use el agente y se ve mejor así). */
+@media (min-width: 721px) {
+  .agent-cards { grid-auto-rows: 1fr; }
 }
 .agent-card {
   display: flex;
@@ -2431,6 +2438,21 @@ body { overflow-x: clip; }
 
 @media (max-width: 720px) {
   /* --- Comparar --- */
+  /* Perfiles + filtros en un único bloque con tarjeta. */
+  .compare-top {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 12px 14px;
+    border: 1px solid var(--line);
+  }
+  .compare-top .ranked-controls {
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+  }
+  .compare-top .compare-controls { margin-top: 0; }
   /* Filtros: Periodo y Métrica siempre a la vista; el resto se despliega. */
   .compare-controls { row-gap: 10px; }
   .compare-controls .ctl-group { flex: 1 1 100%; }
@@ -2478,10 +2500,6 @@ body { overflow-x: clip; }
   /* Ranking en tarjetas */
   .rank-desktop { display: none; }
   .rank-mobile { display: flex; flex-direction: column; gap: 10px; }
-  .rc-sort { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--mute); }
-  .rc-sort > span { white-space: nowrap; }
-  .rc-sort select { flex: 1 1 auto; min-width: 0; min-height: 40px; }
-  .rc-dir { justify-content: center; min-width: 42px; min-height: 40px; }
   .rank-card {
     display: flex;
     flex-direction: column;
@@ -2502,8 +2520,8 @@ body { overflow-x: clip; }
   }
   .rc-rank { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; white-space: nowrap; }
   .rc-main { display: flex; align-items: baseline; gap: 10px; }
-  .rc-wr { font-size: 30px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
-  .rc-wr small { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--faint); }
+  .rc-hero { font-size: 30px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .rc-hero small { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--faint); }
   .rc-record { color: var(--mute); font-size: 12px; }
   .rc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 6px; }
   .rc-stat { display: flex; flex-direction: column; gap: 2px; }
@@ -2526,6 +2544,7 @@ body { overflow-x: clip; }
     background: rgba(255, 70, 85, 0.12);
     border: 1px solid rgba(255, 70, 85, 0.4);
   }
+  /* Métrica seleccionada: se muestra en grande (ver heroOf) y sale del grid. */
 
   /* Tabs móviles Resumen | Por agente */
   .cmp-tabs { width: 100%; margin-top: 12px; }

@@ -308,6 +308,18 @@ export default function ComparativoPage() {
     return String(Math.round(v));
   };
 
+  // Mini-cards ("resumen" de perfiles): mismo orden y métrica que el Ranking.
+  const miniValue = (e: (typeof entries)[number], i: number): number => {
+    if (metric === 'rank') {
+      return e.data?.currentElo ?? (e.data?.currentTier ? e.data.currentTier * 100 : Number.NEGATIVE_INFINITY);
+    }
+    const s = statsFromMatches(filteredPerPlayer[i] ?? []);
+    if (metric === 'acs') return s.acs;
+    if (metric === 'kd') return s.kd;
+    return s.wr;
+  };
+  const metricLabel = metric === 'rank' ? 'RANGO' : metric.toUpperCase();
+
   const oldestTs = useMemo(() => {
     let min = Infinity;
     for (const e of entries) for (const m of e.data?.matches ?? []) min = Math.min(min, m.timestamp);
@@ -371,13 +383,35 @@ export default function ComparativoPage() {
         <div className="banner warn">{refreshError}</div>
       )}
 
-      <div className="controls ranked-controls" style={{ marginTop: 20 }}>
-        <label>Perfiles</label>
-        <ProfilePicker
-          profiles={allProfiles}
-          selected={selectedIds}
-          onChange={setUserSelected}
-          onAddProfile={() => setFormOpen(true)}
+      {/* Perfiles arriba y filtros debajo: un solo bloque ordenado. */}
+      <div className="compare-top">
+        <div className="controls ranked-controls">
+          <label>Perfiles</label>
+          <ProfilePicker
+            profiles={allProfiles}
+            selected={selectedIds}
+            onChange={setUserSelected}
+            onAddProfile={() => setFormOpen(true)}
+          />
+        </div>
+
+        <FiltersBar
+          win={win}
+          onWin={setWin}
+          filters={filters}
+          onFilters={setFilters}
+          onToggleAgent={toggleAgent}
+          agents={agents}
+          maps={maps}
+          gran={gran}
+          onGran={setGran}
+          metric={metric}
+          onMetric={(m) => {
+            // La Métrica manda también en el orden del Ranking (en escritorio
+            // los encabezados de la tabla pueden sobreescribirlo).
+            setMetric(m);
+            setSortKey(m === 'rank' ? 'rank' : m);
+          }}
         />
       </div>
 
@@ -389,28 +423,31 @@ export default function ComparativoPage() {
 
       {entries.length > 0 ? (
         <div className="controls cmp-minis" style={{ marginTop: 8 }}>
-          {entries.map((e, i) => (
-            <span
-              key={e.member.id}
-              className={`mini-card${e.isLoading ? ' skel' : ''}`}
-              title={
-                e.accounts > 1
-                  ? accounts[i].map((a, ai) => `cuenta ${ai + 1}: ${a.name}#${a.tag}`).join(' · ')
-                  : undefined
-              }
-            >
-              <span className="p-dot" style={{ background: e.color }} />
-              <b>{e.member.label}{e.accounts > 1 ? ` · ${e.accounts} cuentas` : ''}</b>
-              {e.data ? (
-                <span className="mini-stats">
-                  {statsFromMatches(filteredPerPlayer[i]).games}p · WR{' '}
-                  {statsFromMatches(filteredPerPlayer[i]).wr.toFixed(0)}%
-                </span>
-              ) : (
-                <span className="mini-stats">…</span>
-              )}
-            </span>
-          ))}
+          {entries
+            .map((e, i) => ({ e, i, v: miniValue(e, i) }))
+            .sort((a, b) => b.v - a.v)
+            .map(({ e, i, v }) => (
+              <span
+                key={e.member.id}
+                className={`mini-card${e.isLoading ? ' skel' : ''}`}
+                title={
+                  e.accounts > 1
+                    ? accounts[i].map((a, ai) => `cuenta ${ai + 1}: ${a.name}#${a.tag}`).join(' · ')
+                    : undefined
+                }
+              >
+                <span className="p-dot" style={{ background: e.color }} />
+                <b>{e.member.label}{e.accounts > 1 ? ` · ${e.accounts} cuentas` : ''}</b>
+                {e.data ? (
+                  <span className="mini-stats">
+                    {statsFromMatches(filteredPerPlayer[i]).games}p · {metricLabel}{' '}
+                    {Number.isFinite(v) ? fmtMetric(v) : '—'}
+                  </span>
+                ) : (
+                  <span className="mini-stats">…</span>
+                )}
+              </span>
+            ))}
         </div>
       ) : null}
 
@@ -427,19 +464,6 @@ export default function ComparativoPage() {
         </p>
       )}
 
-      <FiltersBar
-        win={win}
-        onWin={setWin}
-        filters={filters}
-        onFilters={setFilters}
-        onToggleAgent={toggleAgent}
-        agents={agents}
-        maps={maps}
-        gran={gran}
-        onGran={setGran}
-        metric={metric}
-        onMetric={setMetric}
-      />
       {oldestTs && (
         <p className="window-info" style={{ margin: '10px 0 0', paddingLeft: 4 }}>
           cobertura de datos desde {oldestTs.toLocaleDateString('es')} — el rango custom filtra dentro de lo consultado
@@ -454,6 +478,17 @@ export default function ComparativoPage() {
           </button>
         </div>
       )}
+
+      {/* Evolución: panel propio antes de las pestañas (siempre visible en móvil). */}
+      <div className="panel">
+        <h2>Evolución por {effGran === 'day' ? 'día' : 'semana'}{gran === 'auto' ? ' (auto)' : ''} · métrica {metric === 'rank' ? 'RANGO' : metric.toUpperCase()}</h2>
+        <TrendCompare
+          series={trendSeries}
+          fmt={fmtMetric}
+          minValue={metric === 'rank' ? rankFloor : undefined}
+          ticks={metric === 'rank' ? rankTicks : undefined}
+        />
+      </div>
 
       <div className="pill-toggle cmp-tabs only-mobile" role="tablist" aria-label="Vista del comparativo">
         <button
@@ -480,16 +515,6 @@ export default function ComparativoPage() {
         <div className="panel">
           <h2>Ranking</h2>
           <RankingTable rows={rankRows} sortKey={sortKey} onSortKey={setSortKey} />
-        </div>
-
-        <div className="panel">
-          <h2>Evolución por {effGran === 'day' ? 'día' : 'semana'}{gran === 'auto' ? ' (auto)' : ''} · métrica {metric === 'rank' ? 'RANGO' : metric.toUpperCase()}</h2>
-          <TrendCompare
-            series={trendSeries}
-            fmt={fmtMetric}
-            minValue={metric === 'rank' ? rankFloor : undefined}
-            ticks={metric === 'rank' ? rankTicks : undefined}
-          />
         </div>
       </div>
 

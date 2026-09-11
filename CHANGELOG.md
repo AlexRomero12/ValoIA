@@ -18,7 +18,8 @@ Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, ex
 - **Comparar en móvil**: filtros colapsables con contador (Periodo y Métrica siempre a la vista), selector de perfiles en chips que envuelven, **Ranking en tarjetas** por jugador con orden por selector y badge «mejor en…», pestañas **Resumen | Agentes** y agentes en tarjetas con sub-vista **Por jugador / Por agente**; iconos de agente de 40px
 
 ### Changed
-- **Agentes en tarjetas también en escritorio**: el heatmap y la tabla de detalle se sustituyen por las vistas **Por jugador / Por agente** en todos los tamaños (el sub-toggle ya no es solo móvil), con tarjetas de altura uniforme, pie de resumen por agente (partidas, WR global y mejor jugador) y filas de jugadores a 2 columnas en escritorio
+- **Agentes en tarjetas también en escritorio**: el heatmap y la tabla de detalle se sustituyen por las vistas **Por jugador / Por agente** en todos los tamaños (el sub-toggle ya no es solo móvil), con tarjetas de altura uniforme en escritorio (alto natural en móvil), pie de resumen por agente (partidas, WR global y mejor jugador) y filas de jugadores a 2 columnas en escritorio
+- **Comparar · controles ordenados**: Perfiles y Filtros viven en un único bloque (mini-cards y notas pasan debajo), el panel de **Evolución** va antes de las pestañas Resumen | Agentes (siempre visible en móvil) y la **Métrica manda en el orden** del Ranking y del resumen de perfiles (las mini-cards muestran esa métrica y la tarjeta móvil la pinta en grande, como antes el WR; en móvil desaparece el selector extra de orden y en escritorio los encabezados de la tabla siguen ordenando)
 - **Orden en Ranked**: «Partidas recientes» pasa delante de Arsenal y Trend de rango (menos scroll hasta el detalle)
 - Los endpoints de summary/status/refresh/backfill responden `404 NO_PROFILES` cuando el usuario aún no tiene perfiles (antes podían caer en los de otro al no haber propios)
 
