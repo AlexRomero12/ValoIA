@@ -59,7 +59,10 @@ export function AuditProposal({ matches, hasRules, onApply }: {
         </p>
 
         <details className="audit-proposal-detail">
-          <summary>Ver detalle de la propuesta</summary>
+          <summary>
+            <span className="day-chevron" aria-hidden>▸</span>
+            Ver detalle de la propuesta
+          </summary>
           <div className="proposal-grid">
             {proposal.maps.map((m) => (
               <div key={m.map} className="proposal-map">

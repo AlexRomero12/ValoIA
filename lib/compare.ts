@@ -381,6 +381,11 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
   }
 
   const st = statsFromMatches(matches);
+  // Impacto (FB/FD): statsFromMatches no lo calcula; se promedia sobre las
+  // partidas unidas igual que el summary de una sola cuenta. Sin esto, los
+  // perfiles multi-cuenta se quedaban sin las tarjetas FB/FD en Ranked.
+  const fb = matches.length ? matches.reduce((a, m) => a + (m.firstBloods ?? 0), 0) / matches.length : undefined;
+  const fd = matches.length ? matches.reduce((a, m) => a + (m.firstDeaths ?? 0), 0) / matches.length : undefined;
   const fetchedMatches = ok.reduce((a, s) => a + (s.window?.fetchedMatches ?? 0), 0);
   const archivedMatches = ok.reduce((a, s) => a + (s.window?.archivedMatches ?? 0), 0);
   const syncedAt = ok.reduce<string | null>(
@@ -455,6 +460,8 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
       acs: st.acs,
       adr: st.adr,
       hsPct: st.hsPct,
+      fb,
+      fd,
     },
     currentTier: best.currentTier,
     startTier: best.startTier,

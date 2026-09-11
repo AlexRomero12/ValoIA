@@ -4,7 +4,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [1.13.0] — 2026-09-11
 
-Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, export/import, ayudas inline y Comparar adaptado a móvil.
+Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, export/import, ayudas inline y Comparar en tarjetas.
 
 ### Added
 - **Login claro**: qué es ValoIA, aviso de aprobación con pasos (envías → el admin aprueba → contraseña temporal), ayuda "¿Olvidaste tu contraseña?" y estado "pendiente de aprobación" (sin correos)
@@ -15,9 +15,10 @@ Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, ex
 - **Export/import de perfiles**: archivo `.valoia.json` con etiqueta, Riot ID, cuentas, preferencias y reglas (sin RSO ni notas); importar crea perfiles nuevos respetando el tope
 - **Ayudas inline `(?)`** en los KPIs (WR, K/D, ACS, HS%, ADR, FB, FD) y renombres: "Ventana" → "Periodo", "Cont" → "Parada", "Auditoría" → "Reglas de sesión" (nav "Reglas") y "Team" → "Equipo"
 - **Winrate · Agente colapsable**: muestra los 6 agentes más jugados con botón **Ver más (N agentes más)** / **Ver menos** para desplegar el resto, dejando el panel a la par de **Winrate · Mapa**; añade una pista de que cada fila filtra «Partidas recientes»
-- **Comparar en móvil**: filtros colapsables con contador (Periodo y Métrica siempre a la vista), selector de perfiles en chips que envuelven, **Ranking en tarjetas** por jugador con orden por selector y badge «mejor en…», pestañas **Resumen | Agentes** y agentes en tarjetas con sub-vista **Por jugador / Por agente** (el heatmap y el detalle con tablas quedan en escritorio); iconos de agente de 40px
+- **Comparar en móvil**: filtros colapsables con contador (Periodo y Métrica siempre a la vista), selector de perfiles en chips que envuelven, **Ranking en tarjetas** por jugador con orden por selector y badge «mejor en…», pestañas **Resumen | Agentes** y agentes en tarjetas con sub-vista **Por jugador / Por agente**; iconos de agente de 40px
 
 ### Changed
+- **Agentes en tarjetas también en escritorio**: el heatmap y la tabla de detalle se sustituyen por las vistas **Por jugador / Por agente** en todos los tamaños (el sub-toggle ya no es solo móvil), con tarjetas de altura uniforme, pie de resumen por agente (partidas, WR global y mejor jugador) y filas de jugadores a 2 columnas en escritorio
 - **Orden en Ranked**: «Partidas recientes» pasa delante de Arsenal y Trend de rango (menos scroll hasta el detalle)
 - Los endpoints de summary/status/refresh/backfill responden `404 NO_PROFILES` cuando el usuario aún no tiene perfiles (antes podían caer en los de otro al no haber propios)
 
@@ -27,6 +28,9 @@ Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, ex
 - Banner de bloqueo con hueco vertical en móvil (el `flex-basis` de la versión fila se interpretaba como altura)
 - Botón "Actualizar" con cooldown de 60 s anti-spam y contador visible; deshabilitado mientras la contraseña es temporal
 - **Aislamiento estricto de perfiles**: cada usuario (incluido el admin) ve y edita solo los suyos; antes el admin veía los de todos y quien no tenía perfiles podía terminar operando sobre el del admin
+- **Borrar cuentas alternativas**: al eliminar todas, el servidor las restauraba (el array vacío se trataba como «sin cambios»); ahora se guarda la lista vacía (mismo arreglo en las preferencias de agente por mapa)
+- **FB/FD en perfiles multi-cuenta**: el merge de cuentas no recalculaba el impacto y las tarjetas FB/FD desaparecían en Ranked; ahora se promedian sobre las partidas unidas (como en el resumen de una sola cuenta)
+- **Flechas de los desplegables de Auditoría**: "¿Qué son las reglas de sesión…?" y "Propuesta de reglas" usaban marcadores distintos; ahora comparten el mismo chevron que rota al abrir
 
 ## [1.12.0] — 2026-09-11
 

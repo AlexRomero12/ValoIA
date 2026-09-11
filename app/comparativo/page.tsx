@@ -7,8 +7,6 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { FiltersBar, type WindowValue } from '@/components/compare/FiltersBar';
 import { RankingTable, type RankRow, type SortKey } from '@/components/compare/RankingTable';
 import { TrendCompare } from '@/components/compare/TrendCompare';
-import { AgentHeatmap } from '@/components/compare/AgentHeatmap';
-import { AgentStatsTable } from '@/components/compare/AgentStatsTable';
 import { AgentByPlayerCards, AgentByAgentCards } from '@/components/compare/AgentCards';
 import { ProfilePicker } from '@/components/profiles/ProfilePicker';
 import { ProfileForm } from '@/components/profiles/ProfileForm';
@@ -496,7 +494,7 @@ export default function ComparativoPage() {
       </div>
 
       <div className={`cmp-pane${tab !== 'agentes' ? ' off' : ''}`}>
-        <div className="pill-toggle agent-mobile-tabs only-mobile" role="tablist" aria-label="Vista por agente">
+        <div className="pill-toggle agent-tabs" role="tablist" aria-label="Vista por agente">
           <button
             type="button"
             role="tab"
@@ -517,32 +515,11 @@ export default function ComparativoPage() {
           </button>
         </div>
 
-        <div className={`agent-mobile${agentTab !== 'jugador' ? ' off' : ''}`}>
+        <div className={`agent-pane${agentTab !== 'jugador' ? ' off' : ''}`}>
           <AgentByPlayerCards players={agentPlayers} filters={filters} minGames={filters.minGames} />
         </div>
-        <div className={`agent-mobile${agentTab !== 'agente' ? ' off' : ''}`}>
+        <div className={`agent-pane${agentTab !== 'agente' ? ' off' : ''}`}>
           <AgentByAgentCards players={agentPlayers} filters={filters} minGames={filters.minGames} />
-        </div>
-
-        <div className="agent-desktop">
-          <div className="panel">
-            <h2>Heatmap jugador × agente</h2>
-            <AgentHeatmap players={entries.map((e) => ({ id: e.member.id, label: e.member.label, matches: e.data?.matches ?? [] }))} filters={filters} minGames={filters.minGames} />
-          </div>
-
-          <div className="panel">
-            <h2>Detalle jugador × agente</h2>
-            <AgentStatsTable
-              players={entries.map((e) => ({
-                id: e.member.id,
-                label: e.member.label,
-                color: e.color,
-                matches: e.data?.matches ?? [],
-              }))}
-              filters={filters}
-              minGames={filters.minGames}
-            />
-          </div>
         </div>
       </div>
 

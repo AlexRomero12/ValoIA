@@ -1,7 +1,7 @@
 # Plan — Vista "Por agente" estilo VLR (Opción C)
 
-> **Estado:** pendiente de implementación
-> **Página afectada:** `/comparativo` · sección "Heatmap jugador × agente"
+> **Estado:** implementado (v1.13.0) y después sustituido por las tarjetas **Por jugador / Por agente** (misma info, más legible en móvil y escritorio). Este documento queda como registro de la decisión original.
+> **Página afectada:** `/comparativo` · sección de agentes
 > **Estimación:** ~1.5 h · $0$ requests nuevos a Henrik
 
 ## Contexto

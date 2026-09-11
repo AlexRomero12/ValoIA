@@ -269,6 +269,10 @@ export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer):
 
   const label = String(input.label ?? '').trim() || existing?.label || name;
   const id = existing?.id ?? slugifyId(label, new Set(profiles.map((p) => p.id)));
+  // Array explícito (aunque venga vacío) = lista completa que manda el cliente:
+  // permite borrar todas las cuentas/preferencias. `undefined` = no tocar.
+  const accounts = Array.isArray(input.accounts) ? (cleanAccounts(input.accounts) ?? []) : existing?.accounts;
+  const prefs = Array.isArray(input.prefs) ? (cleanPrefs(input.prefs) ?? []) : existing?.prefs;
   const next: Profile = {
     id,
     label,
@@ -279,8 +283,8 @@ export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer):
     color: String(input.color ?? existing?.color ?? '').trim() || undefined,
     visible: input.visible ?? existing?.visible ?? true,
     primary: input.primary ?? existing?.primary ?? false,
-    accounts: cleanAccounts(input.accounts) ?? existing?.accounts,
-    prefs: cleanPrefs(input.prefs) ?? existing?.prefs,
+    accounts,
+    prefs,
     audit:
       input.audit === null
         ? undefined

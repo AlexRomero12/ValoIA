@@ -5,7 +5,10 @@
 export function AuditIntro({ hasRules }: { hasRules: boolean }) {
   return (
     <details className="panel audit-intro" open={!hasRules}>
-      <summary>¿Qué son las reglas de sesión y cómo se configuran?</summary>
+      <summary>
+        <span className="day-chevron" aria-hidden>▸</span>
+        ¿Qué son las reglas de sesión y cómo se configuran?
+      </summary>
       <div className="audit-intro-body">
         <ul>
           <li>

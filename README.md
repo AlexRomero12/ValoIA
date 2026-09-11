@@ -10,7 +10,7 @@ Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de H
 app/                  Páginas (/valorant, /comparativo, /team, /tienda, /auditoria, /perfiles) + API routes
 components/           TopBar, KpiGrid, WrPanel, TierChart, MatchesTable, MatchDetailModal, LoadingOverlay, InfoTip
 components/audit/     Auditoría: intro y propuesta de reglas, día auditado, recomendaciones con acción
-components/compare/   Filtros, ranking, trend, heatmap, tabla jugador × agente y tarjetas móviles de agente
+components/compare/   Filtros, ranking, trend y tarjetas de agentes Por jugador / Por agente
 components/profiles/  Formulario de perfil, selector, editor de reglas de auditoría y selector de agentes
 components/store/     Tienda de hoy, favoritas y panel de notificaciones
 lib/                  Clientes Henrik/Riot, perfiles, agregación, auditoría, propuesta de reglas, export/import, cache L1+L2, hooks
@@ -47,10 +47,10 @@ public/               Estáticos (incluye sw.js para Web Push)
 ### Página Comparar (`/comparativo`)
 - **Perfiles lado a lado (los que elijas)**: selector multi-perfil + botón “Agregar perfil”; ranking ordenable (WR, K/D, ACS, ADR, HS%, RR neto) con columnas clickeables
 - **Evolución comparada** en un solo gráfico: WR/ACS/K/D/**RANGO** por día o semana — la métrica RANGO muestra el tier + RR (ej. "D1 · 20") con el eje Y iniciando en Platinum 3 para no perder detalle
-- **Heatmap jugador × agente** y tabla analítica estilo VLR con mini-barras por celda (modo todos / mejores combos); columna de rango con **badge del tier + RR**
+- **Agentes en tarjetas**: sub-vista **Por jugador** (los agentes de cada uno con WR%, K/D, ACS y RR; top 4 + ver todos) y **Por agente** (WR de cada jugador con ese agente, ordenado por partidas; pie con total, WR global y mejor jugador) — sustituyen al heatmap y a la tabla densa en todas las vistas
 - Filtros combinables: ventana (temporada o 7/14/30/90 días), rango de fechas custom, mapa y **filtro de agentes por iconitos**
 - Filtro de mínimo de partidas y leyenda de cobertura de datos
-- **Móvil ≤720px**: filtros colapsables con contador, ranking en tarjetas por jugador (WR grande, stats clave y «mejor en…») con selector de orden, pestañas **Resumen | Agentes** y, dentro de agentes, tarjetas con sub-vista **Por jugador** (agentes de cada uno, top 4 + ver todos) y **Por agente** (WR de cada jugador por agente, el heatmap en formato legible); heatmap y detalle con tablas quedan en escritorio
+- **Móvil ≤720px**: filtros colapsables con contador, ranking en tarjetas por jugador (WR grande, stats clave y «mejor en…») con selector de orden, pestañas **Resumen | Agentes** y tarjetas de agentes a una columna con sub-toggle a ancho completo
 
 ### Página Equipo (`/team`)
 - **Composiciones por mapa** para los perfiles que selecciones (eligiendo desde `/perfiles` o con “Agregar perfil”)

@@ -27,7 +27,7 @@ function rrText(s: PlayerStats): string {
   return `${s.rrTotal > 0 ? '+' : ''}${s.rrTotal}${s.rrMissing > 0 ? '~' : ''}`;
 }
 
-/** Vista móvil "Por jugador": una tarjeta por jugador con la lista de sus agentes. */
+/** Vista "Por jugador": una tarjeta por jugador con la lista de sus agentes. */
 export function AgentByPlayerCards({ players, filters, minGames }: AgentCardsProps) {
   const { data } = useAgentIcons();
   const icons = useMemo(() => agentIconLookup(data), [data]);
@@ -51,7 +51,7 @@ export function AgentByPlayerCards({ players, filters, minGames }: AgentCardsPro
   if (!cards.length) return <p className="empty">Sin combinaciones jugador × agente con estos filtros.</p>;
 
   return (
-    <div>
+    <div className="agent-cards">
       {cards.map((p) => {
         const list = byPlayer.get(p.id) ?? [];
         const expanded = open[p.id] === true;
@@ -105,7 +105,7 @@ export function AgentByPlayerCards({ players, filters, minGames }: AgentCardsPro
   );
 }
 
-/** Vista móvil "Por agente": tarjeta por agente con filas por jugador (heatmap legible). */
+/** Vista "Por agente": tarjeta por agente con filas por jugador (heatmap legible). */
 export function AgentByAgentCards({ players, filters, minGames }: AgentCardsProps) {
   const { data } = useAgentIcons();
   const icons = useMemo(() => agentIconLookup(data), [data]);
@@ -114,20 +114,29 @@ export function AgentByAgentCards({ players, filters, minGames }: AgentCardsProp
   const min = Math.max(1, minGames);
 
   const cards = agents
-    .map((agent) => ({
-      agent,
-      rows: players
+    .map((agent) => {
+      const rows = players
         .map((p) => ({ player: p, cell: cells.get(`${p.id}|${agent}`) }))
         .filter((r) => r.cell != null && r.cell.games >= min)
-        .sort((a, b) => (b.cell?.wr ?? 0) - (a.cell?.wr ?? 0) || (b.cell?.games ?? 0) - (a.cell?.games ?? 0)),
-    }))
+        .sort((a, b) => (b.cell?.wr ?? 0) - (a.cell?.wr ?? 0) || (b.cell?.games ?? 0) - (a.cell?.games ?? 0));
+      // WR global del agente (todas las partidas, sin el mínimo del filtro).
+      let wins = 0;
+      let decisive = 0;
+      for (const p of players) {
+        const c = cells.get(`${p.id}|${agent}`);
+        if (!c) continue;
+        wins += c.wins;
+        decisive += c.games - c.draws;
+      }
+      return { agent, rows, wr: decisive ? (wins / decisive) * 100 : 0, best: rows[0] ?? null };
+    })
     .filter((c) => c.rows.length > 0);
 
   if (!cards.length) return <p className="empty">Sin agentes con partidas en estos filtros.</p>;
 
   return (
-    <div>
-      {cards.map(({ agent, rows }) => {
+    <div className="agent-cards">
+      {cards.map(({ agent, rows, wr, best }) => {
         const icon = icons.get(agent.toLowerCase()) ?? null;
         return (
           <article key={agent} className="agent-card">
@@ -140,20 +149,32 @@ export function AgentByAgentCards({ players, filters, minGames }: AgentCardsProp
               <b>{agent}</b>
               <span className="ag-total">{totals.get(agent) ?? 0}p</span>
             </div>
-            {rows.map(({ player, cell }) =>
-              cell ? (
-                <div key={player.id} className="ag-row">
-                  <span className="ag-player">
-                    <span className="p-dot" style={{ background: player.color }} />
-                    <b>{player.label}</b>
-                  </span>
-                  <span className="ag-wr" style={{ color: wrColor(cell.wr) }}>{cell.wr.toFixed(0)}%</span>
-                  <span className="ag-sub">
-                    {cell.wins}V–{cell.losses}{cell.draws ? `–${cell.draws}E` : ''} · {cell.games}p
-                  </span>
-                </div>
-              ) : null,
-            )}
+            <div className="ag-rows">
+              {rows.map(({ player, cell }) =>
+                cell ? (
+                  <div key={player.id} className="ag-row">
+                    <span className="ag-player">
+                      <span className="p-dot" style={{ background: player.color }} />
+                      <b>{player.label}</b>
+                    </span>
+                    <span className="ag-wr" style={{ color: wrColor(cell.wr) }}>{cell.wr.toFixed(0)}%</span>
+                    <span className="ag-sub">
+                      {cell.wins}V–{cell.losses}{cell.draws ? `–${cell.draws}E` : ''} · {cell.games}p
+                    </span>
+                  </div>
+                ) : null,
+              )}
+            </div>
+            <div className="ag-foot">
+              <span>
+                <b>{totals.get(agent) ?? 0}p</b> · {wr.toFixed(0)}% WR
+              </span>
+              {best?.cell ? (
+                <span>
+                  Mejor: <b>{best.player.label}</b> {best.cell.wr.toFixed(0)}%
+                </span>
+              ) : null}
+            </div>
           </article>
         );
       })}
