@@ -1,8 +1,10 @@
 'use client';
 
 import { tierName } from '@/lib/metas';
+import { tierShort } from '@/lib/compare';
 import { pickXMarks } from '@/lib/chartAxis';
 import { useTierIcons } from '@/lib/hooks';
+import { useElementWidth } from '@/lib/useElementWidth';
 import type { MatchRow } from '@/lib/types';
 
 interface TierChartProps {
@@ -10,6 +12,7 @@ interface TierChartProps {
 }
 
 export function TierChart({ matchesAsc }: TierChartProps) {
+  const { ref, width: boxW } = useElementWidth(940);
   const tierIcons = useTierIcons().data ?? {};
   if (!matchesAsc.length) return <p className="empty">Sin competitivas en esta ventana.</p>;
 
@@ -20,7 +23,14 @@ export function TierChart({ matchesAsc }: TierChartProps) {
   const hi = validTiers.length ? Math.max(...validTiers) : 18;
   const minT = lo - 1;
   const maxT = hi + 1;
-  const W = 940, H = 250, PL = 88, PR = 18, PT = 18, PB = 32;
+  // Móvil: el SVG se dibuja en píxeles reales (textos legibles) con layout compacto.
+  const compact = boxW < 560;
+  const W = compact ? Math.max(300, Math.round(boxW)) : 940;
+  const H = compact ? 200 : 250;
+  const PL = compact ? 40 : 88;
+  const PR = compact ? 10 : 18;
+  const PT = compact ? 16 : 18;
+  const PB = compact ? 26 : 32;
   const cw = W - PL - PR;
   const ch = H - PT - PB;
   const xAt = (i: number) => PL + (matchesAsc.length === 1 ? cw / 2 : (i / (matchesAsc.length - 1)) * cw);
@@ -39,12 +49,12 @@ export function TierChart({ matchesAsc }: TierChartProps) {
         <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#20303f" strokeWidth={major ? 1.3 : 0.7} opacity={major ? 1 : 0.6} />
         {tierName(t) !== '—' && (
           tierIcons[String(t)] ? (
-            <image key={t} x={PL - 30} y={y - 9} width="20" height="20" href={tierIcons[String(t)]}>
+            <image key={t} x={compact ? 4 : PL - 30} y={y - (compact ? 8 : 9)} width={compact ? 16 : 20} height={compact ? 16 : 20} href={tierIcons[String(t)]}>
               <title>{tierName(t)}</title>
             </image>
           ) : (
-            <text x={PL - 12} y={y + 3.5} fontSize="10" fill={major ? '#93a4b3' : '#5d7080'} textAnchor="end">
-              {tierName(t)}
+            <text x={PL - (compact ? 8 : 12)} y={y + 3.5} fontSize={compact ? 10 : 10} fill={major ? '#93a4b3' : '#5d7080'} textAnchor="end">
+              {compact ? tierShort(t) : tierName(t)}
             </text>
           )
         )}
@@ -63,6 +73,7 @@ export function TierChart({ matchesAsc }: TierChartProps) {
     count: matchesAsc.length,
     labelOf: (i) => dayLabelOf(matchesAsc[i].timestamp),
     plotW: cw,
+    minPx: compact ? 40 : 48,
   });
   const segs: string[][] = [[]];
   matchesAsc.forEach((m, i) => {
@@ -83,7 +94,7 @@ export function TierChart({ matchesAsc }: TierChartProps) {
       .join(' ') || `M${xAt(0).toFixed(1)} ${(PT + ch).toFixed(1)} Z`;
 
   return (
-    <div className="chart-wrap">
+    <div className="chart-wrap" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img">
         <defs>
           <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
@@ -106,11 +117,11 @@ export function TierChart({ matchesAsc }: TierChartProps) {
           if (cy == null) {
             return (
               <g key={m.matchId + i}>
-                <circle cx={cx} cy={PT + ch} r={4} fill="none" stroke="#5d7080" strokeWidth={1.5}>
+                <circle cx={cx} cy={PT + ch} r={compact ? 4.5 : 4} fill="none" stroke="#5d7080" strokeWidth={1.5}>
                   <title>Sin rango (Unrated)</title>
                 </circle>
                 {showX.has(i) && (
-                  <text x={cx} y={H - PB + 18} fontSize="9" fill="#5d7080" textAnchor="middle">{label}</text>
+                  <text x={cx} y={H - PB + (compact ? 16 : 18)} fontSize={compact ? 11 : 9} fill="#5d7080" textAnchor="middle">{label}</text>
                 )}
               </g>
             );
@@ -119,15 +130,15 @@ export function TierChart({ matchesAsc }: TierChartProps) {
             <g key={m.matchId + i}>
               {m.tierChange !== 0 && (
                 <>
-                  <circle cx={cx} cy={cy} r={7} fill="none" stroke="#e8c97a" strokeWidth={1.4} opacity={0.9} />
-                  <text x={cx} y={cy - 13} fontSize="11" fill={m.tierChange > 0 ? '#e8c97a' : '#ff5c69'} textAnchor="middle">
+                  <circle cx={cx} cy={cy} r={compact ? 6.5 : 7} fill="none" stroke="#e8c97a" strokeWidth={1.4} opacity={0.9} />
+                  <text x={cx} y={cy - (compact ? 12 : 13)} fontSize={compact ? 12 : 11} fill={m.tierChange > 0 ? '#e8c97a' : '#ff5c69'} textAnchor="middle">
                     {m.tierChange > 0 ? '▲' : '▼'}
                   </text>
                 </>
               )}
-              <circle cx={cx} cy={cy} r={4} fill={col} stroke="#0f1923" strokeWidth={1.5} />
+              <circle cx={cx} cy={cy} r={compact ? 4.5 : 4} fill={col} stroke="#0f1923" strokeWidth={1.5} />
               {showX.has(i) && (
-                <text x={cx} y={H - PB + 18} fontSize="9" fill="#5d7080" textAnchor="middle">{label}</text>
+                <text x={cx} y={H - PB + (compact ? 16 : 18)} fontSize={compact ? 11 : 9} fill="#5d7080" textAnchor="middle">{label}</text>
               )}
             </g>
           );

@@ -2,6 +2,21 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.12.0] — 2026-09-11
+
+Vistas adaptadas a móvil, PWA instalable y vista previa de enlaces.
+
+### Added
+- **Adaptación móvil completa**: barra HUD inferior (Ranked, Comparar, Team, Tienda, Auditoría; Perfiles en el menú de usuario), TopBar compacta, tarjetas de partidas en Ranked, tablas comparativas con scroll real + primera columna fija, gráficos SVG recalculados al ancho real (`useElementWidth` + modo compacto), auditoría con detalle al toque y slot mínimo por partida, modales como bottom sheets, objetivos táctiles de 44px y safe-area
+- **PWA instalable** (sin service worker): `app/manifest.ts`, iconos 192/512/maskable + apple-touch-icon y metas iOS (`appleWebApp`) para añadir a pantalla de inicio
+- **Vista previa de enlaces (Open Graph/Twitter)**: imagen 1200×630 de marca, metadata completa con `metadataBase`, y rutas de assets públicos exentas de sesión en el proxy (los crawlers deben poder leerlas)
+- `scripts/generate-brand-assets.ps1`: regenera iconos PWA e imagen OG con la identidad del dash
+
+### Changed
+- `viewport` explícito (`viewport-fit=cover`, `interactiveWidget: resizes-content`, theme color), `100dvh` en login/modales y `overflow-x: clip` global
+- Los tooltips solo-hover de los gráficos (Tier, Tendencia, Auditoría) se reemplazan en móvil por selección al toque con lectura de datos
+- Eliminado el CSS muerto `app/page.module.css`
+
 ## [1.11.0] — 2026-09-10
 
 Seguridad multiusuario completa: sesiones revocables, altas con aprobación y tienda/favoritas/push por usuario.

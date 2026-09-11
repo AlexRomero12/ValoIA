@@ -69,7 +69,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
         </div>
       )}
 
-      <div className="table-scroll">
+      <div className="table-scroll matches-desktop">
         <table className="matches">
           <colgroup>
             <col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '13%' }} /><col style={{ width: '12%' }} />
@@ -138,6 +138,46 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="matches-cards">
+        {!matches.length ? (
+          <p className="empty">Juega una competitiva y aparecerá aquí.</p>
+        ) : !rows.length ? (
+          <p className="empty">Ninguna partida cumple el filtro activo.</p>
+        ) : (
+          pageDays.map((g) => {
+            const st = dayStats(g);
+            const expanded = openDays.includes(g.key);
+            return (
+              <section key={g.key} className="mc-day">
+                <div className="mc-day-head">
+                  <button className="mc-day-btn" onClick={() => setAnalysisDay(g.key)} title="Ver análisis del día">
+                    <span className="day-label">{esc(st.label)}</span>
+                    <span className="day-meta">
+                      {st.matches}p ·{' '}
+                      <b className={st.wins >= st.losses ? 'd-win' : 'd-loss'}>
+                        {st.wins}V-{st.losses}D{st.draws > 0 ? `-${st.draws}E` : ''}
+                      </b>{' '}
+                      · KD {st.kd.toFixed(2)}
+                    </span>
+                    <span className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}>
+                      {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
+                    </span>
+                  </button>
+                  <button
+                    className={`mc-chevron${expanded ? ' on' : ''}`}
+                    aria-label={expanded ? 'Contraer día' : 'Expandir día'}
+                    onClick={() => toggleDay(g.key)}
+                  >
+                    ▸
+                  </button>
+                </div>
+                {expanded ? g.matches.map((m) => <MatchCard key={m.matchId} m={m} onSelect={() => setSelected(m)} />) : null}
+              </section>
+            );
+          })
+        )}
       </div>
 
       {totalPages > 1 && (
@@ -225,6 +265,43 @@ function MatchRowEl({ m, fMap, fAgent, onSelect, toggle }: {
         {rr == null ? '—' : `${rr > 0 ? '+' : ''}${rr}`}
       </td>
     </tr>
+  );
+}
+
+/** Tarjeta de partida para móvil (≤720px). Mantiene el tap → detalle. */
+function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
+  const d = new Date(m.timestamp);
+  const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const kd = (m.kills / Math.max(1, m.deaths)).toFixed(2);
+  const draw = isDraw(m);
+  const rr = m.rrDelta;
+  return (
+    <button className="match-card" onClick={onSelect} title="Ver detalle de la partida">
+      <span className={`mc-badge ${draw ? 'e' : m.won ? 'w' : 'l'}`}>{draw ? 'E' : m.won ? 'V' : 'D'}</span>
+      <span className="mc-main">
+        <span className="mc-line1">
+          {m.mapIcon ? <img className="map-icon" src={m.mapIcon} alt="" loading="lazy" /> : null}
+          <b>{esc(m.map)}</b>
+          <span className="mc-dot">·</span>
+          {m.agentIcon ? <img className="agent-icon" src={m.agentIcon} alt="" loading="lazy" /> : null}
+          {esc(m.agent)}
+        </span>
+        <span className="mc-line2">
+          <b className="mc-score">{m.roundsWon}–{m.roundsLost}</b>
+          <span className="mc-dot">·</span>
+          {m.kills}/{m.deaths}/{m.assists}
+          <span className="mc-dot">·</span>
+          KD <b className={parseFloat(kd) >= 1.05 ? 'stat-ok' : ''}>{kd}</b>
+        </span>
+      </span>
+      <span className="mc-side">
+        <span className={`mc-acs${m.acs >= 220 ? ' stat-ok' : ''}`}>{m.acs} <i>ACS</i></span>
+        <span className="mc-sub">ADR {m.adr} · HS {m.hsPct.toFixed(1)}%</span>
+        <span className={`mc-rr${rr == null ? '' : rr > 0 ? ' up' : rr < 0 ? ' down' : ''}`}>
+          {rr == null ? `${hora} · sin RR` : `${hora} · ${rr > 0 ? '+' : ''}${rr} RR`}
+        </span>
+      </span>
+    </button>
   );
 }
 

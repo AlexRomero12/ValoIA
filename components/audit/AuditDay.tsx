@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { esc } from '@/lib/metas';
+import { useElementWidth } from '@/lib/useElementWidth';
 import type { MatchRow } from '@/lib/types';
 import { isDraw, STOP_KD, type AuditDay, type AuditMatchRow, type PickClass } from '@/lib/audit';
 import type { AuditRules } from '@/lib/profileTypes';
@@ -50,13 +51,25 @@ function fmtRR(v: number | null): string {
 export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, rules }: AuditDayProps) {
   const stopKd = rules?.stop.kdBelow ?? STOP_KD;
   const [open, setOpen] = useState(defaultOpen);
+  /** Partida seleccionada al tocar una barra (reemplaza el tooltip en táctil). */
+  const [sel, setSel] = useState<number | null>(null);
+  // Ancho real medido: en compacto el SVG se dibuja en píxeles reales con un
+  // mínimo de 46px por partida (táctil); en escritorio se mantiene el 940 fijo.
+  const { ref: boxRef, width: boxW } = useElementWidth(940);
   const rows = day.matches;
   const n = Math.max(1, rows.length);
-  const plotW = W - PL - PR;
+  const compact = boxW < 640;
+  const plotW = compact ? Math.max(Math.round(boxW), n * 46) - (compact ? 34 : PL) - (compact ? 14 : PR) : W - PL - PR;
+  const Wc = compact ? plotW + 34 + 14 : W;
+  const PLc = compact ? 34 : PL;
+  const PRc = compact ? 14 : PR;
+  const TOPc = compact ? 14 : TOP;
+  const BASELINEc = compact ? 96 : BASELINE;
+  const BOTTOMc = compact ? 196 : BOTTOM;
   const slotW = plotW / n;
-  const barW = Math.min(48, slotW * 0.62);
-  const cx = (i: number) => PL + slotW * i + slotW / 2;
-  const scale = 3.6; // px por RR
+  const barW = Math.min(compact ? 34 : 48, slotW * (compact ? 0.72 : 0.62));
+  const cx = (i: number) => PLc + slotW * i + slotW / 2;
+  const scale = compact ? 3.1 : 3.6; // px por RR
 
   const cutIdx = rows.findIndex((r) => r.cutPoint);
   const cutX = cutIdx >= 0 ? cx(cutIdx) + slotW / 2 : null;
@@ -163,8 +176,18 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
             {' '}Impacto: FB ≥ 2.5 y FD ≤ 2.0 por partida; a la 3.ª primera muerte, modo &quot;no regalar&quot;.
           </p>
 
-          <div className="audit-svg-scroll">
-            <svg viewBox={`0 0 ${W} 268`} role="img" aria-label={`RR por partida — ${day.label}`}>
+          {sel != null && rows[sel] ? (
+            <div className="audit-tap-info">
+              <b>{new Date(rows[sel].match.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</b>
+              {' · '}{esc(rows[sel].match.map)} · {esc(rows[sel].match.agent)}
+              {' · '}{rows[sel].match.roundsWon}–{rows[sel].match.roundsLost}
+              {' · '}K/D {rows[sel].kd.toFixed(2)}
+              {' · '}{rows[sel].match.rrDelta == null ? 'sin RR' : `${rows[sel].match.rrDelta > 0 ? '+' : ''}${rows[sel].match.rrDelta} RR`}
+            </div>
+          ) : null}
+
+          <div className="audit-svg-scroll" ref={boxRef}>
+            <svg style={{ width: '100%', minWidth: Wc }} viewBox={`0 0 ${Wc} ${BOTTOMc + 16}`} role="img" aria-label={`RR por partida — ${day.label}`}>
               <defs>
                 <pattern id={tapeId} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                   <rect width="9" height="9" fill="#e8c97a" />
@@ -175,23 +198,23 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
               {sessionBands.map((b, i) => (
                 <rect
                   key={i}
-                  x={PL + slotW * b.from}
-                  y={TOP}
+                  x={PLc + slotW * b.from}
+                  y={TOPc}
                   width={slotW * (b.to - b.from)}
-                  height={BOTTOM - TOP}
+                  height={BOTTOMc - TOPc}
                   fill={i % 2 ? 'rgba(147,164,179,0.05)' : 'rgba(147,164,179,0.02)'}
                 />
               ))}
               {/* línea base */}
-              <line x1={PL} y1={BASELINE} x2={W - PR} y2={BASELINE} stroke="#34495e" strokeWidth="1" />
+              <line x1={PLc} y1={BASELINEc} x2={Wc - PRc} y2={BASELINEc} stroke="#34495e" strokeWidth="1" />
               {/* cinta de peligro del corte */}
               {cutX != null ? (
                 <g>
-                  <rect x={cutX - 3} y={TOP} width={6} height={BOTTOM - TOP} fill={`url(#${tapeId})`} opacity="0.9" />
+                  <rect x={cutX - 3} y={TOPc} width={6} height={BOTTOMc - TOPc} fill={`url(#${tapeId})`} opacity="0.9" />
                   <text
                     x={cutX - 9}
-                    y={36}
-                    fontSize="10"
+                    y={compact ? 24 : 36}
+                    fontSize={compact ? 11 : 10}
                     fontWeight="700"
                     fill="#e8c97a"
                     textAnchor="end"
@@ -199,7 +222,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                   >
                     CORTE · {day.cutAt}
                   </text>
-                  <text x={cutX - 9} y={50} fontSize="9" fill="#93a4b3" textAnchor="end">
+                  <text x={cutX - 9} y={compact ? 38 : 50} fontSize={compact ? 10 : 9} fill="#93a4b3" textAnchor="end">
                     no debiste jugar
                   </text>
                 </g>
@@ -210,9 +233,9 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                   <rect
                     key={`p${i}`}
                     x={cx(i) - slotW / 2 + 3}
-                    y={26}
+                    y={TOPc}
                     width={slotW - 6}
-                    height={220}
+                    height={BOTTOMc - TOPc}
                     fill="none"
                     stroke="#ff5c69"
                     strokeWidth="1"
@@ -232,18 +255,20 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                       key={i}
                       x1={cx(i) - 3}
                       x2={cx(i) + 3}
-                      y1={BASELINE}
-                      y2={BASELINE}
-                      stroke="#5d7080"
+                      y1={BASELINEc}
+                      y2={BASELINEc}
+                      stroke={sel === i ? '#ece8e1' : '#5d7080'}
                       strokeWidth="2.5"
                       opacity={r.afterCut ? 0.4 : 1}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setSel(sel === i ? null : i)}
                     >
                       <title>{`${r.match.map} · ${r.match.agent} · ${r.match.roundsWon}-${r.match.roundsLost} · K/D ${r.kd.toFixed(2)} · RR sin dato`}</title>
                     </line>
                   );
                 }
                 const h = Math.min(Math.abs(rr) * scale, BAR_MAX_RR * scale);
-                const y = rr >= 0 ? BASELINE - h : BASELINE;
+                const y = rr >= 0 ? BASELINEc - h : BASELINEc;
                 return (
                   <rect
                     key={i}
@@ -253,32 +278,34 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                     height={Math.max(2.5, h)}
                     fill={rrColor(r.match)}
                     opacity={r.afterCut ? 0.38 : 1}
-                    stroke={r.violation ? '#ff4655' : undefined}
-                    strokeWidth={r.violation ? 1.4 : undefined}
-                    strokeDasharray={r.violation ? '4 3' : undefined}
+                    stroke={sel === i ? '#ece8e1' : r.violation ? '#ff4655' : undefined}
+                    strokeWidth={sel === i ? 2 : r.violation ? 1.4 : undefined}
+                    strokeDasharray={r.violation && sel !== i ? '4 3' : undefined}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSel(sel === i ? null : i)}
                   >
                     <title>{`${r.match.map} · ${r.match.agent} · ${r.match.roundsWon}-${r.match.roundsLost} · K/D ${r.kd.toFixed(2)} · ${rr > 0 ? '+' : ''}${rr} RR`}</title>
                   </rect>
                 );
               })}
               {/* valores (alineados con la barra capada y clampados al lienzo) */}
-              <g fontSize="10.5" fontWeight="700" textAnchor="middle">
+              <g fontSize={compact ? 11 : 10.5} fontWeight="700" textAnchor="middle">
                 {rows.map((r, i) => {
                   if (r.match.rrDelta == null) {
                     return (
-                      <text key={i} x={cx(i)} y={BASELINE + 14} fill="#5d7080">
+                      <text key={i} x={cx(i)} y={BASELINEc + 14} fill="#5d7080">
                         ·
                       </text>
                     );
                   }
                   const rr = r.match.rrDelta;
                   const h = Math.min(Math.abs(rr) * scale, BAR_MAX_RR * scale);
-                  const y = rr > 0 ? BASELINE - h - 7 : BASELINE + h + 14;
+                  const y = rr > 0 ? BASELINEc - h - 7 : BASELINEc + h + 14;
                   return (
                     <text
                       key={i}
                       x={cx(i)}
-                      y={Math.min(BOTTOM + 2, Math.max(TOP + 2, y))}
+                      y={Math.min(BOTTOMc - 26, Math.max(TOPc + 2, y))}
                       fill={rrColor(r.match)}
                       opacity={r.afterCut ? 0.6 : 1}
                     >
@@ -288,26 +315,26 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                 })}
               </g>
               {/* hora / mapa / contador */}
-              <g fontSize="9.5" fill="#93a4b3" textAnchor="middle">
+              <g fontSize={compact ? 10.5 : 9.5} fill="#93a4b3" textAnchor="middle">
                 {rows.map((r, i) => (
-                  <text key={i} x={cx(i)} y={214}>
+                  <text key={i} x={cx(i)} y={BOTTOMc - 42}>
                     {new Date(r.match.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                   </text>
                 ))}
               </g>
-              <g fontSize="8.5" fill="#5d7080" textAnchor="middle">
+              <g fontSize={compact ? 10 : 8.5} fill="#5d7080" textAnchor="middle">
                 {rows.map((r, i) => (
-                  <text key={i} x={cx(i)} y={228}>
+                  <text key={i} x={cx(i)} y={BOTTOMc - 27}>
                     {esc(r.match.map)}
                   </text>
                 ))}
               </g>
-              <g fontSize="9" fontWeight="700" textAnchor="middle">
+              <g fontSize={compact ? 10.5 : 9} fontWeight="700" textAnchor="middle">
                 {rows.map((r, i) => (
                   <text
                     key={i}
                     x={cx(i)}
-                    y={244}
+                    y={BOTTOMc - 10}
                     fill={r.cutPoint ? '#ff5c69' : r.counterAfter >= 1 ? '#e8c97a' : '#5d7080'}
                   >
                     {r.afterCut ? 'no jugar' : `cont ${r.counterAfter}`}
@@ -317,7 +344,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
             </svg>
           </div>
 
-          <AuditCumulative day={day} />
+          <AuditCumulative day={day} W={Wc} PL={PLc} PR={PRc} compact={compact} sel={sel} onPick={setSel} />
 
           <div className="table-scroll">
             <table className="score-table audit-table">
@@ -406,7 +433,15 @@ function niceStep(range: number): number {
   return 200;
 }
 
-function AuditCumulative({ day }: { day: AuditDay }) {
+function AuditCumulative({ day, W, PL, PR, compact, sel, onPick }: {
+  day: AuditDay;
+  W: number;
+  PL: number;
+  PR: number;
+  compact: boolean;
+  sel: number | null;
+  onPick: (i: number | null) => void;
+}) {
   const rows = day.matches;
   const n = Math.max(1, rows.length);
   const plotW = W - PL - PR;
@@ -414,9 +449,9 @@ function AuditCumulative({ day }: { day: AuditDay }) {
   const cx = (i: number) => PL + slotW * i + slotW / 2;
   // Eje con cero real: los valores positivos van ARRIBA de la línea de 0 y los
   // negativos debajo (antes se usaba Math.abs y ±57 caían en el mismo punto).
-  const TOP = 26;
-  const BOTTOM = 172;
-  const H = 190;
+  const TOP = compact ? 20 : 26;
+  const BOTTOM = compact ? 136 : 172;
+  const H = compact ? 156 : 190;
 
   const realPts: { x: number; v: number }[] = [];
   const planPts: { x: number; v: number }[] = [];
@@ -460,7 +495,7 @@ function AuditCumulative({ day }: { day: AuditDay }) {
 
   return (
     <div className="audit-svg-scroll" style={{ marginTop: 8 }}>
-      <svg viewBox={`0 0 ${W} ${H + 20}`} role="img" aria-label="RR acumulado real vs plan">
+      <svg style={{ width: '100%', minWidth: W }} viewBox={`0 0 ${W} ${H + 20}`} role="img" aria-label="RR acumulado real vs plan">
         {ticks.map((v) => (
           <g key={v}>
             <line
@@ -471,7 +506,7 @@ function AuditCumulative({ day }: { day: AuditDay }) {
               stroke={v === 0 ? '#34495e' : '#20303f'}
               strokeWidth={v === 0 ? 1.2 : 1}
             />
-            <text x={PL - 6} y={yOf(v) + 3} fontSize="9" fill={v === 0 ? '#93a4b3' : '#5d7080'} textAnchor="end">
+            <text x={PL - 6} y={yOf(v) + 3} fontSize={compact ? 10 : 9} fill={v === 0 ? '#93a4b3' : '#5d7080'} textAnchor="end">
               {v > 0 ? `+${v}` : v}
             </text>
           </g>
@@ -487,15 +522,31 @@ function AuditCumulative({ day }: { day: AuditDay }) {
         ) : null}
         {lastReal ? <circle cx={lastReal.x} cy={yOf(lastReal.v)} r="3.5" fill="#ece8e1" /> : null}
         {lastReal ? (
-          <text x={lastReal.x + 6} y={yOf(lastReal.v) + 4} fontSize="10" fontWeight="700" fill="#ece8e1">
+          <text x={lastReal.x + 6} y={yOf(lastReal.v) + 4} fontSize={compact ? 11 : 10} fontWeight="700" fill="#ece8e1">
             {day.realRR == null ? 'RR?' : `${day.realRR > 0 ? '+' : ''}${day.realRR} real`}
           </text>
         ) : null}
         {lastPlan && !sameEnd ? (
-          <text x={lastPlan.x + 6} y={yOf(lastPlan.v) + 4} fontSize="10" fontWeight="700" fill="#e8c97a">
+          <text x={lastPlan.x + 6} y={yOf(lastPlan.v) + 4} fontSize={compact ? 11 : 10} fontWeight="700" fill="#e8c97a">
             {day.planRR == null ? 'RR?' : `${day.planRR > 0 ? '+' : ''}${day.planRR} con regla`}
           </text>
         ) : null}
+        {sel != null && sel < n ? (
+          <line x1={cx(sel)} y1={TOP} x2={cx(sel)} y2={BOTTOM} stroke="#ece8e1" strokeWidth="1" strokeDasharray="3 3" opacity="0.5" />
+        ) : null}
+        {/* Zonas táctiles por partida: tocar selecciona (reemplaza el tooltip). */}
+        {rows.map((_, i) => (
+          <rect
+            key={`hit-${i}`}
+            x={cx(i) - slotW / 2}
+            y={0}
+            width={slotW}
+            height={H + 20}
+            fill="transparent"
+            style={{ cursor: 'pointer' }}
+            onClick={() => onPick(sel === i ? null : i)}
+          />
+        ))}
       </svg>
     </div>
   );

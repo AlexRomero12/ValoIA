@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { UserMenu } from '@/components/auth/UserMenu';
+import { MobileNav } from '@/components/MobileNav';
 
 
 interface TopBarProps {
@@ -39,9 +40,12 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
           className={accent === 'red' ? 'primary-red' : 'primary-blue'}
           onClick={onRefresh}
           disabled={loading || disabled}
-          title={disabled ? 'Esperando cooldown para proteger el rate limit' : undefined}
+          title={disabled ? 'Esperando cooldown para proteger el rate limit' : 'Actualizar'}
+          aria-label="Actualizar"
         >
-          Actualizar{loading ? <span className="loader" /> : null}
+          <RefreshIcon />
+          <span className="btn-label">Actualizar</span>
+          {loading ? <span className="loader" /> : null}
         </button>
       </div>
 
@@ -53,7 +57,18 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
         {<Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>}
         <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''}>Auditoría</Link>
       </nav>
+
+      <MobileNav activePage={activePage} />
     </>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 12a8 8 0 1 1-2.3-5.6" />
+      <path d="M20 4v4h-4" />
+    </svg>
   );
 }
 

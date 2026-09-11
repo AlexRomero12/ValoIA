@@ -92,5 +92,9 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|sw\\.js).*)'],
+  // Públicos sin sesión: assets de Next, iconos PWA, imagen OG y manifest
+  // (los crawlers de WhatsApp/Discord y el instalador deben leerlos directo).
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|icons/|og/|apple-touch-icon\\.png|manifest\\.webmanifest).*)',
+  ],
 };

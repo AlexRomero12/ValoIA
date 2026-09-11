@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import type { BucketPoint } from '@/lib/compare';
 import { pickXMarks } from '@/lib/chartAxis';
+import { useElementWidth } from '@/lib/useElementWidth';
 
 export interface TrendSeries {
   id: string;
@@ -20,6 +22,9 @@ interface TrendCompareProps {
 }
 
 export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps) {
+  const { ref: boxRef, width: boxW } = useElementWidth(940);
+  /** Columna seleccionada al tocar (reemplaza los tooltips en táctil). */
+  const [selIdx, setSelIdx] = useState<number | null>(null);
   const active = series.filter((s) => s.points.some((p) => p.value != null));
   if (!active.length) return <p className="empty">Sin datos suficientes para la evolución con estos filtros.</p>;
 
@@ -44,7 +49,13 @@ export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps
   const min = minValue ?? Math.max(0, Math.min(...values) - pad);
   max = max + pad;
 
-  const W = 940, H = 280, PL = 56, PR = 16, PT = 16, PB = 36;
+  const compact = boxW < 560;
+  const W = compact ? Math.max(300, Math.round(boxW)) : 940;
+  const H = compact ? 220 : 280;
+  const PL = compact ? 44 : 56;
+  const PR = compact ? 12 : 16;
+  const PT = 16;
+  const PB = compact ? 30 : 36;
   const cw = W - PL - PR, ch = H - PT - PB;
   const xAt = (i: number) => PL + (labels.length === 1 ? cw / 2 : (i / (labels.length - 1)) * cw);
   const yAt = (v: number) => PT + ch - ((v - min) / Math.max(1e-9, max - min)) * ch;
@@ -65,23 +76,48 @@ export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps
       : key);
   // Separación mínima real en píxeles (ver lib/chartAxis.ts): días de 1-2
   // partidas dejaban marcas en puntos adyacentes que se encimaban igual.
-  const showSet = pickXMarks({ count: labels.length, labelOf: (i) => labelAt(labels[i]), plotW: cw });
+  const showSet = pickXMarks({ count: labels.length, labelOf: (i) => labelAt(labels[i]), plotW: cw, minPx: compact ? 40 : 48 });
+
+  const tapValues: { label: string; color: string; text: string }[] =
+    selIdx == null
+      ? []
+      : active
+          .map((s) => {
+            const p = s.points.find((pt) => pt.key === labels[selIdx] && pt.value != null);
+            return p && p.value != null
+              ? { label: s.label, color: s.color, text: `${fmt(p.value)}${p.approx ? ' ~' : ''} (${p.games}p)` }
+              : null;
+          })
+          .filter((v): v is { label: string; color: string; text: string } => v !== null);
 
   return (
-    <div className="chart-wrap">
+    <div className="chart-wrap" ref={boxRef}>
+      {selIdx != null && labels[selIdx] ? (
+        <div className="chart-tap-info">
+          <b>{labelAt(labels[selIdx])}</b>
+          {tapValues.length
+            ? tapValues.map((v) => (
+                <span key={v.label}>
+                  <span className="sw" style={{ background: v.color }} />
+                  {v.label}: {v.text}
+                </span>
+              ))
+            : <span>sin datos</span>}
+        </div>
+      ) : null}
       <svg viewBox={`0 0 ${W} ${H}`} role="img">
         {gridVals.map((v, i) => {
           const y = yAt(v);
           return (
             <g key={i}>
               <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#20303f" strokeWidth={1} />
-              <text x={PL - 8} y={y + 4} fontSize="10" fill="#5d7080" textAnchor="end">{fmt(v)}</text>
+              <text x={PL - 8} y={y + 4} fontSize={compact ? 11 : 10} fill="#5d7080" textAnchor="end">{fmt(v)}</text>
             </g>
           );
         })}
         {labels.map((key, i) => {
           if (!showSet.has(i)) return null;
-          return <text key={key} x={xAt(i)} y={H - PB + 18} fontSize="9" fill="#5d7080" textAnchor="middle">{labelAt(key)}</text>;
+          return <text key={key} x={xAt(i)} y={H - PB + (compact ? 16 : 18)} fontSize={compact ? 11 : 9} fill="#5d7080" textAnchor="middle">{labelAt(key)}</text>;
         })}
         {active.map((s) => {
           const pts = s.points
@@ -122,6 +158,22 @@ export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps
             </g>
           );
         })}
+        {selIdx != null && selIdx < labels.length ? (
+          <line x1={xAt(selIdx)} y1={PT} x2={xAt(selIdx)} y2={H - PB} stroke="#ece8e1" strokeWidth="1" strokeDasharray="3 3" opacity="0.45" />
+        ) : null}
+        {/* Zonas táctiles por columna: tocar selecciona (reemplaza los tooltips). */}
+        {labels.map((key, i) => (
+          <rect
+            key={`hit-${key}`}
+            x={xAt(i) - Math.max(8, cw / Math.max(1, labels.length) / 2)}
+            y={0}
+            width={Math.max(16, cw / Math.max(1, labels.length))}
+            height={H}
+            fill="transparent"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setSelIdx(selIdx === i ? null : i)}
+          />
+        ))}
       </svg>
       <div className="legend">
         {active.map((s) => (

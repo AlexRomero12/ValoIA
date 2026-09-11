@@ -60,6 +60,16 @@ export function SkinPreview({
     return () => window.removeEventListener('keydown', onKey);
   }, [skin, onClose]);
 
+  // Bloquea el scroll del body mientras el lightbox está abierto.
+  useEffect(() => {
+    if (!skin) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [skin]);
+
   if (!skin || typeof document === 'undefined') return null;
 
   const variants = chromasQ.data ?? [];

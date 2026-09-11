@@ -21,15 +21,23 @@ export function AgentPicker({ selected, onChange, label, accent = '#ff4655', com
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const boxRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const iconsQ = useAgentIcons();
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
+    const onDoc = (e: PointerEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('pointerdown', onDoc);
+    return () => document.removeEventListener('pointerdown', onDoc);
+  }, [open]);
+
+  // En táctil no enfocamos el buscador: abrir el teclado al tocar molesta.
+  useEffect(() => {
+    if (!open) return;
+    const fine = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (fine) searchRef.current?.focus();
   }, [open]);
 
   const catalog = useMemo(() => iconsQ.data ?? [], [iconsQ.data]);
@@ -69,7 +77,7 @@ export function AgentPicker({ selected, onChange, label, accent = '#ff4655', com
 
       {open && (
         <div className="agent-panel">
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar agente…" className="agent-search" />
+          <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar agente…" className="agent-search" />
           <div className="agent-grid">
             {options.length === 0 && <span className="empty">Sin resultados</span>}
             {options.map(({ name, icon }) => (

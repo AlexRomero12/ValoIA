@@ -96,7 +96,6 @@ function LoginForm() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
-                autoFocus
                 spellCheck={false}
               />
             </label>
@@ -137,7 +136,6 @@ function LoginForm() {
                 value={reqUser}
                 onChange={(e) => setReqUser(e.target.value)}
                 autoComplete="off"
-                autoFocus
                 spellCheck={false}
               />
             </label>

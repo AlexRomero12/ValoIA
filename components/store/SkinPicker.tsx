@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { SkinPreview } from './SkinPreview';
@@ -92,6 +92,15 @@ export function SkinPicker({
 
   const showing = searching ? (searchQ.data ?? []) : (skinsQ.data ?? []);
   const loadingSkins = (!searching && skinsQ.isFetching) || (searching && searchQ.isFetching);
+
+  // Bloquea el scroll del body mientras el modal está abierto (como los otros).
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   const pickCategory = (name: string) => {
     setCategory(name);
