@@ -18,13 +18,18 @@ export function KpiGrid({ kpis: k, accent }: KpiGridProps) {
       </div>
       {METAS.map((m) => {
         const v = m.get(k);
-        const ok = v >= m.target;
-        const pct = Math.max(4, Math.min(100, (v / m.target) * 100));
+        if (v == null || !Number.isFinite(v)) return null;
+        const ok = m.lowerIsBetter ? v <= m.target : v >= m.target;
+        const pct = m.lowerIsBetter
+          ? v <= 0
+            ? 100
+            : Math.max(4, Math.min(100, (m.target / v) * 100))
+          : Math.max(4, Math.min(100, (v / m.target) * 100));
         return (
           <div key={m.key} className={`kpi ${ok ? 'ok' : ''}`}>
             <div className="label">{m.label}</div>
             <div className="value">{m.fmt(v)}</div>
-            <div className="target">meta ≥ {m.fmt(m.target)}</div>
+            <div className="target">{m.targetHint ?? `meta ≥ ${m.fmt(m.target)}`}</div>
             <div className="meter">
               <div className="fill" style={{ width: `${pct}%`, background: ok ? 'var(--win)' : 'var(--loss)' }} />
             </div>

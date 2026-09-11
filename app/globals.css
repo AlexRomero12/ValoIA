@@ -197,19 +197,19 @@ select {
 /* ---------- KPIs ---------- */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+  gap: 8px;
   margin-top: 18px;
 }
 .kpi {
   position: relative;
   background: var(--steel);
   border: 1px solid var(--line);
-  padding: 14px 16px 15px;
-  min-height: 116px;
+  padding: 11px 12px 12px;
+  min-height: 102px;
   display: flex;
   flex-direction: column;
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 .kpi::before {
   content: '';
@@ -221,22 +221,22 @@ select {
 }
 .kpi .label {
   color: var(--mute);
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .kpi .value {
-  font-size: 30px;
+  font-size: 25px;
   font-weight: 700;
   line-height: 1.1;
-  margin-top: 6px;
+  margin-top: 5px;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 .kpi.ok .value { color: var(--win); }
 .kpi.bad .value { color: var(--loss); }
-.kpi .target { font-size: 11px; color: var(--faint); margin-top: 3px; letter-spacing: 0.02em; }
+.kpi .target { font-size: 10px; color: var(--faint); margin-top: 3px; letter-spacing: 0.02em; }
 .kpi .target b { color: var(--mute); font-weight: 600; }
 .kpi .meter { height: 4px; background: var(--steel-2); margin-top: auto; overflow: hidden; }
 .kpi .fill { height: 100%; transition: width 0.4s ease; }

@@ -320,6 +320,10 @@ export interface MatchSummary {
   acs: number;
   adr: number;
   hsPct: number;
+  /** Primeras sangres del jugador (primer kill del round). Solo Henrik. */
+  firstBloods?: number;
+  /** Primeras muertes del jugador (primera muerte del round). Solo Henrik. */
+  firstDeaths?: number;
   score?: number;
   damageDealt?: number;
   headshots?: number;
@@ -400,7 +404,7 @@ export interface ValSummary {
   generatedAt: string;
   account: ValAccount;
   window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; rrMissing?: number; eloTotal?: number | null; syncedAt?: string | null; mmrSyncedAt?: string | null; truncated?: boolean };
-  kpis: ReturnType<typeof finishGroup> & { wins: number; losses: number };
+  kpis: ReturnType<typeof finishGroup> & { wins: number; losses: number; fb?: number; fd?: number };
   currentTier: number;
   startTier: number;
   currentElo?: number | null;
@@ -560,6 +564,8 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const summaries: MatchSummary[] = [];
   let prevTier: number | null = null;
   let prevElo: number | null = null;
+  let fbTotal = 0;
+  let fdTotal = 0;
 
   const mmrHistory = await getHenrikMmrHistory(acctName, acctTag).catch(
     () => [] as Awaited<ReturnType<typeof getHenrikMmrHistory>>,
@@ -608,6 +614,20 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     const eloDelta = elo != null && prevElo != null ? elo - prevElo : null;
     if (elo != null) prevElo = elo;
 
+    // Impacto: primeras sangres / primeras muertes (mismo criterio que el arsenal).
+    const seenFbRounds = new Set<number>();
+    let firstBloods = 0;
+    let firstDeaths = 0;
+    for (const k of m.kills ?? []) {
+      const round = k.round ?? -1;
+      if (seenFbRounds.has(round)) continue;
+      seenFbRounds.add(round);
+      if (k.killer?.puuid === account.puuid) firstBloods += 1;
+      if (k.victim?.puuid === account.puuid) firstDeaths += 1;
+    }
+    fbTotal += firstBloods;
+    fdTotal += firstDeaths;
+
     summaries.push({
       matchId: m.metadata?.match_id ?? '',
       date: new Date(henrikMatchTimestamp(m)).toISOString(),
@@ -624,6 +644,8 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       acs: Math.round((s.score ?? 0) / rds),
       adr: Math.round(dmgDealt / rds),
       hsPct: shots ? Math.round((hs / shots) * 1000) / 10 : 0,
+      firstBloods,
+      firstDeaths,
       score: s.score ?? 0,
       damageDealt: dmgDealt,
       headshots: hs,
@@ -729,7 +751,13 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       })(),
       truncated,
     },
-    kpis: { ...kpis, wins: group.wins, losses: group.matches - group.wins - group.draws },
+    kpis: {
+      ...kpis,
+      wins: group.wins,
+      losses: group.matches - group.wins - group.draws,
+      fb: summaries.length ? fbTotal / summaries.length : undefined,
+      fd: summaries.length ? fdTotal / summaries.length : undefined,
+    },
     currentTier: latestMmr?.tier?.id ?? lastMatch?.tier ?? 0,
     startTier: firstMatch?.tier ?? 0,
     currentElo: latestMmr?.elo ?? lastMatch?.elo ?? null,

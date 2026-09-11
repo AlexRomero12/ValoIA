@@ -15,6 +15,10 @@ export interface ValKpis {
   acs: number;
   adr: number;
   hsPct: number;
+  /** Primeras sangres por partida (promedio). Solo proveedor Henrik. */
+  fb?: number;
+  /** Primeras muertes por partida (promedio). Solo proveedor Henrik. */
+  fd?: number;
 }
 
 export interface GroupRow {
@@ -46,6 +50,10 @@ export interface MatchRow {
   acs: number;
   adr: number;
   hsPct: number;
+  /** Primeras sangres del jugador (primer kill del round). Solo proveedor Henrik. */
+  firstBloods?: number;
+  /** Primeras muertes del jugador (primera muerte del round). Solo proveedor Henrik. */
+  firstDeaths?: number;
   /** Totales crudos para agregar por día con precisión (opcional, proveedor Henrik/Riot) */
   score?: number;
   damageDealt?: number;

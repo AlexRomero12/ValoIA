@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { TopBar } from '@/components/TopBar';
@@ -24,6 +24,31 @@ function isoDayLocal(ts: number): string {
 
 function fmtRR(v: number | null): string {
   return v == null ? '—' : `${v > 0 ? '+' : ''}${v}`;
+}
+
+/** Impacto ponderado (FB/FD por partida) de un conjunto de días con detalle de kill feed. */
+function impactOfDays(days: AuditDayT[]): { fb: number; fd: number; matches: number } | null {
+  const withData = days.filter((d) => d.fbTotal != null && d.fdTotal != null && d.matches.length > 0);
+  const n = withData.reduce((a, d) => a + d.matches.length, 0);
+  if (!n) return null;
+  const fb = withData.reduce((a, d) => a + (d.fbTotal ?? 0), 0) / n;
+  const fd = withData.reduce((a, d) => a + (d.fdTotal ?? 0), 0) / n;
+  return { fb, fd, matches: n };
+}
+
+/** Celda FB/FD de la tabla de semanas anteriores. */
+function renderWeekImpact(w: AuditWeek): ReactNode {
+  const imp = impactOfDays(w.days);
+  if (!imp) return <span title="Sin detalle de kill feed en esta semana (días solo con snapshot)">—</span>;
+  const ok = imp.fb >= 2.5 && imp.fd <= 2;
+  return (
+    <span
+      className={ok ? 'stat-win' : 'stat-loss'}
+      title={`FB ${imp.fb.toFixed(1)} · FD ${imp.fd.toFixed(1)} por partida en ${imp.matches}p con detalle · meta FB ≥ 2.5 y FD ≤ 2.0`}
+    >
+      {imp.fb.toFixed(1)}/{imp.fd.toFixed(1)}
+    </span>
+  );
 }
 
 /**
@@ -89,7 +114,7 @@ export default function AuditoriaPage() {
   });
   useEffectComments(historyQ.data?.days, setHistory);
 
-  const { allDays, currentDays, pastWeeks, weekTotals, weekPartial, weekRange } = useMemo(() => {
+  const { allDays, currentDays, pastWeeks, weekTotals, weekImpact, weekPartial, weekRange } = useMemo(() => {
     const matches: MatchRow[] = [...(data?.matches ?? [])].sort((a, b) => a.timestamp - b.timestamp);
     const days = new Map<string, MatchRow[]>();
     for (const m of matches) {
@@ -131,6 +156,7 @@ export default function AuditoriaPage() {
       allDays: audited,
       currentDays: current,
       pastWeeks: groupAuditWeeks(past).reverse(),
+      weekImpact: impactOfDays(current),
       weekTotals: {
         matches: current.reduce((a, d) => a + d.matches.length, 0),
         realRR: sum((d) => d.realRR),
@@ -305,6 +331,14 @@ export default function AuditoriaPage() {
                 {wt.violationCount ? `${wt.violationCount} fuera de pool · ${fmtRR(wt.violationLoss)} RR` : 'pool limpio'}
               </span>
               {wt.bannedCount ? <span className="audit-falta bad">{wt.bannedCount} prohibidos</span> : null}
+              {weekImpact ? (
+                <span
+                  className={`audit-falta${weekImpact.fb >= 2.5 && weekImpact.fd <= 2 ? '' : ' bad'}`}
+                  title={`Impacto de la semana: FB ${weekImpact.fb.toFixed(1)} y FD ${weekImpact.fd.toFixed(1)} por partida en ${weekImpact.matches}p con detalle · meta FB ≥ 2.5 y FD ≤ 2.0`}
+                >
+                  Impacto FB {weekImpact.fb.toFixed(1)} · FD {weekImpact.fd.toFixed(1)}
+                </span>
+              ) : null}
               {weekPartial ? <span className="audit-falta warn">RR parcial</span> : null}
             </div>
           </div>
@@ -347,7 +381,7 @@ export default function AuditoriaPage() {
                 <table className="score-table audit-table">
                   <thead>
                     <tr>
-                      <th>Semana</th><th className="num">Partidas</th><th className="num">RR real</th>
+                      <th>Semana</th><th className="num">Partidas</th><th className="num">FB/FD</th><th className="num">RR real</th>
                       <th className="num">Con regla</th><th className="num">Regla + pool</th>
                       <th className="num">Fuera de pool</th><th className="num">Cortes</th><th />
                     </tr>
@@ -365,6 +399,7 @@ export default function AuditoriaPage() {
                             ) : null}
                           </td>
                           <td className="num">{w.matches}</td>
+                          <td className="num">{renderWeekImpact(w)}</td>
                           <td className={`num ${(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}`}>{fmtRR(w.realRR)}</td>
                           <td className="num">{fmtRR(w.planRR)}</td>
                           <td className="num">{fmtRR(w.planPoolRR)}</td>
@@ -386,7 +421,7 @@ export default function AuditoriaPage() {
                         </tr>
                         {openWeek === w.key ? (
                           <tr className="week-detail-row">
-                            <td colSpan={8}>
+                            <td colSpan={9}>
                               <AuditRecommendations
                                 embedded
                                 profile={profile}

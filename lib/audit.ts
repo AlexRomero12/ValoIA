@@ -98,6 +98,12 @@ export interface AuditDay {
   stored?: boolean;
   /** Nº de partidas según la copia histórica (para semanas sin datos en vivo). */
   storedMatches?: number;
+  /** Primeras sangres del día (solo partidas con detalle de kill feed). */
+  fbTotal?: number | null;
+  /** Primeras muertes del día (solo partidas con detalle de kill feed). */
+  fdTotal?: number | null;
+  /** Partidas del día con 3+ primeras muertes (señal "no regalar"). */
+  fdHighCount?: number;
 }
 
 function isoDayLocal(ts: number): string {
@@ -197,9 +203,18 @@ export function auditDay(matches: MatchRow[], rules?: AuditRules): AuditDay {
 
   const cutIdx = rows.findIndex((r) => r.cutPoint);
 
+  // Impacto (FB/FD): solo cuenta partidas con detalle de kill feed.
+  const impactRows = rows.filter((r) => r.match.firstBloods != null && r.match.firstDeaths != null);
+  const fbTotal = impactRows.length ? impactRows.reduce((a, r) => a + (r.match.firstBloods ?? 0), 0) : null;
+  const fdTotal = impactRows.length ? impactRows.reduce((a, r) => a + (r.match.firstDeaths ?? 0), 0) : null;
+  const fdHighCount = impactRows.filter((r) => (r.match.firstDeaths ?? 0) >= 3).length;
+
   return {
     key,
     label: sorted.length ? localLabel(sorted[0].timestamp) : key,
+    fbTotal,
+    fdTotal,
+    fdHighCount,
     dayStart,
     matches: rows,
     realRR: real.sum,

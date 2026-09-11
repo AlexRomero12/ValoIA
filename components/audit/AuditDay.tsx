@@ -144,11 +144,23 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
               <span className="audit-stat-lbl">Sesiones</span>
               <span className="audit-stat-val neutral">{day.sessions}</span>
             </div>
+            {day.fbTotal != null && day.fdTotal != null ? (
+              <div className="audit-stat">
+                <span className="audit-stat-lbl">FB/FD</span>
+                <span
+                  className={`audit-stat-val ${day.fbTotal - day.fdTotal >= 0 ? 'win' : 'loss'}`}
+                  title={`Primeras sangres / primeras muertes · meta FB ≥ 2.5 y FD ≤ 2.0 por partida${day.fdHighCount ? ` · ${day.fdHighCount} partida(s) con 3+ FD` : ''}`}
+                >
+                  {day.fbTotal}/{day.fdTotal}
+                </span>
+              </div>
+            ) : null}
           </div>
 
           <p className="audit-rule-hint">
             Corte: 2 derrotas seguidas con K/D &lt; 0.9. Solo las derrotas con K/D &lt; 0.9 suman al
             contador (las de buen K/D no son tilt, no cuentan) · una victoria reinicia · el empate no reinicia.
+            {' '}Impacto: FB ≥ 2.5 y FD ≤ 2.0 por partida; a la 3.ª primera muerte, modo &quot;no regalar&quot;.
           </p>
 
           <div className="audit-svg-scroll">
@@ -312,7 +324,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
               <thead>
                 <tr>
                   <th>Hora</th><th>Mapa · Agente</th><th>Marcador</th><th>Resultado</th>
-                  <th className="num">K/D</th><th className="num">RR</th><th className="num">Cont</th><th>Auditoría</th><th>Nota</th>
+                  <th className="num">K/D</th><th className="num">FB/FD</th><th className="num">RR</th><th className="num">Cont</th><th>Auditoría</th><th>Nota</th>
                 </tr>
               </thead>
               <tbody>
@@ -334,6 +346,24 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                         {pick ? <span className={`res-badge ${pick.cls}`} title={pick.title}>{pick.text}</span> : null}
                       </td>
                       <td className={`num${r.kd >= 1 ? ' stat-ok' : ''}`}>{r.kd.toFixed(2)}</td>
+                      <td
+                        className={`num${
+                          r.match.firstBloods == null
+                            ? ''
+                            : (r.match.firstDeaths ?? 0) >= 3
+                              ? ' stat-loss'
+                              : (r.match.firstBloods ?? 0) > (r.match.firstDeaths ?? 0)
+                                ? ' stat-win'
+                                : ''
+                        }`}
+                        title={
+                          r.match.firstBloods == null
+                            ? 'Sin detalle de kill feed'
+                            : `Primeras sangres ${r.match.firstBloods} · primeras muertes ${r.match.firstDeaths}${(r.match.firstDeaths ?? 0) >= 3 ? ' · 3+ FD: modo "no regalar"' : ''}`
+                        }
+                      >
+                        {r.match.firstBloods == null ? '·' : `${r.match.firstBloods}/${r.match.firstDeaths}`}
+                      </td>
                       <td className={`num ${r.match.rrDelta == null ? '' : r.match.rrDelta > 0 ? 'stat-win' : 'stat-loss'}`}>
                         {r.match.rrDelta == null ? '·' : `${r.match.rrDelta > 0 ? '+' : ''}${r.match.rrDelta}`}
                       </td>

@@ -204,6 +204,24 @@ export function AuditRecommendations({
       });
     }
 
+    // 4b) Impacto: FB/FD por partida (meta del plan: FB ≥ 2.5 · FD ≤ 2.0)
+    const impact = matches.filter((m) => m.firstBloods != null && m.firstDeaths != null);
+    if (impact.length >= MIN_GAMES) {
+      const fb = impact.reduce((a, m) => a + (m.firstBloods ?? 0), 0) / impact.length;
+      const fd = impact.reduce((a, m) => a + (m.firstDeaths ?? 0), 0) / impact.length;
+      const fdHigh = impact.filter((m) => (m.firstDeaths ?? 0) >= 3).length;
+      const ok = fb >= 2.5 && fd <= 2;
+      const balance = fb - fd;
+      out.push({
+        id: 'impacto',
+        tone: ok ? 'good' : fd >= 2.5 || fb < 2 ? 'bad' : 'warn',
+        title: `Impacto: FB ${fb.toFixed(1)} · FD ${fd.toFixed(1)} por partida`,
+        detail: ok
+          ? `Balance ${balance >= 0 ? '+' : ''}${balance.toFixed(1)} · meta cumplida (FB ≥ 2.5, FD ≤ 2.0).`
+          : `Meta: FB ≥ 2.5 y FD ≤ 2.0 · balance ${balance >= 0 ? '+' : ''}${balance.toFixed(1)}${fdHigh ? ` · ${fdHigh} partida(s) con 3+ primeras muertes (a la 3.ª, modo "no regalar")` : ''}.`,
+      });
+    }
+
     // 5) Mapas jugados sin regla
     if (rules) {
       const unruled = [...playedMaps].filter((map) => !poolRuleFor(rules, map)).slice(0, 3);
