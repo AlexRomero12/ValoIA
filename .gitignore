@@ -47,3 +47,6 @@ verify-*.mjs
 next-env.d.ts
 # backups del servidor
 backups/
+
+# planes de diseño locales (no se publican)
+/docs/plan-*.md

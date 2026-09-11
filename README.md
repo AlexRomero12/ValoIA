@@ -14,7 +14,7 @@ components/compare/   Filtros, ranking, trend y tarjetas de agentes Por jugador 
 components/profiles/  Formulario de perfil, selector, editor de reglas de auditoría y selector de agentes
 components/store/     Tienda de hoy, favoritas y panel de notificaciones
 lib/                  Clientes Henrik/Riot, perfiles, agregación, auditoría, propuesta de reglas, export/import, cache L1+L2, hooks
-docs/                 Planes de diseño de vistas
+docs/                 Guía de despliegue en Oracle
 public/               Estáticos (incluye sw.js para Web Push)
 ```
 
