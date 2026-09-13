@@ -2,7 +2,7 @@
 
 Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) con cache persistente, Docker y **perfiles configurables** (tú decides a quién ver y qué reglas aplicar).
 
-> Estado actual: **v1.21.0** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado actual: **v1.21.1** — ver [CHANGELOG.md](./CHANGELOG.md)
 
 ## Estructura
 
@@ -79,7 +79,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 ### Página Tienda (`/tienda`)
 - **Tienda diaria por usuario**: cada uno conecta **su** Riot desde un panel guiado con la cabecera `cookie` completa de `auth.riotgames.com` (recomendada: dura ~3 semanas; también sirve solo `ssid`, ~1 semana); el server renueva tokens solo cada hora y avisa (banner + push) cuando la sesión caduca. Ve su rotación de 4 skins + bundle destacado con precio/descuento/tiempo restante — todo **privado** (el admin tampoco ve lo ajeno)
 - Si la sesión conectada no es la del perfil principal del usuario, se avisa y no se muestra la tienda ajena; sin perfil principal, invita a crearlo en Perfiles
-- **Previsualización**: click en cualquier skin (tienda, bundle, favoritas o explorador) abre un lightbox con el render a tamaño grande, sus **niveles de evolución** y sus **variantes de color (chromas)** para cambiar en vivo; las imágenes se sirven optimizadas (`next/image`, WebP, caché 31 días)
+- **Previsualización**: click en cualquier skin (tienda, bundle, favoritas o explorador) abre un lightbox con el render a tamaño grande y sus **variantes de color (chromas)** para cambiar en vivo; las imágenes se sirven optimizadas (`next/image`, WebP, caché 31 días)
 - **Skins favoritas persistentes por usuario**: explorador del arsenal completo por categoría de arma (Sidearms → Melee) con iconos, contador de skins por arma y búsqueda por nombre; snapshot denormalizado en `data/favorites.<usuario>.json` (volumen Docker `valo-data`, inmune al borrado del cache)
 - Badge **"¡EN TIENDA!"** sobre las favoritas disponibles hoy, con precio
 - **Web Push**: activa notificaciones y el cron avisa al instante cuando una favorita aparece en la tienda (una vez por día por skin, sin spam); botón **Enviar prueba** para verificar el pipeline
@@ -206,7 +206,7 @@ Oracle Cloud Always Free (ARM) con `docker-compose.prod.yml` + Caddy
 | `GET /api/store/status` | Tienda de hoy + bundle + favoritas (con coincidencias y estado de notificación) + estado RSO/push; `?refresh=1` fuerza revalidación |
 | `GET /api/store/catalog?q=\|weapon=` | Búsqueda en el catálogo de skins o todas las skins de un arma |
 | `GET /api/store/weapons` | Armas agrupadas por categoría con iconos y contador de skins |
-| `GET /api/store/chromas?id=` | Niveles de evolución y variantes de color (chromas) de una skin |
+| `GET /api/store/chromas?id=` | Variantes de color (chromas) de una skin |
 | `POST /api/store/favorites` | `{action: add\|remove, offerId}` — favoritas del usuario |
 | `POST /api/store/auth` | `{action: cookie, cookies\|ssid}` (y login/2FA) — conexión RSO del usuario |
 | `GET /api/store/status` | Tienda del usuario (perfil principal, cuenta conectada, favoritas y push propios) |

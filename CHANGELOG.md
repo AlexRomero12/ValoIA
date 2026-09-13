@@ -2,6 +2,11 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.21.1] — 2026-09-13
+
+### Changed
+- **Detalle de skin sin niveles**: se retira la fila de **Niveles de evolución** del lightbox — la API solo trae render del nivel base (los demás son `null`) y sin video (28–117 MB) no aportan; queda la imagen del skin y sus **variantes de color**
+
 ## [1.21.0] — 2026-09-13
 
 Rendimiento de medios (imágenes hasta 26× más ligeras), Reglas móvil y tienda sin fricción.

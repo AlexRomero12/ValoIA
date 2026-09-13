@@ -19,17 +19,11 @@ interface ChromaInfo {
   label: string;
 }
 
-interface LevelInfo {
-  id: string;
-  label: string;
-  icon: string;
-}
-
 /**
- * Lightbox de previsualización: render grande de la skin, selector de niveles
- * de evolución y variantes de color, y toggle de favorita. Solo imágenes
- * (los videos de Riot pesan 28–117 MB; no se descargan). Portal al body porque
- * los .panel tienen clip-path y recortarían un modal fixed.
+ * Lightbox de previsualización: render grande de la skin, variantes de color
+ * y toggle de favorita. Solo imágenes (los niveles de evolución no tienen
+ * render en la API y los videos de Riot pesan 28–117 MB: no se descargan).
+ * Portal al body porque los .panel tienen clip-path y recortarían un modal fixed.
  */
 export function SkinPreview({
   skin,
@@ -43,22 +37,21 @@ export function SkinPreview({
   onClose: () => void;
 }) {
   const [variant, setVariant] = useState<ChromaInfo | null>(null);
-  const [level, setLevel] = useState<LevelInfo | null>(null);
 
-  const variantsQ = useQuery<{ chromas: ChromaInfo[]; levels: LevelInfo[] }>({
+  const variantsQ = useQuery<{ chromas: ChromaInfo[] }>({
     queryKey: ['store-variants', skin?.id],
     queryFn: async () => {
       const res = await fetch(`/api/store/chromas?id=${encodeURIComponent(skin!.id)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('No se pudieron cargar las variantes');
-      const json = (await res.json()) as { chromas?: ChromaInfo[]; levels?: LevelInfo[] };
-      return { chromas: json.chromas ?? [], levels: json.levels ?? [] };
+      const json = (await res.json()) as { chromas?: ChromaInfo[] };
+      return { chromas: json.chromas ?? [] };
     },
     enabled: !!skin?.id,
     staleTime: 60 * 60 * 1000,
   });
 
   // Al cambiar de skin el padre remonta este componente (key=skin.id):
-  // `variant`/`level` vuelven a null sin necesidad de effects.
+  // `variant` vuelve a null sin necesidad de effects.
 
   useEffect(() => {
     if (!skin) return;
@@ -82,11 +75,9 @@ export function SkinPreview({
   if (!skin || typeof document === 'undefined') return null;
 
   const chromas = variantsQ.data?.chromas ?? [];
-  const levels = variantsQ.data?.levels ?? [];
-  const shown = level ?? variant ?? { id: skin.id, name: skin.name, icon: skin.icon };
-  const shownId = level?.id ?? variant?.id ?? skin.id;
-  // La API solo trae render del nivel base: al elegir otro nivel se mantiene la
-  // imagen del skin para que el lightbox no quede en blanco.
+  const shown = variant ?? { id: skin.id, name: skin.name, icon: skin.icon };
+  const shownId = variant?.id ?? skin.id;
+  // Algunas variantes no traen render en la API: se mantiene la imagen del skin.
   const mainIcon = shown.icon || skin.icon;
   const isFav = favoriteIds?.has(skin.id) ?? false;
 
@@ -107,27 +98,8 @@ export function SkinPreview({
         </div>
         <div className="skin-preview-name">{skin.name}</div>
         <div className="skin-preview-weapon">
-          {variant ? variant.label : level ? level.label : skin.weapon || 'Skin'}
+          {variant ? variant.label : skin.weapon || 'Skin'}
         </div>
-
-        {levels.length > 1 ? (
-          <div className="skin-preview-row">
-            <span className="spr-label">Niveles</span>
-            <div className="skin-preview-vars">
-              {levels.map((l) => (
-                <button
-                  key={l.id}
-                  className={`skin-preview-var${shownId === l.id ? ' on' : ''}${l.icon ? '' : ' no-img'}`}
-                  onClick={() => { setLevel(l); setVariant(null); }}
-                  title={l.icon ? l.label : `${l.label} · sin render en la API`}
-                >
-                  {l.icon ? <Image src={l.icon} alt="" width={30} height={20} style={{ objectFit: 'contain' }} /> : null}
-                  <span>{l.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
 
         {chromas.length > 1 ? (
           <div className="skin-preview-row">
@@ -137,7 +109,7 @@ export function SkinPreview({
                 <button
                   key={c.id}
                   className={`skin-preview-var${shownId === c.id ? ' on' : ''}${c.icon ? '' : ' no-img'}`}
-                  onClick={() => { setVariant(c); setLevel(null); }}
+                  onClick={() => setVariant(c)}
                   title={c.icon ? c.label : `${c.label} · sin render en la API`}
                 >
                   {c.icon ? <Image src={c.icon} alt="" width={30} height={20} style={{ objectFit: 'contain' }} /> : null}
