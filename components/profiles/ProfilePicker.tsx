@@ -15,7 +15,7 @@ interface ProfilePickerProps {
 }
 
 /**
- * Chips multi-select de perfiles (o single para Auditoría). Los visibles
+ * Chips multi-select de perfiles (o single para Reglas). Los visibles
  * vienen preseleccionados por la página; aquí se puede ajustar y agregar.
  */
 export function ProfilePicker({ profiles, selected, onChange, onAddProfile, max, accent = '#ff4655', single = false, label }: ProfilePickerProps) {

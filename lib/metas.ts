@@ -84,13 +84,6 @@ export const METAS: MetaDef[] = [
   },
 ];
 
-export const TIER_NAMES = ['Unrated','Unrated','Unrated','Iron 1','Iron 2','Iron 3','Bronze 1','Bronze 2','Bronze 3','Silver 1','Silver 2','Silver 3','Gold 1','Gold 2','Gold 3','Platinum 1','Platinum 2','Platinum 3','Diamond 1','Diamond 2','Diamond 3','Ascendant 1','Ascendant 2','Ascendant 3','Immortal 1','Immortal 2','Immortal 3','Radiant'];
-
-export function tierName(t: number | null | undefined): string {
-  if (t == null) return '—';
-  return TIER_NAMES[t] ?? `Tier ${t}`;
-}
-
 export function wrColor(wr: number): string {
   const hue = Math.round((Math.min(Math.max(wr, 0), 70) / 70) * 130);
   return `hsl(${hue} 58% 52%)`;

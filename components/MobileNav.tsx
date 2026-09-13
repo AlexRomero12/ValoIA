@@ -1,10 +1,10 @@
 import Link from 'next/link';
 
-export type NavPage = 'ranked' | 'comparar' | 'team' | 'tienda' | 'auditoria' | 'perfiles';
+export type NavPage = 'ranked' | 'equipo' | 'tienda' | 'reglas' | 'perfiles';
 
 /**
  * Barra HUD inferior para móvil (≤720px): 5 tabs con el activo marcado por el
- * notch angular de la identidad ValoIA. Perfiles queda en el UserMenu.
+ * notch angular de la identidad ValoIA.
  */
 export function MobileNav({ activePage }: { activePage: NavPage }) {
   return (
@@ -13,21 +13,21 @@ export function MobileNav({ activePage }: { activePage: NavPage }) {
         <CrosshairIcon />
         <span>Ranked</span>
       </Link>
-      <Link href="/comparativo" className={activePage === 'comparar' ? 'active' : ''} aria-current={activePage === 'comparar' ? 'page' : undefined}>
-        <BarsIcon />
-        <span>Comparar</span>
-      </Link>
-      <Link href="/team" className={activePage === 'team' ? 'active' : ''} aria-current={activePage === 'team' ? 'page' : undefined}>
+      <Link href="/team" className={activePage === 'equipo' ? 'active' : ''} aria-current={activePage === 'equipo' ? 'page' : undefined}>
         <TeamIcon />
         <span>Equipo</span>
       </Link>
-      <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''} aria-current={activePage === 'auditoria' ? 'page' : undefined}>
+      <Link href="/reglas" className={activePage === 'reglas' ? 'active' : ''} aria-current={activePage === 'reglas' ? 'page' : undefined}>
         <ShieldIcon />
         <span>Reglas</span>
       </Link>
       <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''} aria-current={activePage === 'tienda' ? 'page' : undefined}>
         <BagIcon />
         <span>Tienda</span>
+      </Link>
+      <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''} aria-current={activePage === 'perfiles' ? 'page' : undefined}>
+        <UserIcon />
+        <span>Perfiles</span>
       </Link>
     </nav>
   );
@@ -51,14 +51,6 @@ function CrosshairIcon() {
       <circle cx="12" cy="12" r="7" />
       <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
       <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function BarsIcon() {
-  return (
-    <svg {...svgProps()}>
-      <path d="M5 20v-6M12 20V5M19 20v-9" />
     </svg>
   );
 }
@@ -88,6 +80,15 @@ function ShieldIcon() {
     <svg {...svgProps()}>
       <path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3Z" />
       <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg {...svgProps()}>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M5 20c.8-3.6 3.4-5.4 7-5.4s6.2 1.8 7 5.4" />
     </svg>
   );
 }

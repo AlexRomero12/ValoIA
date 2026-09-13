@@ -16,27 +16,53 @@ interface MatchesTableProps {
   canLoadMore?: boolean;
   /** Solicita más historial (crece limit 10 -> 20 -> 40) */
   onLoadMore?: () => void;
-  /** Filtros activos, controlados desde el padre (también los paneles de winrate filtran) */
-  fMap: string | null;
-  fAgent: string | null;
-  onFilter: (kind: 'map' | 'agent', value: string | null) => void;
+  /** Filtros activos (multi), controlados desde el padre (también los paneles de winrate filtran) */
+  fAgents: string[];
+  fMaps: string[];
+  onToggle: (kind: 'map' | 'agent', value: string) => void;
+  onClear: () => void;
 }
 
-export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap, fAgent, onFilter }: MatchesTableProps) {
+export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgents, fMaps, onToggle, onClear }: MatchesTableProps) {
   const [selected, setSelected] = useState<MatchRow | null>(null);
-  const [openDays, setOpenDays] = useState<string[]>([]);
   const [analysisDay, setAnalysisDay] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
-  const rows = matches.filter((m) => (!fMap || m.map === fMap) && (!fAgent || m.agent === fAgent));
+  const rows = matches.filter(
+    (m) => (!fMaps.length || fMaps.includes(m.map)) && (!fAgents.length || fAgents.includes(m.agent)),
+  );
+  const filtering = fAgents.length > 0 || fMaps.length > 0;
+
+  // Opciones de los selectores: solo lo presente en la ventana, con conteo.
+  const agentOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of matches) counts.set(m.agent, (counts.get(m.agent) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([name, games]) => ({ name, games }))
+      .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name));
+  }, [matches]);
+  const mapOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of matches) counts.set(m.map, (counts.get(m.map) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([name, games]) => ({ name, games }))
+      .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name));
+  }, [matches]);
+  const remainingAgents = agentOptions.filter((o) => !fAgents.includes(o.name));
+  const remainingMaps = mapOptions.filter((o) => !fMaps.includes(o.name));
 
   const days = useMemo(() => groupByDay(rows), [rows]);
   const totalPages = Math.max(1, Math.ceil(days.length / DAYS_PER_PAGE));
   const activePage = Math.min(page, totalPages - 1);
   const pageDays = days.slice(activePage * DAYS_PER_PAGE, activePage * DAYS_PER_PAGE + DAYS_PER_PAGE);
 
-  const toggle = (kind: 'map' | 'agent', value: string) =>
-    onFilter(kind, (kind === 'map' ? fMap : fAgent) === value ? null : value);
+  // Sin filtro: día más reciente expandido (resto colapsado). Con filtro de
+  // agente/mapa: historial completo desplegado. Ranked remonta el componente al
+  // cambiar el filtro (key), así que este inicializador cubre cada cambio y la
+  // paginación arranca de nuevo en la primera página.
+  const [openDays, setOpenDays] = useState<string[]>(() =>
+    filtering ? days.map((d) => d.key) : days.length ? [days[0].key] : [],
+  );
 
   const toggleDay = (key: string) =>
     setOpenDays((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
@@ -45,29 +71,59 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
     <div className="panel">
       <h2>Partidas recientes</h2>
 
-      {(fMap || fAgent) && (
-        <div className="filter-bar">
-          <span>Filtro:</span>
-          {fMap && (
-            <button className="f-chip" onClick={() => onFilter('map', null)}>
-              Mapa: <b>{esc(fMap)}</b> ✕
-            </button>
-          )}
-          {fAgent && (
-            <button className="f-chip" onClick={() => onFilter('agent', null)}>
-              Agente: <b>{esc(fAgent)}</b> ✕
-            </button>
-          )}
-          {fMap && fAgent && (
-            <button
-              className="f-chip"
-              onClick={() => { onFilter('map', null); onFilter('agent', null); }}
-            >
-              Limpiar todo ✕
-            </button>
-          )}
-        </div>
-      )}
+      <div className="history-filters">
+        <span className="hf-label">Filtros</span>
+        {remainingAgents.length ? (
+          <select
+            className="hf-select"
+            value=""
+            aria-label="Agregar filtro de agente"
+            onChange={(e) => {
+              if (e.target.value) onToggle('agent', e.target.value);
+            }}
+          >
+            <option value="">＋ Agente…</option>
+            {remainingAgents.map((o) => (
+              <option key={o.name} value={o.name}>{o.name} · {o.games}p</option>
+            ))}
+          </select>
+        ) : null}
+        {remainingMaps.length ? (
+          <select
+            className="hf-select"
+            value=""
+            aria-label="Agregar filtro de mapa"
+            onChange={(e) => {
+              if (e.target.value) onToggle('map', e.target.value);
+            }}
+          >
+            <option value="">＋ Mapa…</option>
+            {remainingMaps.map((o) => (
+              <option key={o.name} value={o.name}>{o.name} · {o.games}p</option>
+            ))}
+          </select>
+        ) : null}
+        {fAgents.map((a) => (
+          <button key={`a-${a}`} className="f-chip" onClick={() => onToggle('agent', a)} title="Quitar este filtro">
+            Agente: <b>{esc(a)}</b> ✕
+          </button>
+        ))}
+        {fMaps.map((mp) => (
+          <button key={`m-${mp}`} className="f-chip" onClick={() => onToggle('map', mp)} title="Quitar este filtro">
+            Mapa: <b>{esc(mp)}</b> ✕
+          </button>
+        ))}
+        {filtering ? (
+          <button className="f-chip" onClick={onClear} title="Quitar todos los filtros">
+            Limpiar ✕
+          </button>
+        ) : null}
+        <span className="window-info hf-count">
+          {filtering
+            ? `${rows.length} de ${matches.length} partidas · ${days.length} ${days.length === 1 ? 'día' : 'días'}`
+            : `${matches.length} partida${matches.length === 1 ? '' : 's'} · ${days.length} ${days.length === 1 ? 'día' : 'días'}`}
+        </span>
+      </div>
 
       <div className="table-scroll matches-desktop">
         <table className="matches">
@@ -95,44 +151,45 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
                 const head = (
                   <tr key={`day-${g.key}`} className="day-row">
                     <td colSpan={11}>
-                      <button
-                        className="day-head"
-                        title="Ver análisis del día"
-                        onClick={() => setAnalysisDay(g.key)}
-                      >
-                        <span
-                          className={`day-chevron${expanded ? ' on' : ''}`}
-                          role="button"
+                      <div className="day-head">
+                        <button
+                          type="button"
+                          className="day-chevron-btn"
+                          aria-expanded={expanded}
                           aria-label={expanded ? 'Contraer día' : 'Expandir día'}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleDay(g.key);
-                          }}
+                          onClick={() => toggleDay(g.key)}
                         >
-                          ▸
-                        </span>
-                        <span className="day-label">{esc(st.label)}</span>
-                        <span className="day-meta">
-                          {st.matches} partida{st.matches !== 1 ? 's' : ''} ·{' '}
-                          <b className={st.wins >= st.losses ? 'd-win' : 'd-loss'}>
-                            {st.wins}V-{st.losses}D{st.draws > 0 ? `-${st.draws}E` : ''}
-                          </b>
-                          {' '}· KD {st.kd.toFixed(2)} · ACS {st.acs} · ADR {st.adr}
-                        </span>
-                        <span
-                          className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}
-                          title={st.rrMissing > 0 ? `RR de ${st.matches - st.rrMissing}/${st.matches} partidas (${st.rrMissing} sin dato)` : undefined}
+                          <span className={`day-chevron${expanded ? ' on' : ''}`} aria-hidden>▸</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="day-open"
+                          title="Ver análisis del día"
+                          onClick={() => setAnalysisDay(g.key)}
                         >
-                          {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
-                        </span>
-                      </button>
+                          <span className="day-label">{esc(st.label)}</span>
+                          <span className="day-meta">
+                            {st.matches} partida{st.matches !== 1 ? 's' : ''} ·{' '}
+                            <b className={st.wins >= st.losses ? 'd-win' : 'd-loss'}>
+                              {st.wins}V-{st.losses}D{st.draws > 0 ? `-${st.draws}E` : ''}
+                            </b>
+                            {' '}· WR {st.wr.toFixed(0)}% · KD {st.kd.toFixed(2)} · ACS {st.acs} · ADR {st.adr}
+                          </span>
+                          <span
+                            className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}
+                            title={st.rrMissing > 0 ? `RR de ${st.matches - st.rrMissing}/${st.matches} partidas (${st.rrMissing} sin dato)` : undefined}
+                          >
+                            {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
+                          </span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
                 if (!expanded) return [head];
                 return [
                   head,
-                  ...g.matches.map((m) => <MatchRowEl key={m.matchId} m={m} fMap={fMap} fAgent={fAgent} onSelect={() => setSelected(m)} toggle={toggle} />),
+                  ...g.matches.map((m) => <MatchRowEl key={m.matchId} m={m} fMaps={fMaps} fAgents={fAgents} onSelect={() => setSelected(m)} toggle={onToggle} />),
                 ];
               })
             )}
@@ -159,7 +216,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
                       <b className={st.wins >= st.losses ? 'd-win' : 'd-loss'}>
                         {st.wins}V-{st.losses}D{st.draws > 0 ? `-${st.draws}E` : ''}
                       </b>{' '}
-                      · KD {st.kd.toFixed(2)}
+                      · WR {st.wr.toFixed(0)}% · KD {st.kd.toFixed(2)}
                     </span>
                     <span className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}>
                       {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
@@ -212,10 +269,10 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fMap,
   );
 }
 
-function MatchRowEl({ m, fMap, fAgent, onSelect, toggle }: {
+function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
   m: MatchRow;
-  fMap: string | null;
-  fAgent: string | null;
+  fMaps: string[];
+  fAgents: string[];
   onSelect: () => void;
   toggle: (kind: 'map' | 'agent', value: string) => void;
 }) {
@@ -229,7 +286,7 @@ function MatchRowEl({ m, fMap, fAgent, onSelect, toggle }: {
       <td className="date">{fecha}</td>
       <td>
         <span
-          className={`icon-cell clickable${fMap === m.map ? ' filter-on' : ''}`}
+          className={`icon-cell clickable${fMaps.includes(m.map) ? ' filter-on' : ''}`}
           title={`Filtrar por ${m.map}`}
           onClick={(e) => { e.stopPropagation(); toggle('map', m.map); }}
         >
@@ -239,7 +296,7 @@ function MatchRowEl({ m, fMap, fAgent, onSelect, toggle }: {
       </td>
       <td className="agent">
         <span
-          className={`icon-cell clickable${fAgent === m.agent ? ' filter-on' : ''}`}
+          className={`icon-cell clickable${fAgents.includes(m.agent) ? ' filter-on' : ''}`}
           title={`Filtrar por ${m.agent}`}
           onClick={(e) => { e.stopPropagation(); toggle('agent', m.agent); }}
         >

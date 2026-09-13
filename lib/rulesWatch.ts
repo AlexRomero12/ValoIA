@@ -1,4 +1,4 @@
-import { auditDay, mondayOf } from './audit';
+import { evaluateDay, mondayOf } from './rules';
 import { getValSummary } from './valorant';
 import { getStorePrimaryProfile } from './profiles';
 import { getSubscriptions, pushEnabled, sendPush } from './push';
@@ -7,12 +7,12 @@ import { adminUsername } from './auth';
 import type { MatchRow } from './types';
 
 /**
- * Aviso semanal de auditoría (lo ejecuta el cron de instrumentation.ts):
+ * Aviso semanal de reglas (lo ejecuta el cron de instrumentation.ts):
  * cuando la semana anterior ya terminó, calcula para el PERFIL PRINCIPAL sus
  * cortes ignorados y violaciones de pool, y manda UN push resumen con
- * hallazgos. Dedupe en `data/audit-notified.json` (una vez por semana).
+ * hallazgos. Dedupe en `data/rules-notified.json` (una vez por semana).
  *
- * Se puede apagar con VAL_AUDIT_PUSH=0.
+ * Se puede apagar con VAL_RULES_PUSH=0.
  */
 
 interface NotifiedFile {
@@ -21,7 +21,9 @@ interface NotifiedFile {
   sentAt: number;
 }
 
-const NOTIFIED_FILE = 'audit-notified.json';
+const NOTIFIED_FILE = 'rules-notified.json';
+/** Archivo previo al rename (compat de dedupe semanal). */
+const LEGACY_NOTIFIED_FILE = 'audit-notified.json';
 const READY_HOUR = 9;
 
 function dayKey(ts: number): string {
@@ -34,7 +36,7 @@ function fmtRR(v: number | null): string {
   return `${v > 0 ? '+' : ''}${v}`;
 }
 
-export interface AuditWatchResult {
+export interface RulesWatchResult {
   checked: boolean;
   week: string | null;
   sent: number;
@@ -46,9 +48,11 @@ export interface AuditWatchResult {
  * Comprueba si la semana pasada está lista para notificar y, si no se avisó
  * aún, envía el resumen. Corre desde el cron; es idempotente por semana.
  */
-export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResult> {
-  if (process.env.VAL_AUDIT_PUSH === '0') {
-    return { checked: false, week: null, sent: 0, failed: 0, skipped: 'VAL_AUDIT_PUSH=0' };
+export async function watchWeeklyRules(now = Date.now()): Promise<RulesWatchResult> {
+  // Compat: el nombre viejo del flag sigue apagándolo.
+  const pushOff = process.env.VAL_RULES_PUSH ?? process.env.VAL_AUDIT_PUSH;
+  if (pushOff === '0') {
+    return { checked: false, week: null, sent: 0, failed: 0, skipped: 'VAL_RULES_PUSH=0' };
   }
   if (!pushEnabled()) {
     return { checked: false, week: null, sent: 0, failed: 0, skipped: 'push no configurado' };
@@ -71,7 +75,8 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
   }
 
   const notified = readData<NotifiedFile>(NOTIFIED_FILE, { week: '', sentAt: 0 });
-  if (notified.week === week) {
+  const legacyNotified = readData<NotifiedFile>(LEGACY_NOTIFIED_FILE, { week: '', sentAt: 0 });
+  if (notified.week === week || legacyNotified.week === week) {
     return { checked: false, week, sent: 0, failed: 0, skipped: 'ya notificada' };
   }
 
@@ -87,7 +92,7 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
     const summary = await getValSummary({ days: daysBack, playerId: profile.id, maxFetch: 40 });
     matches = (summary.matches ?? []).filter((m) => m.timestamp >= lastMonday.getTime() && m.timestamp < weekEnd);
   } catch (e) {
-    console.error(`[audit] ${profile.label}: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(`[rules] ${profile.label}: ${e instanceof Error ? e.message : String(e)}`);
     writeData(NOTIFIED_FILE, { week, sentAt: Date.now() });
     return { checked: true, week, sent: 0, failed: 0, skipped: 'error al cargar partidas' };
   }
@@ -111,7 +116,7 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
   let rrReal = 0;
   let poolLoss = 0;
   for (const list of byDay.values()) {
-    const day = auditDay(list, profile.audit);
+    const day = evaluateDay(list, profile.rules);
     if (day.cutIgnored) cutIgnored += 1;
     violations += day.violationCount;
     banned += day.bannedCount;
@@ -135,9 +140,9 @@ export async function watchWeeklyAudit(now = Date.now()): Promise<AuditWatchResu
 
   const res = await sendPush(
     {
-      title: `Auditoría semanal · ${profile.label}`,
+      title: `Reglas semanales · ${profile.label}`,
       body: `${record} en ${matches.length}p · ${fmtRR(Math.round(rrReal))} RR · ${findings.join(' · ')}`,
-      url: '/auditoria',
+      url: '/reglas',
     },
     owner,
   );

@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQueries } from '@tanstack/react-query';
 import { TopBar, RankChip } from '@/components/TopBar';
 import { TierIcon } from '@/components/TierIcon';
@@ -10,12 +11,15 @@ import { WrPanel } from '@/components/WrPanel';
 import { ArsenalPanel } from '@/components/ArsenalPanel';
 import { TierChart } from '@/components/TierChart';
 import { MatchesTable } from '@/components/MatchesTable';
+import { FormStrip } from '@/components/FormStrip';
+import { RankedTabs, isRankedTab, type RankedTab } from '@/components/ranked/RankedTabs';
+import { StatsTable } from '@/components/ranked/StatsTable';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useProfiles, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { useCooldown } from '@/lib/useCooldown';
 import { mergeAccountSummaries } from '@/lib/compare';
 import { memberAccounts } from '@/lib/profileTypes';
-import { tierName } from '@/lib/metas';
+import { tierName } from '@/lib/ranks';
 import type { ValSummary } from '@/lib/types';
 
 type WindowValue = 'season' | '7' | '14' | '30' | '90';
@@ -28,15 +32,37 @@ function sleep(ms: number): Promise<void> {
 }
 
 export default function ValorantPage() {
+  // `useSearchParams` exige un Suspense boundary en páginas prerenderizadas.
+  return (
+    <Suspense fallback={null}>
+      <RankedPage />
+    </Suspense>
+  );
+}
+
+function RankedPage() {
   const [win, setWin] = useState<WindowValue>('season');
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [want, setWant] = useState<number>(DEFAULT_LIMIT);
-  const [fMap, setFMap] = useState<string | null>(null);
-  const [fAgent, setFAgent] = useState<string | null>(null);
+  const [fMaps, setFMaps] = useState<string[]>([]);
+  const [fAgents, setFAgents] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
   const cooldown = useCooldown(60);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: RankedTab = isRankedTab(tabParam) ? tabParam : 'resumen';
+  const goTab = (next: RankedTab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === 'resumen') params.delete('tab');
+    else params.set('tab', next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const profilesQ = useProfiles();
   const profiles = useMemo(() => (profilesQ.data ?? []).filter((p) => p.visible), [profilesQ.data]);
@@ -149,9 +175,27 @@ export default function ValorantPage() {
   const agentRows = (data?.byAgent ?? []).map((a) => ({ ...a, name: a.agent }));
   const mapRows = (data?.byMap ?? []).map((m) => ({ ...m, name: m.map }));
 
-  const onFilter = (kind: 'map' | 'agent', value: string | null) => (kind === 'map' ? setFMap : setFAgent)(value);
-  const toggleFilter = (kind: 'map' | 'agent', value: string) =>
-    onFilter(kind, (kind === 'map' ? fMap : fAgent) === value ? null : value);
+  // Filtros multi: OR dentro del mismo tipo, AND entre tipos.
+  const toggleFilter = (kind: 'map' | 'agent', value: string) => {
+    const setter = kind === 'map' ? setFMaps : setFAgents;
+    setter((cur) => (cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]));
+  };
+  const clearFilters = () => {
+    setFMaps([]);
+    setFAgents([]);
+  };
+  // Desde las tablas de Agentes/Mapas: la selección ya está aplicada, solo vuelve al historial.
+  const goHistory = () => {
+    goTab('resumen');
+    window.setTimeout(() => document.getElementById('historial')?.scrollIntoView({ block: 'start' }), 60);
+  };
+  const filteredMatches = useMemo(
+    () =>
+      (data?.matches ?? []).filter(
+        (m) => (!fMaps.length || fMaps.includes(m.map)) && (!fAgents.length || fAgents.includes(m.agent)),
+      ),
+    [data, fMaps, fAgents],
+  );
 
   const loadingProfiles = profilesQ.isLoading;
   const coldLoad = Boolean(activeId) && anyLoading && loadedAccounts === 0;
@@ -266,29 +310,87 @@ export default function ValorantPage() {
             </p>
           ) : null}
 
-          <KpiGrid kpis={data.kpis} accent="#ff4655" />
+          <RankedTabs tab={tab} onTab={goTab} />
 
-          <div className="two-col" style={{ ['--accent-row' as string]: '#ff4655' }}>
-            <WrPanel label="Agente" rows={agentRows} icons={agentIcons} active={fAgent} onPick={(name) => toggleFilter('agent', name)} limit={6} />
-            <WrPanel label="Mapa" rows={mapRows} icons={mapIcons} active={fMap} onPick={(name) => toggleFilter('map', name)} />
-          </div>
+          {tab === 'resumen' && (
+            <>
+              <FormStrip matches={data.matches} />
 
-          <MatchesTable
-            matches={data.matches}
-            playerId={activeId}
-            fMap={fMap}
-            fAgent={fAgent}
-            onFilter={onFilter}
-            canLoadMore={canLoadMore}
-            onLoadMore={loadMore}
-          />
+              <KpiGrid kpis={data.kpis} prev={data.prev} accent="#ff4655" />
 
-          <ArsenalPanel arsenal={data.arsenal} />
+              <div id="historial">
+                <MatchesTable
+                  key={`${[...fMaps].sort().join(',')}|${[...fAgents].sort().join(',')}`}
+                  matches={data.matches}
+                  playerId={activeId}
+                  fAgents={fAgents}
+                  fMaps={fMaps}
+                  onToggle={toggleFilter}
+                  onClear={clearFilters}
+                  canLoadMore={canLoadMore}
+                  onLoadMore={loadMore}
+                />
+              </div>
 
-          <div className="panel">
-            <h2>Trend de rango</h2>
-            <TierChart matchesAsc={[...data.matches].reverse()} />
-          </div>
+              <div className="two-col" style={{ ['--accent-row' as string]: '#ff4655' }}>
+                <WrPanel
+                  label="Agente"
+                  rows={agentRows}
+                  icons={agentIcons}
+                  active={fAgents}
+                  onPick={(name) => toggleFilter('agent', name)}
+                  limit={3}
+                  onMore={() => goTab('agentes')}
+                />
+                <WrPanel
+                  label="Mapa"
+                  rows={mapRows}
+                  icons={mapIcons}
+                  active={fMaps}
+                  onPick={(name) => toggleFilter('map', name)}
+                  limit={3}
+                  onMore={() => goTab('mapas')}
+                />
+              </div>
+
+              <div className="panel">
+                <h2>Trend de rango</h2>
+                <TierChart matchesAsc={[...data.matches].reverse()} />
+              </div>
+            </>
+          )}
+
+          {tab === 'agentes' && (
+            <StatsTable
+              title="Estadísticas · Agentes"
+              firstCol="Agente"
+              noun="agente"
+              rows={agentRows}
+              icons={agentIcons}
+              kind="agent-icon"
+              active={fAgents}
+              onPick={(name) => toggleFilter('agent', name)}
+              filteredCount={filteredMatches.length}
+              onViewHistory={goHistory}
+            />
+          )}
+
+          {tab === 'mapas' && (
+            <StatsTable
+              title="Estadísticas · Mapas"
+              firstCol="Mapa"
+              noun="mapa"
+              rows={mapRows}
+              icons={mapIcons}
+              kind="map-icon"
+              active={fMaps}
+              onPick={(name) => toggleFilter('map', name)}
+              filteredCount={filteredMatches.length}
+              onViewHistory={goHistory}
+            />
+          )}
+
+          {tab === 'arsenal' && <ArsenalPanel arsenal={data.arsenal} />}
         </>
       )}
     </div>

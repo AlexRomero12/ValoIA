@@ -146,7 +146,7 @@ export function RequestsPanel({ onPending }: { onPending?: (n: number) => void }
               <div key={r.id} className="user-row off">
                 <div className="user-row-main">
                   <b>{r.username}</b>
-                  <span className={`audit-falta${r.status === 'approved' ? '' : ' bad'}`}>
+                  <span className={`rules-falta${r.status === 'approved' ? '' : ' bad'}`}>
                     {r.status === 'approved' ? 'aprobada' : 'rechazada'}
                   </span>
                   <span className="window-info">por {r.decidedBy ?? '—'}</span>

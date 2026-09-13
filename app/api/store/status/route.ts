@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getStoreFront, refreshStoreFront, rsoStatus } from '@/lib/riotClient';
+import { getStoreFront, refreshStoreFront, rsoHealth } from '@/lib/riotClient';
 import { getFavorites, type FavoriteSkin } from '@/lib/favorites';
 import { getSkinsCatalog } from '@/lib/skins';
 import { pushEnabled, pushConfig, getSubscriptions } from '@/lib/push';
@@ -38,7 +38,16 @@ export interface StoreStatusResponse {
     items: Array<{ itemId: string; price?: number; name: string; icon: string; weapon: string }>;
   } | null;
   favorites: Array<FavoriteSkin & { inStoreToday: boolean; price?: number; notified: boolean }>;
-  rso: { status: 'ok' | 'needs_2fa' | 'needs_cookie'; needsCode: boolean };
+  rso: {
+    status: 'ok' | 'needs_2fa' | 'needs_cookie';
+    needsCode: boolean;
+    /** Cuándo se conectó la sesión de tienda (null en sesiones viejas). */
+    connectedAt: number | null;
+    /** Estimación de caducidad (heurística, según jar completo o solo ssid). */
+    estimateExpiresAt: number | null;
+    /** true = queda poco para la estimación: conviene reconectar. */
+    expiringSoon: boolean;
+  };
   push: { enabled: boolean; publicKey: string; subscribed: boolean; count: number };
   error?: string;
 }
@@ -100,7 +109,7 @@ export async function GET(req: NextRequest) {
 
     const cfg = pushConfig();
     const subs = getSubscriptions(user);
-    const rso = await rsoStatus(user);
+    const health = await rsoHealth(user);
     const sourceDetail = front.source === 'rso' ? 'Respaldo RSO' : 'Sin conexión';
 
     const profiles = listProfilesFor(viewer);
@@ -123,7 +132,13 @@ export async function GET(req: NextRequest) {
       daily,
       bundle,
       favorites: favoritesEnriched,
-      rso: { status: rso, needsCode: rso === 'needs_2fa' },
+      rso: {
+        status: health.status,
+        needsCode: health.status === 'needs_2fa',
+        connectedAt: health.connectedAt,
+        estimateExpiresAt: health.estimateExpiresAt,
+        expiringSoon: health.expiringSoon,
+      },
       push: {
         enabled: pushEnabled(),
         publicKey: cfg?.publicKey ?? '',

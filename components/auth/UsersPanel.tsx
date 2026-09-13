@@ -20,7 +20,7 @@ type Msg = { kind: 'ok' | 'error'; text: string } | null;
 /**
  * Mi cuenta / Usuarios + Sesiones.
  * - Admin: crea usuarios (contraseña temporal con cambio forzado), resetea
- *   contraseñas, borra y audita sesiones (todas o por usuario).
+ *   contraseñas, borra y revisa sesiones (todas o por usuario).
  * - Usuario: cambia su propia contraseña (verificando la actual) y ve sus
  *   dispositivos conectados.
  */
@@ -229,7 +229,7 @@ export function UsersPanel() {
                     <b>{u.username}</b>
                     {u.admin ? <span className="profile-primary-badge">admin</span> : null}
                     {u.username === self ? <span className="profile-primary-badge">tú</span> : null}
-                    {u.mustChangePassword ? <span className="audit-warn">debe cambiar contraseña</span> : null}
+                    {u.mustChangePassword ? <span className="rules-warn">debe cambiar contraseña</span> : null}
                     <span className="window-info">desde {new Date(u.createdAt).toLocaleDateString('es')}</span>
                     {admin && u.createdIp ? <span className="window-info">IP {u.createdIp}</span> : null}
                   </div>

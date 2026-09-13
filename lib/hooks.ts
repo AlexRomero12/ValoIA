@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ValSummary, AgentIconInfo } from './types';
 import type { MatchDetail } from './matchDetail';
-import type { Profile, AuditRules } from './profileTypes';
+import type { Profile, SessionRules } from './profileTypes';
 
 export type ValWindowMode =
   | { kind: 'season' }
@@ -113,7 +113,7 @@ export interface ProfileMutation {
   profiles?: Profile[];
 }
 
-export type ProfileInput = Omit<Partial<Profile>, 'audit'> & { name: string; tag: string; audit?: AuditRules | null };
+export type ProfileInput = Omit<Partial<Profile>, 'rules'> & { name: string; tag: string; rules?: SessionRules | null };
 
 /** Acciones de perfiles contra la API + invalidación de la caché local. */
 export function useProfileActions() {
@@ -129,6 +129,9 @@ export function useProfileActions() {
     if (!res.ok || json.error) return { ok: false, error: (json as { error?: string }).error || 'No se pudo guardar el perfil' };
     const profiles = (json.profiles ?? []) as Profile[];
     client.setQueryData(PROFILES_KEY, profiles);
+    // Refresca también desde el servidor: garantiza que lo normalizado en el
+    // guardado (p. ej. rulesVersion) se refleje en cualquier vista activa.
+    void client.invalidateQueries({ queryKey: PROFILES_KEY });
     return { ok: true, profiles };
   };
 

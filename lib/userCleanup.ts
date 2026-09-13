@@ -4,7 +4,7 @@ import { removeUserSubscriptions } from './push';
 /**
  * Borra los datos privados de un usuario al eliminarlo:
  * favoritas, tokens RSO, dedupe de notificaciones y suscripciones push.
- * (Las notas por partida y los snapshots de auditoría quedan por autor/perfil;
+ * (Las notas por partida y los snapshots de reglas quedan por autor/perfil;
  * los perfiles del usuario se borran aparte desde el panel.)
  */
 

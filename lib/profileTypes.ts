@@ -16,21 +16,48 @@ export interface ProfilePref {
 }
 
 /** Regla de pool de un mapa: principales y backups. */
-export interface AuditPoolRule {
+export interface PoolRule {
   main: string[];
   backup: string[];
 }
 
+/** Límites del pool: un principal y hasta dos backups por mapa. */
+export const POOL_MAIN_MAX = 1;
+export const POOL_BACKUP_MAX = 2;
+
+/** Normaliza una regla de pool: sin duplicados, 1 principal y hasta 2 backups. */
+export function clampPoolRule(rule?: Partial<PoolRule> | null): PoolRule {
+  const main = [...new Set(rule?.main ?? [])].slice(0, POOL_MAIN_MAX);
+  const mainSet = new Set(main);
+  const backup = [...new Set(rule?.backup ?? [])]
+    .filter((a) => !mainSet.has(a))
+    .slice(0, POOL_BACKUP_MAX);
+  return { main, backup };
+}
+
+/** Aplica los límites del pool a todas las reglas (default y por mapa). */
+export function clampRulesPools(rules: SessionRules): SessionRules {
+  return {
+    ...rules,
+    pool: {
+      default: rules.pool.default ? clampPoolRule(rules.pool.default) : undefined,
+      byMap: Object.fromEntries(
+        Object.entries(rules.pool.byMap).map(([map, rule]) => [map, clampPoolRule(rule)]),
+      ),
+    },
+  };
+}
+
 /**
- * Reglas de auditoría por perfil. `rulesVersion` sube al editar y acompaña a
+ * Reglas de sesión por perfil. `rulesVersion` sube al editar y acompaña a
  * los snapshots: cambiar reglas no reescribe la evaluación de semanas viejas.
  */
-export interface AuditRules {
+export interface SessionRules {
   rulesVersion: number;
   pool: {
     /** Regla para mapas sin entrada en `byMap` */
-    default?: AuditPoolRule;
-    byMap: Record<string, AuditPoolRule>;
+    default?: PoolRule;
+    byMap: Record<string, PoolRule>;
   };
   bannedAgents: string[];
   bannedRoles: string[];
@@ -55,15 +82,15 @@ export interface Profile {
   color?: string;
   /** Aparece en los selectores de Ranked (y por defecto en el resto). */
   visible: boolean;
-  /** Perfil principal del DUEÑO: es el único que audita su página Auditoría. */
+  /** Perfil principal del DUEÑO: es el único que se evalúa en la página Reglas. */
   primary?: boolean;
   /** Usuario dueño del perfil (aislamiento; el admin ve todos). */
   owner?: string;
   /** Cuentas alternativas del mismo jugador (stats mezcladas en Comparar). */
   accounts?: ProfileAccount[];
   prefs?: ProfilePref[];
-  /** Reglas de auditoría; ausente = defaults globales sin pool. */
-  audit?: AuditRules;
+  /** Reglas de sesión; ausente = defaults globales sin pool. */
+  rules?: SessionRules;
 }
 
 /** Lista de cuentas (principal + alternativas) de un perfil. */
@@ -104,7 +131,7 @@ export function profileColor(profile: Pick<Profile, 'color'>, index = 0): string
   return profile.color || PROFILE_COLORS[index % PROFILE_COLORS.length];
 }
 
-/** Perfil principal (o el primer visible, o el primero) — para Auditoría. */
+/** Perfil principal (o el primer visible, o el primero) — para Reglas. */
 export function primaryOf(profiles: Profile[]): Profile | undefined {
   return profiles.find((p) => p.primary) ?? profiles.find((p) => p.visible) ?? profiles[0];
 }
@@ -125,7 +152,7 @@ export function slugifyId(label: string, taken: Set<string>): string {
 }
 
 /** Regla de pool de un mapa: `byMap[mapa]` o la default (o null si no hay). */
-export function poolRuleFor(rules: AuditRules | undefined, map: string): AuditPoolRule | null {
+export function poolRuleFor(rules: SessionRules | undefined, map: string): PoolRule | null {
   if (!rules) return null;
   const mapRule = rules.pool.byMap[map];
   if (mapRule && (mapRule.main.length > 0 || mapRule.backup.length > 0)) return mapRule;
@@ -135,7 +162,7 @@ export function poolRuleFor(rules: AuditRules | undefined, map: string): AuditPo
 }
 
 /** Reglas vacías (solo defaults de corte/pausa) para el editor. */
-export function emptyAuditRules(): AuditRules {
+export function emptySessionRules(): SessionRules {
   return {
     rulesVersion: 1,
     pool: { default: { main: [], backup: [] }, byMap: {} },
@@ -148,6 +175,42 @@ export function emptyAuditRules(): AuditRules {
 }
 
 /** Copia profunda de reglas (al duplicar/copiar entre perfiles). */
-export function cloneAuditRules(rules: AuditRules): AuditRules {
-  return JSON.parse(JSON.stringify(rules)) as AuditRules;
+export function cloneSessionRules(rules: SessionRules): SessionRules {
+  return JSON.parse(JSON.stringify(rules)) as SessionRules;
+}
+
+/**
+ * Compara el contenido de dos reglas ignorando `rulesVersion` y el orden de
+ * listas/mapas: sirve para saber si una propuesta ya está aplicada tal cual.
+ */
+export function sameRulesContent(a?: SessionRules | null, b?: SessionRules | null): boolean {
+  if (!a || !b) return false;
+  const normRule = (r?: PoolRule) => ({
+    main: [...(r?.main ?? [])].sort(),
+    backup: [...(r?.backup ?? [])].sort(),
+  });
+  const norm = (r: SessionRules) =>
+    JSON.stringify({
+      pool: {
+        default: normRule(r.pool.default),
+        byMap: Object.fromEntries(
+          Object.entries(r.pool.byMap)
+            .sort(([x], [y]) => x.localeCompare(y))
+            .map(([k, v]) => [k, normRule(v)]),
+        ),
+      },
+      bannedAgents: [...r.bannedAgents].sort(),
+      bannedRoles: [...r.bannedRoles].sort(),
+      stop: { losses: r.stop.losses, kdBelow: r.stop.kdBelow },
+      sessions: { gapMinutes: r.sessions.gapMinutes },
+      goals: {
+        wr: r.goals.wr,
+        kd: r.goals.kd,
+        acs: r.goals.acs,
+        hsPct: r.goals.hsPct,
+        adr: r.goals.adr,
+        fbPositive: r.goals.fbPositive,
+      },
+    });
+  return norm(a) === norm(b);
 }

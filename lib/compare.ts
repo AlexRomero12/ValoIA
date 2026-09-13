@@ -1,4 +1,5 @@
-import type { ArsenalRow, MatchRow, ValArsenal, ValSummary } from './types';
+import type { ArsenalRow, MatchRow, ValArsenal, ValKpis, ValSummary } from './types';
+import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 
 export interface CompareFilters {
   agents: string[];
@@ -31,76 +32,6 @@ export function applyFilters(ms: MatchRow[], f: CompareFilters): MatchRow[] {
   });
 }
 
-export interface PlayerStats {
-  games: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  wr: number;
-  kd: number;
-  acs: number;
-  adr: number;
-  hsPct: number;
-  rrTotal: number | null;
-  /** Partidas sin dato de RR (la API solo devuelve ~20 recientes): rrTotal es parcial si > 0. */
-  rrMissing: number;
-}
-export function statsFromMatches(ms: MatchRow[]): PlayerStats {
-  let wins = 0;
-  let draws = 0;
-  let kills = 0;
-  let deaths = 0;
-  let scoreW = 0;
-  let dmgW = 0;
-  let hsW = 0;
-  let hsRaw = 0;
-  let shotsRaw = 0;
-  let rounds = 0;
-  let rr = 0;
-  let hasRr = false;
-  let rrMissing = 0;
-
-  for (const m of ms) {
-    // Empate (marcador igualado): no cuenta ni como victoria ni como derrota.
-    if (m.roundsWon === m.roundsLost) draws += 1;
-    else if (m.won) wins += 1;
-    kills += m.kills;
-    deaths += m.deaths;
-    // Totales crudos cuando existen (misma regla que dayAnalysis.ts): reconstruir
-    // desde el ACS/ADR redondeado mete hasta ±0.5 por partida y diverge entre vistas.
-    const rds = Math.max(1, m.rounds);
-    scoreW += m.score ?? m.acs * rds;
-    dmgW += m.damageDealt ?? m.adr * rds;
-    hsW += m.hsPct * rds;
-    hsRaw += m.headshots ?? 0;
-    shotsRaw += m.shots ?? 0;
-    rounds += rds;
-    if (m.rrDelta != null) {
-      rr += m.rrDelta;
-      hasRr = true;
-    } else {
-      rrMissing += 1;
-    }
-  }
-  const games = ms.length;
-  const decisive = games - draws;
-  return {
-    games,
-    wins,
-    losses: games - wins - draws,
-    draws,
-    wr: decisive ? (wins / decisive) * 100 : 0,
-    kd: deaths ? kills / deaths : kills > 0 ? kills : 0,
-    acs: rounds ? scoreW / rounds : 0,
-    adr: rounds ? dmgW / rounds : 0,
-    // HS% por conteo directo cuando hay crudos; si no (proveedor Riot),
-    // promedio ponderado del HS% por partida.
-    hsPct: shotsRaw ? (hsRaw / shotsRaw) * 100 : rounds ? hsW / rounds : 0,
-    rrTotal: hasRr ? rr : null,
-    rrMissing,
-  };
-}
-
 export type ResolvedGranularity = 'day' | 'week';
 export type Granularity = ResolvedGranularity | 'auto';
 export type MetricKey = 'wr' | 'acs' | 'kd' | 'rank';
@@ -128,7 +59,7 @@ export function agentCombos(
       else byAgent.set(m.agent, [m]);
     }
     for (const [agent, ms] of byAgent) {
-      const stats = statsFromMatches(ms);
+      const stats = computeStats(ms);
       if (stats.games < minGames) continue;
       out.push({ playerId: p.id, agent, stats });
     }
@@ -166,7 +97,7 @@ export function agentMatrix(
       const key = `${p.id}|${m.agent}`;
       const c = cells.get(key) ?? { games: 0, wins: 0, losses: 0, draws: 0, wr: 0 };
       c.games += 1;
-      // Empate: no cuenta como victoria ni derrota (misma regla que statsFromMatches).
+      // Empate: no cuenta como victoria ni derrota (misma regla que computeStats).
       if (m.roundsWon === m.roundsLost) c.draws += 1;
       else if (m.won) c.wins += 1;
       cells.set(key, c);
@@ -202,24 +133,6 @@ export interface BucketPoint {
 
 // ---------- Rango (tier + RR) como métrica ----------
 
-const TIER_SHORT: Record<number, string> = {
-  0: 'UR', 3: 'I1', 4: 'I2', 5: 'I3',
-  6: 'B1', 7: 'B2', 8: 'B3',
-  9: 'S1', 10: 'S2', 11: 'S3',
-  12: 'G1', 13: 'G2', 14: 'G3',
-  15: 'P1', 16: 'P2', 17: 'P3',
-  18: 'D1', 19: 'D2', 20: 'D3',
-  21: 'A1', 22: 'A2', 23: 'A3',
-  24: 'IM1', 25: 'IM2', 26: 'IM3',
-  27: 'RAD',
-};
-
-/** Nombre corto de un tier (17 → "P3", 18 → "D1", 27+ → "RAD"). */
-export function tierShort(tier: number): string {
-  if (tier >= 27) return 'RAD';
-  return TIER_SHORT[tier] ?? `T${tier}`;
-}
-
 /**
  * Puntos de rango de una partida: tier * 100 + RR dentro del tier
  * (P3 = 1700-1799, D1 = 1800-1899, D2 = 1900-1999…). Continuo entre tiers:
@@ -253,22 +166,16 @@ function keyFor(ts: number, gran: ResolvedGranularity): { key: string; label: st
     return { key, label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}` };
   }
   const mo = mondayOf(d);
-  // Semana con mes 1-indexado y pads (mismo formato que lib/audit.ts): sin pad,
+  // Semana con mes 1-indexado y pads (mismo formato que lib/rules.ts): sin pad,
   // el orden lexicográfico rompía el eje X (w-2026-7-11 < w-2026-7-4).
   const key = `w-${mo.getFullYear()}-${String(mo.getMonth() + 1).padStart(2, '0')}-${String(mo.getDate()).padStart(2, '0')}`;
   return { key, label: `${String(mo.getDate()).padStart(2, '0')}/${String(mo.getMonth() + 1).padStart(2, '0')}` };
 }
 
-interface Acc {
+interface BucketAcc {
   key: string;
   label: string;
-  games: number;
-  wins: number;
-  draws: number;
-  kills: number;
-  deaths: number;
-  acsW: number;
-  rounds: number;
+  ms: MatchRow[];
 }
 
 export function buildTimeline(
@@ -288,32 +195,27 @@ export function buildTimeline(
         return { key: `${key}#${m.timestamp}-${i}`, label, value: rankPointsOf(m), games: 1, approx: m.tierApprox ?? false };
       });
   }
-  const accs = new Map<string, Acc>();
+  const accs = new Map<string, BucketAcc>();
   for (const m of ms) {
     const { key, label } = keyFor(m.timestamp, gran);
     let a = accs.get(key);
     if (!a) {
-      a = { key, label, games: 0, wins: 0, draws: 0, kills: 0, deaths: 0, acsW: 0, rounds: 0 };
+      a = { key, label, ms: [] };
       accs.set(key, a);
     }
-    a.games += 1;
-    if (m.roundsWon === m.roundsLost) a.draws += 1;
-    else if (m.won) a.wins += 1;
-    a.kills += m.kills;
-    a.deaths += m.deaths;
-    a.acsW += m.acs * Math.max(1, m.rounds);
-    a.rounds += Math.max(1, m.rounds);
+    a.ms.push(m);
   }
 
   const buckets = [...accs.values()]
     .sort((a, b) => (a.key < b.key ? -1 : 1))
     .map((a) => {
+      const s = computeStats(a.ms);
       let value: number | null = null;
-      if (metric === 'wr') value = a.games - a.draws ? (a.wins / (a.games - a.draws)) * 100 : null;
-      else if (metric === 'acs') value = a.rounds ? a.acsW / a.rounds : null;
+      if (metric === 'wr') value = s.games - s.draws ? s.wr : null;
+      else if (metric === 'acs') value = s.games ? s.acs : null;
       // 'rank' retorna antes (un punto por partida); aquí solo queda 'kd'.
-      else value = a.deaths ? a.kills / a.deaths : a.games ? 0 : null;
-      return { key: a.key, label: a.label, value, games: a.games };
+      else value = s.games ? s.kd : null;
+      return { key: a.key, label: a.label, value, games: s.games };
     });
 
   // Relleno de días vacíos: en rangos cortos (una semana, p. ej.) el eje X
@@ -380,12 +282,7 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
     if ((s.currentElo ?? -1) > (best.currentElo ?? -1)) best = s;
   }
 
-  const st = statsFromMatches(matches);
-  // Impacto (FB/FD): statsFromMatches no lo calcula; se promedia sobre las
-  // partidas unidas igual que el summary de una sola cuenta. Sin esto, los
-  // perfiles multi-cuenta se quedaban sin las tarjetas FB/FD en Ranked.
-  const fb = matches.length ? matches.reduce((a, m) => a + (m.firstBloods ?? 0), 0) / matches.length : undefined;
-  const fd = matches.length ? matches.reduce((a, m) => a + (m.firstDeaths ?? 0), 0) / matches.length : undefined;
+  const st = computeStats(matches);
   const fetchedMatches = ok.reduce((a, s) => a + (s.window?.fetchedMatches ?? 0), 0);
   const archivedMatches = ok.reduce((a, s) => a + (s.window?.archivedMatches ?? 0), 0);
   const syncedAt = ok.reduce<string | null>(
@@ -402,36 +299,19 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
   // Agregados por agente/mapa y arsenal: se recalculan sobre las partidas
   // mezcladas para que Ranked (que usa `byAgent`/`byMap`/`arsenal`) muestre
   // las stats combinadas de todas las cuentas.
-  const groupsOf = (pick: (m: MatchRow) => string) => {
-    const groups = new Map<string, MatchRow[]>();
-    for (const m of matches) {
-      const k = pick(m);
-      const list = groups.get(k) ?? [];
-      list.push(m);
-      groups.set(k, list);
-    }
-    return [...groups.entries()]
-      .map(([key, list]) => {
-        const g = statsFromMatches(list);
-        return {
-          key,
-          name: key,
-          matches: g.games,
-          wins: g.wins,
-          draws: g.draws,
-          wr: g.wr,
-          kd: g.kd,
-          acs: g.acs,
-          adr: g.adr,
-          hsPct: g.hsPct,
-        };
-      })
+  const groupsOf = (pick: (m: MatchRow) => string) =>
+    [...groupMatches(matches, pick).entries()]
+      .map(([key, list]) => ({
+        key,
+        name: key,
+        ...toStatBlock(computeStats(list)),
+      }))
       .sort((a, b) => b.matches - a.matches);
-  };
 
   const byAgent = groupsOf((m) => m.agent).map(({ key, ...g }) => ({ agent: key, ...g }));
   const byMap = groupsOf((m) => m.map).map(({ key, ...g }) => ({ map: key, ...g }));
   const arsenal = mergeArsenal(ok.map((s) => s.arsenal).filter((a): a is ValArsenal => a != null));
+  const prev = mergePrevKpis(ok.map((s) => s.prev).filter((p): p is ValKpis => p != null));
 
   return {
     generatedAt: ok[0].generatedAt,
@@ -460,9 +340,10 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
       acs: st.acs,
       adr: st.adr,
       hsPct: st.hsPct,
-      fb,
-      fd,
+      fb: st.fb,
+      fd: st.fd,
     },
+    prev,
     currentTier: best.currentTier,
     startTier: best.startTier,
     currentElo: best.currentElo,
@@ -495,5 +376,43 @@ function mergeArsenal(list: ValArsenal[]): ValArsenal | undefined {
     rows: [...byWeapon.values()].sort((a, b) => b.kills - a.kills || b.deaths - a.deaths),
     totalKills: list.reduce((a, s) => a + s.totalKills, 0),
     totalFirstBloods: list.reduce((a, s) => a + s.totalFirstBloods, 0),
+  };
+}
+
+/**
+ * Ventana anterior combinada de varias cuentas: se agregan V-D-E y se ponderan
+ * las medias por partidas (aproximación suficiente para los deltas de KPIs).
+ */
+function mergePrevKpis(list: ValKpis[]): ValKpis | null {
+  if (list.length === 0) return null;
+  if (list.length === 1) return list[0];
+  const total = list.reduce((a, p) => a + p.matches, 0);
+  if (!total) return null;
+  const weighted = (pick: (p: ValKpis) => number | undefined): number | undefined => {
+    let sum = 0;
+    let weight = 0;
+    for (const p of list) {
+      const v = pick(p);
+      if (v == null || !Number.isFinite(v)) continue;
+      sum += v * p.matches;
+      weight += p.matches;
+    }
+    return weight ? sum / weight : undefined;
+  };
+  const wins = list.reduce((a, p) => a + p.wins, 0);
+  const draws = list.reduce((a, p) => a + (p.draws ?? 0), 0);
+  const decisive = total - draws;
+  return {
+    matches: total,
+    wins,
+    losses: total - wins - draws,
+    draws,
+    wr: decisive ? (wins / decisive) * 100 : 0,
+    kd: weighted((p) => p.kd) ?? 0,
+    acs: Math.round(weighted((p) => p.acs) ?? 0),
+    adr: Math.round(weighted((p) => p.adr) ?? 0),
+    hsPct: weighted((p) => p.hsPct) ?? 0,
+    fb: weighted((p) => p.fb),
+    fd: weighted((p) => p.fd),
   };
 }

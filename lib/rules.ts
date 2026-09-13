@@ -1,9 +1,9 @@
 import type { MatchRow } from './types';
 import { agentRole } from './roles';
-import { poolRuleFor, type AuditRules } from './profileTypes';
+import { poolRuleFor, type SessionRules } from './profileTypes';
 
 /**
- * Motor de auditoría de sesión (reglas configurables por perfil).
+ * Motor de reglas de sesión (reglas configurables por perfil).
  *
  * Regla de parada: N derrotas seguidas con K/D < X = cerrar sesión
  * (default 2 derrotas con K/D < 0.9).
@@ -12,7 +12,7 @@ import { poolRuleFor, type AuditRules } from './profileTypes';
  * - Sesión nueva = pausa >= gap entre partidas (default 3 h; el contador arranca en 0).
  *
  * Pool: cada partida se clasifica como main / backup / fuera / prohibido según
- * las reglas del perfil (`AuditRules`); fuera y prohibido son violación.
+ * las reglas del perfil (`SessionRules`); fuera y prohibido son violación.
  */
 
 /** Clasificación de un pick contra las reglas del perfil. */
@@ -32,7 +32,7 @@ export function matchKd(m: MatchRow): number {
 }
 
 /** Clasifica el agente de una partida contra las reglas (flex = sin regla). */
-export function classifyPick(m: MatchRow, rules?: AuditRules): PickClass {
+export function classifyPick(m: MatchRow, rules?: SessionRules): PickClass {
   if (!rules) return 'flex';
   if ((rules.bannedAgents ?? []).includes(m.agent)) return 'banned';
   const role = m.agentRole ?? agentRole(m.agent);
@@ -44,7 +44,7 @@ export function classifyPick(m: MatchRow, rules?: AuditRules): PickClass {
   return 'off';
 }
 
-export interface AuditMatchRow {
+export interface EvaluatedMatch {
   match: MatchRow;
   kd: number;
   /** Contador de la regla tras esta partida (0-2 típicamente). */
@@ -61,12 +61,12 @@ export interface AuditMatchRow {
   session: number;
 }
 
-export interface AuditDay {
+export interface DayEvaluation {
   key: string;
   label: string;
   dayStart: number;
   /** Partidas en orden cronológico. */
-  matches: AuditMatchRow[];
+  matches: EvaluatedMatch[];
   /** RR neto real del día (suma de los rrDelta disponibles; null si ninguno tenía dato). */
   realRR: number | null;
   /** RR si se hubiera respetado la regla de parada (sin partidas posteriores al corte). */
@@ -119,7 +119,7 @@ function hourLocal(ts: number): string {
   return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
 }
 
-function sumRR(rows: AuditMatchRow[], filter: (r: AuditMatchRow) => boolean): { sum: number | null; coverage: boolean; missing: number } {
+function sumRR(rows: EvaluatedMatch[], filter: (r: EvaluatedMatch) => boolean): { sum: number | null; coverage: boolean; missing: number } {
   let sum = 0;
   let present = 0;
   let missing = 0;
@@ -135,8 +135,8 @@ function sumRR(rows: AuditMatchRow[], filter: (r: AuditMatchRow) => boolean): { 
   return { sum: present ? sum : null, coverage: missing === 0, missing };
 }
 
-/** Audita las competitivas de un día (entrada ya filtrada a competitive + completadas). */
-export function auditDay(matches: MatchRow[], rules?: AuditRules): AuditDay {
+/** Evalúa las competitivas de un día (entrada ya filtrada a competitive + completadas). */
+export function evaluateDay(matches: MatchRow[], rules?: SessionRules): DayEvaluation {
   const stopKd = rules?.stop.kdBelow ?? STOP_KD;
   const stopLosses = Math.max(1, Math.floor(rules?.stop.losses ?? 2));
   const sessionGapMs = Math.max(1, rules?.sessions.gapMinutes ?? SESSION_GAP_MS / 60_000) * 60_000;
@@ -144,7 +144,7 @@ export function auditDay(matches: MatchRow[], rules?: AuditRules): AuditDay {
   const key = sorted.length ? isoDayLocal(sorted[0].timestamp) : '?';
   const dayStart = sorted.length ? new Date(sorted[0].timestamp).setHours(0, 0, 0, 0) : 0;
 
-  const rows: AuditMatchRow[] = [];
+  const rows: EvaluatedMatch[] = [];
   let session = 0;
   let counter = 0;
   let cutAtIdx = -1;
@@ -242,10 +242,10 @@ export function mondayOf(ts: number): Date {
   return d;
 }
 
-export interface AuditWeek {
+export interface RulesWeek {
   key: string;
   label: string;
-  days: AuditDay[];
+  days: DayEvaluation[];
   matches: number;
   realRR: number | null;
   planRR: number | null;
@@ -262,8 +262,8 @@ export interface AuditWeek {
 }
 
 /** Agrega días en semanas (lun-dom). Los días deben venir en orden cronológico. */
-export function groupAuditWeeks(days: AuditDay[]): AuditWeek[] {
-  const byWeek = new Map<string, AuditDay[]>();
+export function groupEvaluationWeeks(days: DayEvaluation[]): RulesWeek[] {
+  const byWeek = new Map<string, DayEvaluation[]>();
   for (const d of days) {
     const mo = mondayOf(d.dayStart);
     const key = `w-${mo.getFullYear()}-${String(mo.getMonth() + 1).padStart(2, '0')}-${String(mo.getDate()).padStart(2, '0')}`;
@@ -273,7 +273,7 @@ export function groupAuditWeeks(days: AuditDay[]): AuditWeek[] {
   }
   return [...byWeek.entries()]
     .map(([key, list]) => {
-      const sum = (pick: (d: AuditDay) => number | null): number | null => {
+      const sum = (pick: (d: DayEvaluation) => number | null): number | null => {
         const vals = list.map(pick).filter((v): v is number => v != null);
         return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
       };

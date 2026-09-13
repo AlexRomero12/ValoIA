@@ -1,7 +1,6 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/useSession';
 
@@ -29,9 +28,6 @@ export function UserMenu() {
         {q.data.user.username}
         {q.data.admin ? ' ★' : ''}
       </span>
-      <Link className="f-chip only-mobile" href="/perfiles">
-        Perfiles
-      </Link>
       <button className="f-chip" onClick={() => void logout()} title="Cerrar sesión">
         Salir
       </button>

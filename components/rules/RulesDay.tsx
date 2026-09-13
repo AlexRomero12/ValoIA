@@ -4,18 +4,18 @@ import { useState } from 'react';
 import { esc } from '@/lib/metas';
 import { useElementWidth } from '@/lib/useElementWidth';
 import type { MatchRow } from '@/lib/types';
-import { isDraw, STOP_KD, type AuditDay, type AuditMatchRow, type PickClass } from '@/lib/audit';
-import type { AuditRules } from '@/lib/profileTypes';
+import { isDraw, STOP_KD, type DayEvaluation, type EvaluatedMatch, type PickClass } from '@/lib/rules';
+import type { SessionRules } from '@/lib/profileTypes';
 import type { MatchComment } from '@/lib/matchComments';
 
-interface AuditDayProps {
-  day: AuditDay;
+interface RulesDayProps {
+  day: DayEvaluation;
   comments: Record<string, MatchComment>;
   onSaveComment: (matchId: string, text: string) => Promise<void>;
   /** Abierto por defecto (sugerencia: solo el día más reciente). */
   defaultOpen?: boolean;
   /** Reglas del perfil (para el umbral de K/D mostrado). */
-  rules?: AuditRules;
+  rules?: SessionRules;
 }
 
 const W = 940;
@@ -30,7 +30,7 @@ function rrColor(m: MatchRow): string {
   return isDraw(m) ? '#e8c97a' : m.won ? '#2fd08a' : '#ff5c69';
 }
 
-function resultBadge(m: AuditMatchRow): { cls: string; text: string } {
+function resultBadge(m: EvaluatedMatch): { cls: string; text: string } {
   if (isDraw(m.match)) return { cls: 'e', text: 'E' };
   return m.match.won ? { cls: 'w', text: 'V' } : { cls: 'l', text: 'D' };
 }
@@ -48,7 +48,7 @@ function fmtRR(v: number | null): string {
   return v == null ? '—' : `${v > 0 ? '+' : ''}${v}`;
 }
 
-export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, rules }: AuditDayProps) {
+export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, rules }: RulesDayProps) {
   const stopKd = rules?.stop.kdBelow ?? STOP_KD;
   const [open, setOpen] = useState(defaultOpen);
   /** Partida seleccionada al tocar una barra (reemplaza el tooltip en táctil). */
@@ -89,60 +89,60 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
   }
 
   return (
-    <div className="panel audit-day">
+    <div className="panel rules-day">
       <button
-        className="audit-day-head"
+        className="rules-day-head"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-controls={`audit-body-${day.key}`}
+        aria-controls={`rules-body-${day.key}`}
       >
         <span className={`day-chevron${open ? ' on' : ''}`} aria-hidden>▸</span>
-        <span className="audit-day-date">{day.label}</span>
-        <span className="audit-day-record">
+        <span className="rules-day-date">{day.label}</span>
+        <span className="rules-day-record">
           {wins}V-{losses}D{draws ? `-${draws}E` : ''}
           {day.storedMatches != null && day.storedMatches > rows.length ? ` · RR de ${day.storedMatches}p` : ''}
         </span>
-        <span className={`audit-day-rr ${(day.realRR ?? 0) < 0 ? 'loss' : 'win'}`}>{fmtRR(day.realRR)} RR</span>
-        <span className="audit-day-meta">
+        <span className={`rules-day-rr ${(day.realRR ?? 0) < 0 ? 'loss' : 'win'}`}>{fmtRR(day.realRR)} RR</span>
+        <span className="rules-day-meta">
           {day.cutAt ? (
-            <span className={`audit-cut-badge${day.cutIgnored ? ' ignored' : ''}`}>
+            <span className={`rules-cut-badge${day.cutIgnored ? ' ignored' : ''}`}>
               {day.cutIgnored ? `corte en ${day.cutAt} · ignorado` : `corte en ${day.cutAt}`}
             </span>
           ) : null}
           {day.violationCount > 0 ? (
-            <span className="audit-pool-badge">
+            <span className="rules-pool-badge">
               {day.violationCount} fuera de pool{day.bannedCount ? ` · ${day.bannedCount} prohibidos` : ''}
             </span>
           ) : null}
           {day.stored ? (
-            <span className="audit-warn" title="RR recuperado del snapshot guardado (la API ya no lo devuelve)">guardado</span>
+            <span className="rules-warn" title="RR recuperado del snapshot guardado (la API ya no lo devuelve)">guardado</span>
           ) : null}
           {day.rrMissing > 0 ? (
-            <span className="audit-warn">RR parcial ({day.rrMissing} sin dato)</span>
+            <span className="rules-warn">RR parcial ({day.rrMissing} sin dato)</span>
           ) : null}
         </span>
       </button>
 
       {open && (
-        <div id={`audit-body-${day.key}`} className="audit-day-body">
-          <div className="audit-stats">
-            <div className="audit-stat">
-              <span className="audit-stat-lbl">RR real</span>
-              <span className={`audit-stat-val ${(day.realRR ?? 0) < 0 ? 'loss' : 'win'}`}>{fmtRR(day.realRR)}</span>
+        <div id={`rules-body-${day.key}`} className="rules-day-body">
+          <div className="rules-stats">
+            <div className="rules-stat">
+              <span className="rules-stat-lbl">RR real</span>
+              <span className={`rules-stat-val ${(day.realRR ?? 0) < 0 ? 'loss' : 'win'}`}>{fmtRR(day.realRR)}</span>
             </div>
-            <div className="audit-stat">
-              <span className="audit-stat-lbl">Con regla</span>
-              <span className="audit-stat-val mute">{fmtRR(day.planRR)}</span>
+            <div className="rules-stat">
+              <span className="rules-stat-lbl">Con regla</span>
+              <span className="rules-stat-val mute">{fmtRR(day.planRR)}</span>
             </div>
-            <div className="audit-stat">
-              <span className="audit-stat-lbl">Regla + pool</span>
-              <span className="audit-stat-val mute">{fmtRR(day.planPoolRR)}</span>
+            <div className="rules-stat">
+              <span className="rules-stat-lbl">Regla + pool</span>
+              <span className="rules-stat-val mute">{fmtRR(day.planPoolRR)}</span>
             </div>
             {day.violationCount > 0 ? (
-              <div className="audit-stat">
-                <span className="audit-stat-lbl">Costo pool</span>
+              <div className="rules-stat">
+                <span className="rules-stat-lbl">Costo pool</span>
                 <span
-                  className="audit-stat-val loss"
+                  className="rules-stat-val loss"
                   title={
                     day.violationGain
                       ? `Balance neto ${fmtRR(day.violationCost)} (ganado fuera de pool: +${day.violationGain})`
@@ -153,15 +153,15 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                 </span>
               </div>
             ) : null}
-            <div className="audit-stat">
-              <span className="audit-stat-lbl">Sesiones</span>
-              <span className="audit-stat-val neutral">{day.sessions}</span>
+            <div className="rules-stat">
+              <span className="rules-stat-lbl">Sesiones</span>
+              <span className="rules-stat-val neutral">{day.sessions}</span>
             </div>
             {day.fbTotal != null && day.fdTotal != null ? (
-              <div className="audit-stat">
-                <span className="audit-stat-lbl">FB/FD</span>
+              <div className="rules-stat">
+                <span className="rules-stat-lbl">FB/FD</span>
                 <span
-                  className={`audit-stat-val ${day.fbTotal - day.fdTotal >= 0 ? 'win' : 'loss'}`}
+                  className={`rules-stat-val ${day.fbTotal - day.fdTotal >= 0 ? 'win' : 'loss'}`}
                   title={`Primeras sangres / primeras muertes · meta FB ≥ 2.5 y FD ≤ 2.0 por partida${day.fdHighCount ? ` · ${day.fdHighCount} partida(s) con 3+ FD` : ''}`}
                 >
                   {day.fbTotal}/{day.fdTotal}
@@ -170,14 +170,14 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
             ) : null}
           </div>
 
-          <p className="audit-rule-hint">
+          <p className="rules-rule-hint">
             Corte: 2 derrotas seguidas con K/D &lt; 0.9. Solo las derrotas con K/D &lt; 0.9 suman al
             contador (las de buen K/D no son tilt, no cuentan) · una victoria reinicia · el empate no reinicia.
             {' '}Impacto: FB ≥ 2.5 y FD ≤ 2.0 por partida; a la 3.ª primera muerte, modo &quot;no regalar&quot;.
           </p>
 
           {sel != null && rows[sel] ? (
-            <div className="audit-tap-info">
+            <div className="rules-tap-info">
               <b>{new Date(rows[sel].match.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</b>
               {' · '}{esc(rows[sel].match.map)} · {esc(rows[sel].match.agent)}
               {' · '}{rows[sel].match.roundsWon}–{rows[sel].match.roundsLost}
@@ -186,7 +186,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
             </div>
           ) : null}
 
-          <div className="audit-svg-scroll" ref={boxRef}>
+          <div className="rules-svg-scroll" ref={boxRef}>
             <svg style={{ width: '100%', minWidth: Wc }} viewBox={`0 0 ${Wc} ${BOTTOMc + 16}`} role="img" aria-label={`RR por partida — ${day.label}`}>
               <defs>
                 <pattern id={tapeId} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -344,14 +344,14 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
             </svg>
           </div>
 
-          <AuditCumulative day={day} W={Wc} PL={PLc} PR={PRc} compact={compact} sel={sel} onPick={setSel} />
+          <RulesCumulative day={day} W={Wc} PL={PLc} PR={PRc} compact={compact} sel={sel} onPick={setSel} />
 
           <div className="table-scroll">
-            <table className="score-table audit-table">
+            <table className="score-table rules-table">
               <thead>
                 <tr>
                   <th>Hora</th><th>Mapa · Agente</th><th>Marcador</th><th>Resultado</th>
-                  <th className="num">K/D</th><th className="num">FB/FD</th><th className="num">RR</th><th className="num" title="Contador de la regla de parada (derrotas con K/D bajo)">Parada</th><th>Auditoría</th><th>Nota</th>
+                  <th className="num">K/D</th><th className="num">FB/FD</th><th className="num">RR</th><th className="num" title="Contador de la regla de parada (derrotas con K/D bajo)">Parada</th><th>Reglas</th><th>Nota</th>
                 </tr>
               </thead>
               <tbody>
@@ -359,7 +359,7 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                   const badge = resultBadge(r);
                   const pick = pickBadge(r.pickClass);
                   return (
-                    <tr key={r.match.matchId} className={`${r.cutPoint ? 'audit-cut-row' : ''}${r.afterCut ? 'row-skip' : ''}`}>
+                    <tr key={r.match.matchId} className={`${r.cutPoint ? 'rules-cut-row' : ''}${r.afterCut ? 'row-skip' : ''}`}>
                       <td>{new Date(r.match.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</td>
                       <td>
                         <span className="icon-cell">
@@ -394,8 +394,8 @@ export function AuditDay({ day, comments, onSaveComment, defaultOpen = false, ru
                       <td className={`num ${r.match.rrDelta == null ? '' : r.match.rrDelta > 0 ? 'stat-win' : 'stat-loss'}`}>
                         {r.match.rrDelta == null ? '·' : `${r.match.rrDelta > 0 ? '+' : ''}${r.match.rrDelta}`}
                       </td>
-                      <td className={`num ${r.cutPoint ? 'audit-cut-num' : ''}`}>{r.afterCut ? '—' : r.counterAfter}</td>
-                      <td className="audit-note-cell">
+                      <td className={`num ${r.cutPoint ? 'rules-cut-num' : ''}`}>{r.afterCut ? '—' : r.counterAfter}</td>
+                      <td className="rules-note-cell">
                         {r.cutPoint
                           ? 'CORTE AQUÍ'
                           : r.afterCut
@@ -433,8 +433,8 @@ function niceStep(range: number): number {
   return 200;
 }
 
-function AuditCumulative({ day, W, PL, PR, compact, sel, onPick }: {
-  day: AuditDay;
+function RulesCumulative({ day, W, PL, PR, compact, sel, onPick }: {
+  day: DayEvaluation;
   W: number;
   PL: number;
   PR: number;
@@ -494,7 +494,7 @@ function AuditCumulative({ day, W, PL, PR, compact, sel, onPick }: {
   const sameEnd = lastReal && lastPlan && Math.abs(yOf(lastReal.v) - yOf(lastPlan.v)) < 0.5;
 
   return (
-    <div className="audit-svg-scroll" style={{ marginTop: 8 }}>
+    <div className="rules-svg-scroll" style={{ marginTop: 8 }}>
       <svg style={{ width: '100%', minWidth: W }} viewBox={`0 0 ${W} ${H + 20}`} role="img" aria-label="RR acumulado real vs plan">
         {ticks.map((v) => (
           <g key={v}>
@@ -577,15 +577,15 @@ function NoteCell({ matchId, comment, onSave }: {
 
   if (!editing) {
     return comment ? (
-      <button className="audit-note-btn has" onClick={start} title={comment.text}>
+      <button className="rules-note-btn has" onClick={start} title={comment.text}>
         {comment.text.length > 40 ? `${comment.text.slice(0, 40)}…` : comment.text}
       </button>
     ) : (
-      <button className="audit-note-btn" onClick={start}>+ nota</button>
+      <button className="rules-note-btn" onClick={start}>+ nota</button>
     );
   }
   return (
-    <div className="audit-note-edit">
+    <div className="rules-note-edit">
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -593,7 +593,7 @@ function NoteCell({ matchId, comment, onSave }: {
         rows={3}
         autoFocus
       />
-      <div className="audit-note-actions">
+      <div className="rules-note-actions">
         <button className="f-chip" onClick={save} disabled={saving}>
           {saving ? 'Guardando…' : text.trim() ? 'Guardar' : 'Borrar nota'}
         </button>

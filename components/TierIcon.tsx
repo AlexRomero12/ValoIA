@@ -1,6 +1,6 @@
 'use client';
 
-import { tierName } from '@/lib/metas';
+import { tierName } from '@/lib/ranks';
 import { useTierIcons } from '@/lib/hooks';
 
 /**

@@ -1,19 +1,22 @@
 'use client';
 
-import { tierName } from '@/lib/metas';
-import { tierShort } from '@/lib/compare';
+import { useState } from 'react';
+import { tierName, tierShort } from '@/lib/ranks';
 import { pickXMarks } from '@/lib/chartAxis';
 import { useTierIcons } from '@/lib/hooks';
 import { useElementWidth } from '@/lib/useElementWidth';
+import { esc } from '@/lib/metas';
 import type { MatchRow } from '@/lib/types';
 
 interface TierChartProps {
   matchesAsc: MatchRow[];
 }
 
+/** Trend de rango: resumen del período + puntos por partida con detalle al tocar. */
 export function TierChart({ matchesAsc }: TierChartProps) {
   const { ref, width: boxW } = useElementWidth(940);
   const tierIcons = useTierIcons().data ?? {};
+  const [sel, setSel] = useState<number | null>(null);
   if (!matchesAsc.length) return <p className="empty">Sin competitivas en esta ventana.</p>;
 
   const validTiers = matchesAsc.map((m) => m.tier).filter((t): t is number => typeof t === 'number' && t > 0);
@@ -39,6 +42,32 @@ export function TierChart({ matchesAsc }: TierChartProps) {
     if (!(t > 0)) return null;
     return PT + ch - ((t - minT) / Math.max(1, maxT - minT)) * ch;
   };
+
+  // ---------- Resumen del período ----------
+  const ranked = matchesAsc.filter((m) => m.tier > 0);
+  const first = ranked[0];
+  const last = ranked[ranked.length - 1];
+  const peak = ranked.length ? ranked.reduce((a, b) => (b.tier > a.tier ? b : a)) : null;
+  const rrMissing = matchesAsc.filter((m) => m.rrDelta == null).length;
+  const rrTotal = matchesAsc.some((m) => m.rrDelta != null)
+    ? matchesAsc.reduce((a, m) => a + (m.rrDelta ?? 0), 0)
+    : null;
+  const wins = matchesAsc.filter((m) => m.won && m.roundsWon !== m.roundsLost).length;
+  const draws = matchesAsc.filter((m) => m.roundsWon === m.roundsLost).length;
+  const losses = matchesAsc.length - wins - draws;
+  const hasTierChange = matchesAsc.some((m) => m.tierChange !== 0);
+  const hasUnrated = matchesAsc.some((m) => !(m.tier > 0));
+
+  const selMatch = sel != null ? (matchesAsc[sel] ?? null) : null;
+  const whenLabel = (m: MatchRow): string => {
+    const d = new Date(m.timestamp);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm} · ${hh}:${mi}`;
+  };
+  const isDraw = selMatch ? selMatch.roundsWon === selMatch.roundsLost : false;
 
   const gridlines = [];
   for (let t = minT; t <= maxT; t++) {
@@ -93,9 +122,67 @@ export function TierChart({ matchesAsc }: TierChartProps) {
       })
       .join(' ') || `M${xAt(0).toFixed(1)} ${(PT + ch).toFixed(1)} Z`;
 
+  const aria = `Tendencia de rango: ${first ? tierName(first.tier) : 'sin rango'} a ${last ? tierName(last.tier) : 'sin rango'} en ${matchesAsc.length} partidas`;
+
   return (
     <div className="chart-wrap" ref={ref}>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img">
+      <div className="chart-summary">
+        {first && last ? (
+          <span className="chart-sum-item">
+            <span className="lbl">Rango</span>
+            <b>{tierShort(first.tier)} → {tierShort(last.tier)}</b>
+            {last.tier !== first.tier ? (
+              <span className={last.tier > first.tier ? 'up' : 'down'}>
+                {last.tier > first.tier ? '▲' : '▼'} {Math.abs(last.tier - first.tier)}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+        {peak ? (
+          <span className="chart-sum-item">
+            <span className="lbl">Pico</span>
+            <b>{tierShort(peak.tier)}</b>
+          </span>
+        ) : null}
+        {rrTotal != null ? (
+          <span className="chart-sum-item">
+            <span className="lbl">RR</span>
+            <b className={rrTotal > 0 ? 'up' : rrTotal < 0 ? 'down' : undefined}>
+              {rrTotal > 0 ? '+' : ''}{rrTotal}{rrMissing > 0 ? '~' : ''}
+            </b>
+          </span>
+        ) : null}
+        <span className="chart-sum-item">
+          <span className="lbl">Récord</span>
+          <b>{wins}V · {losses}D{draws ? ` · ${draws}E` : ''}</b>
+        </span>
+      </div>
+
+      {selMatch ? (
+        <div className="chart-tap-info">
+          <b>{whenLabel(selMatch)}</b>
+          <span>
+            {selMatch.mapIcon ? <img className="map-icon" src={selMatch.mapIcon} alt="" /> : null}
+            {esc(selMatch.map)}
+          </span>
+          <span>
+            {selMatch.agentIcon ? <img className="agent-icon" src={selMatch.agentIcon} alt="" /> : null}
+            {esc(selMatch.agent)}
+          </span>
+          <span className={isDraw ? '' : selMatch.won ? 'stat-win' : 'stat-loss'}>
+            {isDraw ? 'Empate' : selMatch.won ? 'Victoria' : 'Derrota'}
+          </span>
+          <span>{selMatch.roundsWon}–{selMatch.roundsLost}</span>
+          <span>{selMatch.kills}/{selMatch.deaths}/{selMatch.assists}</span>
+          <span>ACS {selMatch.acs}</span>
+          <span className={selMatch.rrDelta == null ? '' : selMatch.rrDelta > 0 ? 'stat-win' : 'stat-loss'}>
+            {selMatch.rrDelta == null ? 'sin RR' : `${selMatch.rrDelta > 0 ? '+' : ''}${selMatch.rrDelta} RR`}
+          </span>
+          <span>{tierName(selMatch.tier)}</span>
+        </div>
+      ) : null}
+
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria} onMouseLeave={() => setSel(null)}>
         <defs>
           <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#ff4655" stopOpacity="0.12" />
@@ -109,11 +196,15 @@ export function TierChart({ matchesAsc }: TierChartProps) {
           .map((s, si) => (
             <path key={si} d={`M${s.join(' L')}`} fill="none" stroke="#ff4655" strokeWidth={2} strokeLinejoin="round" />
           ))}
+        {sel != null && sel < matchesAsc.length ? (
+          <line x1={xAt(sel)} y1={PT} x2={xAt(sel)} y2={PT + ch} stroke="#ece8e1" strokeWidth="1" strokeDasharray="3 3" opacity="0.45" />
+        ) : null}
         {matchesAsc.map((m, i) => {
           const cx = xAt(i);
           const cy = yOf(m.tier);
           const col = m.roundsWon === m.roundsLost ? '#e8c97a' : m.won ? '#2fd08a' : '#ff5c69';
           const label = dayLabelOf(m.timestamp);
+          const isSel = sel === i;
           if (cy == null) {
             return (
               <g key={m.matchId + i}>
@@ -136,14 +227,41 @@ export function TierChart({ matchesAsc }: TierChartProps) {
                   </text>
                 </>
               )}
-              <circle cx={cx} cy={cy} r={compact ? 4.5 : 4} fill={col} stroke="#0f1923" strokeWidth={1.5} />
+              <circle cx={cx} cy={cy} r={isSel ? (compact ? 6.5 : 6) : compact ? 4.5 : 4} fill={col} stroke={isSel ? '#ece8e1' : '#0f1923'} strokeWidth={isSel ? 2 : 1.5} />
               {showX.has(i) && (
                 <text x={cx} y={H - PB + (compact ? 16 : 18)} fontSize={compact ? 11 : 9} fill="#5d7080" textAnchor="middle">{label}</text>
               )}
             </g>
           );
         })}
+        {/* Zonas táctiles por partida: hover/tap selecciona (y muestra el detalle). */}
+        {matchesAsc.map((m, i) => {
+          const cx = xAt(i);
+          const half = matchesAsc.length === 1 ? cw / 2 : Math.max(6, cw / (matchesAsc.length - 1) / 2);
+          return (
+            <rect
+              key={`hit-${m.matchId}-${i}`}
+              x={cx - half}
+              y={PT}
+              width={half * 2}
+              height={ch}
+              fill="transparent"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setSel(i)}
+              onClick={() => setSel(sel === i ? null : i)}
+            />
+          );
+        })}
       </svg>
+
+      <div className="legend">
+        <span><span className="sw" style={{ background: '#2fd08a' }} />Victoria</span>
+        <span><span className="sw" style={{ background: '#ff5c69' }} />Derrota</span>
+        <span><span className="sw" style={{ background: '#e8c97a' }} />Empate</span>
+        {hasTierChange ? <span>▲/▼ cambio de rango</span> : null}
+        {hasUnrated ? <span><span className="sw" style={{ background: '#5d7080' }} />Sin rango</span> : null}
+        <span className="chart-hint">Pasa o toca un punto para ver la partida</span>
+      </div>
     </div>
   );
 }

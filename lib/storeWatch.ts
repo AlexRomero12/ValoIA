@@ -1,5 +1,5 @@
 import { getFavorites } from './favorites';
-import { refreshStoreFront } from './riotClient';
+import { refreshStoreFront, rsoStatus } from './riotClient';
 import { getSubscriptions, pushEnabled, sendPush } from './push';
 import { readData, writeDataSync } from './persist';
 
@@ -24,6 +24,13 @@ function safeUser(user: string): string {
 function notifiedFile(user: string): string {
   return `store-notified.${safeUser(user)}.json`;
 }
+
+/** Última vez que se avisó de reconectar la tienda (dedupe semanal). */
+function reconnectFile(user: string): string {
+  return `store-reconnect.${safeUser(user)}.json`;
+}
+
+const RECONNECT_EVERY_MS = 7 * 86_400_000;
 
 function utcDay(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
@@ -75,7 +82,30 @@ export async function watchStoreAndNotify(): Promise<WatchResult> {
     if (favorites.length === 0) continue;
 
     const front = await refreshStoreFront(user);
-    if (front.source === 'none' || front.daily.length === 0) continue;
+    if (front.source === 'none') {
+      // La conexión de tienda cayó: avisar a SUS dispositivos (máx. 1/semana).
+      // Solo si el problema es de sesión, no un fallo transitorio de Riot.
+      const status = await rsoStatus(user);
+      if (status !== 'ok') {
+        const file = reconnectFile(user);
+        const last = readData<{ sentAt: number }>(file, { sentAt: 0 });
+        if (Date.now() - last.sentAt > RECONNECT_EVERY_MS) {
+          const res = await sendPush(
+            {
+              title: 'Reconecta tu tienda',
+              body: 'Tu sesión de Riot caducó: vuelve a conectar la tienda para seguir viendo tus favoritas y recibir avisos.',
+              url: '/tienda',
+            },
+            user,
+          );
+          sent += res.sent;
+          failed += res.failed;
+          writeDataSync(file, { sentAt: Date.now() });
+        }
+      }
+      continue;
+    }
+    if (front.daily.length === 0) continue;
 
     checked = true;
     source = front.source;

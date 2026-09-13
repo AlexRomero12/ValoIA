@@ -12,9 +12,9 @@ import {
   henrikRoundsPlayed,
   BUCKET_LIMIT,
   type HenrikMatch,
-  type HenrikMatchPlayer,
 } from './henrik';
 import { requireProfile, type ProfileViewer } from './profiles';
+import { computeStats, groupMatches, toStatBlock, type PlayerStats, type StatBlock } from './stats';
 
 export const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
@@ -120,7 +120,7 @@ interface DamageRow {
   headshots?: number;
 }
 
-interface PlayerStats {
+interface RiotPlayerStats {
   score?: number;
   roundsPlayed?: number;
   kills?: number;
@@ -134,7 +134,7 @@ export interface ValPlayer {
   tagLine?: string;
   teamId?: string;
   characterId?: string;
-  stats?: PlayerStats;
+  stats?: RiotPlayerStats;
   competitiveTier?: number;
   damage?: DamageRow[];
 }
@@ -259,31 +259,6 @@ function mapDisplayName(mapId: string | undefined, dicts: ContentDicts): string 
   return cleaned || mapId;
 }
 
-// ---------- Ranks ----------
-
-const TIER_NAMES: Record<number, string> = {};
-{
-  const tiers = [
-    ['Unrated', 0], ['Unrated', 1], ['Unrated', 2],
-    ['Iron 1', 3], ['Iron 2', 4], ['Iron 3', 5],
-    ['Bronze 1', 6], ['Bronze 2', 7], ['Bronze 3', 8],
-    ['Silver 1', 9], ['Silver 2', 10], ['Silver 3', 11],
-    ['Gold 1', 12], ['Gold 2', 13], ['Gold 3', 14],
-    ['Platinum 1', 15], ['Platinum 2', 16], ['Platinum 3', 17],
-    ['Diamond 1', 18], ['Diamond 2', 19], ['Diamond 3', 20],
-    ['Ascendant 1', 21], ['Ascendant 2', 22], ['Ascendant 3', 23],
-    ['Immortal 1', 24], ['Immortal 2', 25], ['Immortal 3', 26],
-    ['Radiant', 27],
-  ] as const;
-  for (const [name, n] of tiers) TIER_NAMES[n] = name;
-}
-export function tierName(tier: number | null | undefined): string {
-  if (tier == null) return '—';
-  if (TIER_NAMES[tier]) return TIER_NAMES[tier];
-  if (tier > 27) return `Immortal ${tier - 23}`;
-  return `Tier ${tier}`;
-}
-
 // ---------- Agregación ----------
 
 export interface ArsenalRow {
@@ -347,70 +322,21 @@ export interface MatchSummary {
   agentRole?: string | null;
 }
 
-interface GroupStat {
-  matches: number;
-  wins: number;
-  draws: number;
-  kills: number;
-  deaths: number;
-  assists: number;
-  score: number;
-  rounds: number;
-  damage: number;
-  headshots: number;
-  bodyshots: number;
-  legshots: number;
-}
-
-function newGroup(): GroupStat {
-  return { matches: 0, wins: 0, draws: 0, kills: 0, deaths: 0, assists: 0, score: 0, rounds: 0, damage: 0, headshots: 0, bodyshots: 0, legshots: 0 };
-}
-
-function addPlayer(g: GroupStat, p: ValPlayer, won: boolean, isDraw = false): void {
-  const s = p.stats ?? {};
-  g.matches += 1;
-  // Empate (marcador igualado): no cuenta ni como victoria ni como derrota.
-  if (isDraw) g.draws += 1;
-  else if (won) g.wins += 1;
-  g.kills += s.kills ?? 0;
-  g.deaths += s.deaths ?? 0;
-  g.assists += s.assists ?? 0;
-  g.score += s.score ?? 0;
-  g.rounds += s.roundsPlayed ?? 0;
-  for (const d of p.damage ?? []) {
-    g.damage += d.damage ?? 0;
-    g.headshots += d.headshots ?? 0;
-    g.bodyshots += d.bodyshots ?? 0;
-    g.legshots += d.legshots ?? 0;
-  }
-}
-
-function finishGroup(g: GroupStat) {
-  const shotsTotal = g.headshots + g.bodyshots + g.legshots;
-  const decisive = g.matches - g.draws;
-  return {
-    matches: g.matches,
-    wins: g.wins,
-    draws: g.draws,
-    wr: decisive ? (g.wins / decisive) * 100 : 0,
-    kd: g.deaths ? g.kills / g.deaths : g.kills > 0 ? g.kills : 0,
-    acs: g.rounds ? g.score / g.rounds : 0,
-    adr: g.rounds ? g.damage / g.rounds : 0,
-    hsPct: shotsTotal ? (g.headshots / shotsTotal) * 100 : 0,
-  };
-}
+export type ValKpisBlock = StatBlock & { losses: number; fb?: number; fd?: number };
 
 export interface ValSummary {
   generatedAt: string;
   account: ValAccount;
   window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; rrMissing?: number; eloTotal?: number | null; syncedAt?: string | null; mmrSyncedAt?: string | null; truncated?: boolean };
-  kpis: ReturnType<typeof finishGroup> & { wins: number; losses: number; fb?: number; fd?: number };
+  kpis: ValKpisBlock;
+  /** Ventana anterior de igual duración (deltas de KPIs); null si no hay datos. */
+  prev?: ValKpisBlock | null;
   currentTier: number;
   startTier: number;
   currentElo?: number | null;
   currentRR?: number | null;
-  byAgent: (ReturnType<typeof finishGroup> & { agent: string })[];
-  byMap: (ReturnType<typeof finishGroup> & { map: string })[];
+  byAgent: (StatBlock & { agent: string })[];
+  byMap: (StatBlock & { map: string })[];
   matches: MatchSummary[];
   /** Solo proveedor Henrik: uso de armas derivado del kill feed de las partidas en ventana */
   arsenal?: ValArsenal;
@@ -454,6 +380,60 @@ export async function getValSummary(opts: AggregateOptions): Promise<ValSummary>
 }
 
 // ---------- Proveedor Henrik ----------
+
+/** Primeras sangres/muertes del jugador desde el kill feed de una partida. */
+function henrikFirsts(m: HenrikMatch, puuid: string): { firstBloods: number; firstDeaths: number } {
+  const seenRounds = new Set<number>();
+  let firstBloods = 0;
+  let firstDeaths = 0;
+  for (const k of m.kills ?? []) {
+    const round = k.round ?? -1;
+    if (seenRounds.has(round)) continue;
+    seenRounds.add(round);
+    if (k.killer?.puuid === puuid) firstBloods += 1;
+    if (k.victim?.puuid === puuid) firstDeaths += 1;
+  }
+  return { firstBloods, firstDeaths };
+}
+
+/** Stats agregadas de partidas Henrik sin construir MatchSummary (ventana anterior). */
+function henrikStatsOf(list: HenrikMatch[], puuid: string, rrOf: (matchId: string) => number | null): PlayerStats {
+  return computeStats(
+    list.map((m) => {
+      const me = (m.players ?? []).find((p) => p.puuid === puuid);
+      const myTeam =
+        (m.teams ?? []).find((t) => t.team_id != null && t.team_id === me?.team_id) ??
+        (m.teams ?? [])[0];
+      const rds = henrikRoundsPlayed(m);
+      const s = me?.stats ?? {};
+      const roundsWon = myTeam?.rounds?.won ?? 0;
+      const hs = s.headshots ?? 0;
+      const body = s.bodyshots ?? 0;
+      const leg = s.legshots ?? 0;
+      const shots = hs + body + leg;
+      const dmgDealt = s.damage?.dealt ?? 0;
+      const { firstBloods, firstDeaths } = henrikFirsts(m, puuid);
+      return {
+        won: Boolean(myTeam?.won),
+        rounds: rds,
+        roundsWon,
+        roundsLost: myTeam?.rounds?.lost ?? Math.max(0, rds - roundsWon),
+        kills: s.kills ?? 0,
+        deaths: s.deaths ?? 0,
+        acs: rds ? Math.round((s.score ?? 0) / rds) : 0,
+        adr: rds ? Math.round(dmgDealt / rds) : 0,
+        hsPct: shots ? Math.round((hs / shots) * 1000) / 10 : 0,
+        score: s.score ?? 0,
+        damageDealt: dmgDealt,
+        headshots: hs,
+        shots,
+        rrDelta: rrOf(m.metadata?.match_id ?? ''),
+        firstBloods,
+        firstDeaths,
+      };
+    }),
+  );
+}
 
 async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> {
   const member = requireProfile(opts.playerId, opts.viewer);
@@ -501,71 +481,36 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     if (opts.season !== 'current' && opts.season) seasonShort = opts.season;
   }
 
-  const inWindow = matches
-    .filter((m) => (seasonShort ? true : henrikMatchTimestamp(m) >= sinceMs))
+  const eligible = matches
     .filter((m) => m.metadata?.is_completed !== false)
-    .filter((m) => {
-      const q = (m.metadata?.queue?.id ?? '').toLowerCase();
-      return q === 'competitive';
-    })
-    .filter((m) => (seasonShort ? m.metadata?.season?.short === seasonShort || m.metadata?.season?.id === seasonShort : true))
-    .filter((m) => (m.players ?? []).some((p) => p.puuid === account.puuid))
+    .filter((m) => (m.metadata?.queue?.id ?? '').toLowerCase() === 'competitive')
+    .filter((m) => (m.players ?? []).some((p) => p.puuid === account.puuid));
+  const inSeason = (m: HenrikMatch): boolean =>
+    Boolean(seasonShort && (m.metadata?.season?.short === seasonShort || m.metadata?.season?.id === seasonShort));
+  const inWindow = eligible
+    .filter((m) => (seasonShort ? inSeason(m) : henrikMatchTimestamp(m) >= sinceMs))
     .sort((a, b) => henrikMatchTimestamp(a) - henrikMatchTimestamp(b));
 
-  interface Acc {
-    matches: number;
-    wins: number;
-    draws: number;
-    kills: number;
-    deaths: number;
-    assists: number;
-    score: number;
-    rounds: number;
-    damage: number;
-    headshots: number;
-    bodyshots: number;
-    legshots: number;
+  // Ventana anterior (deltas de KPIs): misma duración hacia atrás; en temporada,
+  // la temporada/acto previo que alcance el archivo.
+  const windowMs = opts.days * 24 * 60 * 60 * 1000;
+  let prevPool: HenrikMatch[] = [];
+  if (seasonShort) {
+    const prevSeason = [...eligible]
+      .filter((m) => !inSeason(m) && m.metadata?.season?.short)
+      .sort((a, b) => henrikMatchTimestamp(b) - henrikMatchTimestamp(a))[0]?.metadata?.season?.short;
+    if (prevSeason) prevPool = eligible.filter((m) => m.metadata?.season?.short === prevSeason);
+  } else {
+    const prevSince = sinceMs - windowMs;
+    prevPool = eligible.filter((m) => {
+      const t = henrikMatchTimestamp(m);
+      return t >= prevSince && t < sinceMs;
+    });
   }
-  const newAcc = (): Acc => ({ matches: 0, wins: 0, draws: 0, kills: 0, deaths: 0, assists: 0, score: 0, rounds: 0, damage: 0, headshots: 0, bodyshots: 0, legshots: 0 });
-  const add = (a: Acc, me: HenrikMatchPlayer, won: boolean, rounds: number, isDraw: boolean): void => {
-    const s = me.stats ?? {};
-    a.matches += 1;
-    // Empate (marcador igualado): no cuenta ni como victoria ni como derrota.
-    if (isDraw) a.draws += 1;
-    else if (won) a.wins += 1;
-    a.kills += s.kills ?? 0;
-    a.deaths += s.deaths ?? 0;
-    a.assists += s.assists ?? 0;
-    a.score += s.score ?? 0;
-    a.rounds += rounds;
-    a.damage += s.damage?.dealt ?? 0;
-    a.headshots += s.headshots ?? 0;
-    a.bodyshots += s.bodyshots ?? 0;
-    a.legshots += s.legshots ?? 0;
-  };
-  const finish = (a: Acc) => {
-    const shots = a.headshots + a.bodyshots + a.legshots;
-    const decisive = a.matches - a.draws;
-    return {
-      matches: a.matches,
-      wins: a.wins,
-      draws: a.draws,
-      wr: decisive ? (a.wins / decisive) * 100 : 0,
-      kd: a.deaths ? a.kills / a.deaths : a.kills > 0 ? a.kills : 0,
-      acs: a.rounds ? a.score / a.rounds : 0,
-      adr: a.rounds ? a.damage / a.rounds : 0,
-      hsPct: shots ? (a.headshots / shots) * 100 : 0,
-    };
-  };
 
-  const group = newAcc();
-  const agentGroups = new Map<string, Acc>();
-  const mapGroups = new Map<string, Acc>();
   const summaries: MatchSummary[] = [];
   let prevTier: number | null = null;
   let prevElo: number | null = null;
-  let fbTotal = 0;
-  let fdTotal = 0;
 
   const mmrHistory = await getHenrikMmrHistory(acctName, acctTag).catch(
     () => [] as Awaited<ReturnType<typeof getHenrikMmrHistory>>,
@@ -581,16 +526,9 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     const rds = henrikRoundsPlayed(m);
     const roundsWon0 = myTeam?.rounds?.won ?? 0;
     const roundsLost0 = myTeam?.rounds?.lost ?? Math.max(0, rds - roundsWon0);
-    const isDraw = roundsWon0 === roundsLost0;
     const map = m.metadata?.map?.name ?? '?';
     const agent = me.agent?.name ?? '?';
     const s = me.stats ?? {};
-
-    add(group, me, won, rds, isDraw);
-    if (!agentGroups.has(agent)) agentGroups.set(agent, newAcc());
-    add(agentGroups.get(agent)!, me, won, rds, isDraw);
-    if (!mapGroups.has(map)) mapGroups.set(map, newAcc());
-    add(mapGroups.get(map)!, me, won, rds, isDraw);
 
     const hist = rrByMatch.get(m.metadata?.match_id ?? '');
     // El mmr-history es post-partida y por tanto autoritativo: en promociones y
@@ -615,18 +553,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     if (elo != null) prevElo = elo;
 
     // Impacto: primeras sangres / primeras muertes (mismo criterio que el arsenal).
-    const seenFbRounds = new Set<number>();
-    let firstBloods = 0;
-    let firstDeaths = 0;
-    for (const k of m.kills ?? []) {
-      const round = k.round ?? -1;
-      if (seenFbRounds.has(round)) continue;
-      seenFbRounds.add(round);
-      if (k.killer?.puuid === account.puuid) firstBloods += 1;
-      if (k.victim?.puuid === account.puuid) firstDeaths += 1;
-    }
-    fbTotal += firstBloods;
-    fdTotal += firstDeaths;
+    const { firstBloods, firstDeaths } = henrikFirsts(m, account.puuid);
 
     summaries.push({
       matchId: m.metadata?.match_id ?? '',
@@ -665,13 +592,12 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   }
 
   summaries.sort((a, b) => b.timestamp - a.timestamp);
-  const kpis = finish(group);
+  const stats = computeStats(summaries);
+  const prevStats = prevPool.length
+    ? henrikStatsOf(prevPool, account.puuid, (id) => rrByMatch.get(id)?.last_change ?? null)
+    : null;
   const firstMatch = summaries[summaries.length - 1];
   const lastMatch = summaries[0];
-  const rrTotal = summaries.reduce((acc, m) => acc + (m.rrDelta ?? 0), 0);
-  // La API solo devuelve RR de las partidas recientes: si alguna no trae dato,
-  // el total es parcial y se marca (el cliente lo muestra con ~).
-  const rrMissing = summaries.filter((m) => m.rrDelta == null).length;
   const firstElo = firstMatch?.elo ?? null;
   const lastElo = lastMatch?.elo ?? null;
   const eloTotal = firstElo != null && lastElo != null ? lastElo - firstElo : null;
@@ -741,8 +667,8 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       consideredMatches: summaries.length,
       archivedMatches: archived.length,
       seasonShort,
-      rrTotal,
-      rrMissing,
+      rrTotal: stats.rrTotal,
+      rrMissing: stats.rrMissing,
       eloTotal,
       syncedAt: new Date(bucket.updatedAt).toISOString(),
       mmrSyncedAt: (() => {
@@ -751,22 +677,17 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       })(),
       truncated,
     },
-    kpis: {
-      ...kpis,
-      wins: group.wins,
-      losses: group.matches - group.wins - group.draws,
-      fb: summaries.length ? fbTotal / summaries.length : undefined,
-      fd: summaries.length ? fdTotal / summaries.length : undefined,
-    },
+    kpis: { ...toStatBlock(stats), losses: stats.losses, fb: stats.fb, fd: stats.fd },
+    prev: prevStats ? { ...toStatBlock(prevStats), losses: prevStats.losses, fb: prevStats.fb, fd: prevStats.fd } : null,
     currentTier: latestMmr?.tier?.id ?? lastMatch?.tier ?? 0,
     startTier: firstMatch?.tier ?? 0,
     currentElo: latestMmr?.elo ?? lastMatch?.elo ?? null,
     currentRR: latestMmr?.rr ?? lastMatch?.rr ?? null,
-    byAgent: [...agentGroups.entries()]
-      .map(([agent, g]) => ({ agent, ...finish(g) }))
+    byAgent: [...groupMatches(summaries, (m) => m.agent)]
+      .map(([agent, list]) => ({ agent, ...toStatBlock(computeStats(list)) }))
       .sort((a, b) => b.matches - a.matches),
-    byMap: [...mapGroups.entries()]
-      .map(([map, g]) => ({ map, ...finish(g) }))
+    byMap: [...groupMatches(summaries, (m) => m.map)]
+      .map(([map, list]) => ({ map, ...toStatBlock(computeStats(list)) }))
       .sort((a, b) => b.matches - a.matches),
     matches: summaries,
     arsenal,
@@ -815,9 +736,6 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
   const fatalErr = results.find((r) => r.err instanceof RiotApiError)?.err as RiotApiError | undefined;
   if (fatalErr && results.every((r) => r.match === null)) throw fatalErr;
 
-  const group = newGroup();
-  const agentGroups = new Map<string, GroupStat>();
-  const mapGroups = new Map<string, GroupStat>();
   const summaries: MatchSummary[] = [];
 
   let prevTier: number | null = null;
@@ -838,13 +756,6 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
     const agent = agentEntry?.name ?? me.characterId ?? '?';
     const agentIcon = agentEntry?.icon ?? null;
     const mapIcon = mapEntry?.icon ?? null;
-
-    const isDrawRiot = (myTeam?.roundsWon ?? 0) * 2 === (me.stats?.roundsPlayed ?? 0);
-    addPlayer(group, me, won, isDrawRiot);
-    if (!agentGroups.has(agent)) agentGroups.set(agent, newGroup());
-    addPlayer(agentGroups.get(agent)!, me, won, isDrawRiot);
-    if (!mapGroups.has(map)) mapGroups.set(map, newGroup());
-    addPlayer(mapGroups.get(map)!, me, won, isDrawRiot);
 
     const tier: number = me.competitiveTier ?? prevTier ?? 0;
     const tierChange = prevTier != null ? tier - prevTier : 0;
@@ -890,7 +801,7 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
 
   summaries.sort((a, b) => b.timestamp - a.timestamp);
 
-  const kpis = finishGroup(group);
+  const stats = computeStats(summaries);
   const firstMatch = summaries[summaries.length - 1];
   const lastMatch = summaries[0];
 
@@ -903,18 +814,15 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
       fetchedMatches: results.length,
       consideredMatches: summaries.length,
     },
-    kpis: {
-      ...kpis,
-      wins: group.wins,
-      losses: group.matches - group.wins - group.draws,
-    },
+    kpis: { ...toStatBlock(stats), losses: stats.losses },
+    prev: null,
     currentTier: lastMatch?.tier ?? 0,
     startTier: firstMatch?.tier ?? 0,
-    byAgent: [...agentGroups.entries()]
-      .map(([agent, g]) => ({ agent, ...finishGroup(g) }))
+    byAgent: [...groupMatches(summaries, (m) => m.agent)]
+      .map(([agent, list]) => ({ agent, ...toStatBlock(computeStats(list)) }))
       .sort((a, b) => b.matches - a.matches),
-    byMap: [...mapGroups.entries()]
-      .map(([map, g]) => ({ map, ...finishGroup(g) }))
+    byMap: [...groupMatches(summaries, (m) => m.map)]
+      .map(([map, list]) => ({ map, ...toStatBlock(computeStats(list)) }))
       .sort((a, b) => b.matches - a.matches),
     matches: summaries,
   };

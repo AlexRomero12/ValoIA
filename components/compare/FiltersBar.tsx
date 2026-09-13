@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { esc } from '@/lib/metas';
 import type { Granularity, MetricKey, CompareFilters } from '@/lib/compare';
 import { AgentIconFilter } from './AgentIconFilter';
 
@@ -124,5 +123,3 @@ export function FiltersBar(p: FiltersBarProps) {
     </div>
   );
 }
-
-export { esc };

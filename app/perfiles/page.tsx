@@ -71,7 +71,7 @@ export default function PerfilesPage() {
         ...(p.primary ? { primary: true } : {}),
         accounts: p.accounts,
         prefs: p.prefs,
-        audit: p.audit,
+        rules: p.rules,
       });
       if (res.ok) ok += 1;
       else failures.push(`${p.label}: ${res.error ?? 'error'}`);
@@ -192,7 +192,7 @@ export default function PerfilesPage() {
           </div>
         </div>
         <p className="window-info" style={{ marginTop: 8 }}>
-          Elige el <b>perfil principal</b> (★): es el único que se audita. Los <b>visibles</b> aparecen en Ranked;
+          Elige el <b>perfil principal</b> (★): es el único que se evalúa. Los <b>visibles</b> aparecen en Ranked;
           Comparar y Equipo pueden usar cualquiera de tus perfiles. Exportar/Importar solo incluye la configuración de
           tus perfiles (nunca RSO ni notas).
         </p>
@@ -205,7 +205,7 @@ export default function PerfilesPage() {
             {profiles.map((p, i) => {
               const color = profileColor(p, i);
               const accs = memberAccounts(p);
-              const mapsWithRule = p.audit ? Object.keys(p.audit.pool.byMap).length : 0;
+              const mapsWithRule = p.rules ? Object.keys(p.rules.pool.byMap).length : 0;
               return (
                 <div key={p.id} className={`profile-card${p.visible ? '' : ' off'}${p.primary ? ' primary' : ''}`} style={{ ['--pc' as string]: color }}>
                   <span className="profile-card-dot" />
@@ -218,12 +218,12 @@ export default function PerfilesPage() {
                     </div>
                     <div className="profile-card-meta">
                       {accs.length > 1 ? <span className="mini-stats">{accs.length} cuentas</span> : null}
-                      {p.audit ? (
-                        <span className="mini-stats" title={`rules v${p.audit.rulesVersion} · ${mapsWithRule} mapas con regla`}>
-                          auditoría v{p.audit.rulesVersion} · {mapsWithRule} mapas
+                      {p.rules ? (
+                        <span className="mini-stats" title={`rules v${p.rules.rulesVersion} · ${mapsWithRule} mapas con regla`}>
+                          reglas v{p.rules.rulesVersion} · {mapsWithRule} mapas
                         </span>
                       ) : (
-                        <span className="mini-stats">sin reglas de auditoría</span>
+                        <span className="mini-stats">sin reglas de sesión</span>
                       )}
                     </div>
                   </div>

@@ -7,6 +7,7 @@ import { TopBar, RankChip } from '@/components/TopBar';
 import { StorePanel } from '@/components/store/StorePanel';
 import { FavoritesPanel } from '@/components/store/FavoritesPanel';
 import { PushPanel } from '@/components/store/PushPanel';
+import { StoreConnect } from '@/components/store/StoreConnect';
 import type { StoreStatusResponse } from '@/app/api/store/status/route';
 
 const POLL_MS = 5 * 60 * 1000;
@@ -31,35 +32,11 @@ export default function TiendaPage() {
   const status = statusQ.data;
   const error = (statusQ.error as (Error & { code?: string }) | null) ?? null;
   const loading = statusQ.isLoading;
-  const [ssid, setSsid] = useState('');
 
   const reload = async () => {
     // Fuerza revalidación del storefront en el server y refresca el status.
     await fetch('/api/store/status?refresh=1', { cache: 'no-store' }).catch(() => undefined);
     await qc.invalidateQueries({ queryKey: ['store-status'] });
-  };
-
-  const connectCookie = async () => {
-    if (!ssid.trim()) return;
-    setBusy(true);
-    try {
-      const res = await fetch('/api/store/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cookie', ssid: ssid.trim() }),
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || 'No se pudo conectar');
-      setSsid('');
-      await reload();
-    } catch (e) {
-      qc.setQueryData(['store-status'], (old: StoreStatusResponse | undefined) => ({
-        ...(old ?? ({} as StoreStatusResponse)),
-        error: e instanceof Error ? e.message : String(e),
-      }));
-    } finally {
-      setBusy(false);
-    }
   };
 
   const toggleFavorite = async (offerId: string) => {
@@ -144,6 +121,10 @@ export default function TiendaPage() {
 
       {status?.push ? <PushPanel status={status.push} onChanged={() => void reload()} /> : null}
 
+      {status ? (
+        <StoreConnect rso={status.rso} account={status.account} onConnected={() => void reload()} />
+      ) : null}
+
       {needsCode ? (
         <div className="banner warn">
           <b>2FA requerido.</b> Riot pide un código de verificación para el respaldo RSO.{' '}
@@ -158,41 +139,6 @@ export default function TiendaPage() {
             />
             <button className="primary-red" onClick={submitCode} disabled={busy || !code.trim()}>
               Enviar código{busy ? <span className="loader" /> : null}
-            </button>
-          </span>
-        </div>
-      ) : null}
-
-      {status && status.source === 'none' && status.rso.status === 'needs_cookie' ? (
-        <div className="banner warn">
-          <b>Conecta el respaldo RSO con tu sesión de Riot.</b> Riot ya exige captcha en el login por
-          contraseña, así que usamos tu sesión web (sin contraseña):
-          <ol className="rso-steps">
-            <li>
-              Entra a <b>auth.riotgames.com</b> en tu navegador (inicia sesión si te lo pide).
-            </li>
-            <li>
-              Pulsa <b>F12</b> → pestaña <b>Application</b> → <b>Cookies</b> → https://auth.riotgames.com
-            </li>
-            <li>
-              Copia el valor de la cookie <b>ssid</b> y pégalo aquí (se queda guardada en tu servidor y se
-              renueva sola).
-            </li>
-          </ol>
-          <span className="rso-code-row">
-            <input
-              type="password"
-              placeholder="Valor de la cookie ssid"
-              value={ssid}
-              onChange={(e) => setSsid(e.target.value)}
-              className="fav-input rso-code"
-            />
-            <button
-              className="primary-red"
-              onClick={connectCookie}
-              disabled={busy || !ssid.trim()}
-            >
-              Conectar respaldo{busy ? <span className="loader" /> : null}
             </button>
           </span>
         </div>

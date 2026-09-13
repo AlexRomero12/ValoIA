@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
-import { getAuditHistory, upsertAuditDays } from '@/lib/auditHistoryStore';
-import type { StoredAuditDay } from '@/lib/auditHistory';
+import { getRulesHistory, upsertRulesDays } from '@/lib/rulesHistoryStore';
+import type { StoredRulesDay } from '@/lib/rulesHistory';
 import { listProfilesFor } from '@/lib/profiles';
 import { viewerFromRequest } from '@/lib/auth';
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const allowed = allowedPrefixes(req);
   if (!allowed) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
   try {
-    const all = await getAuditHistory();
+    const all = await getRulesHistory();
     const days = Object.fromEntries(Object.entries(all).filter(([key]) => allowed.has(key.split(':')[0])));
     return Response.json({ days }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const allowed = allowedPrefixes(req);
   if (!allowed) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
 
-  let body: { days?: StoredAuditDay[] };
+  let body: { days?: StoredRulesDay[] };
   try {
     body = await req.json();
   } catch {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Falta days[] (o no tienes permiso sobre esos perfiles)' }, { status: 400 });
   }
   try {
-    const saved = await upsertAuditDays(days);
+    const saved = await upsertRulesDays(days);
     return Response.json({ ok: true, days: saved });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

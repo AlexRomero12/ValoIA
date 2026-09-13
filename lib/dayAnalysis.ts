@@ -1,9 +1,10 @@
 import type { MatchRow } from './types';
+import { computeStats, groupMatches } from './stats';
 
 /**
  * Agrupación y análisis de partidas por día (todo client-side, $0 requests).
- * Los agregados usan los totales crudos del MatchRow (score/damage/shots)
- * para que K/D, ACS, ADR y HS% sean exactos, no promedios simples.
+ * La agregación delega en lib/stats.ts: única fuente de WR/K/D/ACS/ADR/HS%,
+ * con los totales crudos del MatchRow para que no diverjan entre vistas.
  */
 
 export interface DayGroup {
@@ -36,37 +37,17 @@ export function groupByDay(matches: MatchRow[]): DayGroup[] {
   return [...groups.values()];
 }
 
-interface SubAgg {
+export interface DaySubStats {
   name: string;
-  icon?: string | null;
+  icon: string | null;
   games: number;
   wins: number;
+  losses: number;
   draws: number;
-  kills: number;
-  deaths: number;
-  score: number;
-  rounds: number;
-  damage: number;
-  headshots: number;
-  shots: number;
-}
-
-function newSub(name: string, icon?: string | null): SubAgg {
-  return { name, icon, games: 0, wins: 0, draws: 0, kills: 0, deaths: 0, score: 0, rounds: 0, damage: 0, headshots: 0, shots: 0 };
-}
-
-function finishSub(s: SubAgg) {
-  return {
-    name: s.name,
-    icon: s.icon,
-    games: s.games,
-    wins: s.wins,
-    losses: s.games - s.wins - s.draws,
-    kd: s.deaths ? s.kills / s.deaths : s.kills > 0 ? s.kills : 0,
-    acs: s.rounds ? Math.round(s.score / s.rounds) : 0,
-    adr: s.rounds ? Math.round(s.damage / s.rounds) : 0,
-    hsPct: s.shots ? Math.round((s.headshots / s.shots) * 1000) / 10 : 0,
-  };
+  kd: number;
+  acs: number;
+  adr: number;
+  hsPct: number;
 }
 
 export interface DayStats {
@@ -89,89 +70,65 @@ export interface DayStats {
   minutes: number;
   /** Partidas del día, más recientes primero */
   rows: MatchRow[];
-  byAgent: ReturnType<typeof finishSub>[];
-  byMap: ReturnType<typeof finishSub>[];
+  byAgent: DaySubStats[];
+  byMap: DaySubStats[];
   bestMatch: MatchRow | null;
   worstMatch: MatchRow | null;
 }
 
+function subStats(
+  list: MatchRow[],
+  pick: (m: MatchRow) => string,
+  iconOf: (m: MatchRow) => string | null | undefined,
+): DaySubStats[] {
+  return [...groupMatches(list, pick).entries()]
+    .map(([name, ms]) => {
+      const s = computeStats(ms);
+      return {
+        name,
+        icon: ms.map(iconOf).find((i) => i) ?? null,
+        games: s.games,
+        wins: s.wins,
+        losses: s.losses,
+        draws: s.draws,
+        kd: s.kd,
+        acs: s.acs,
+        adr: s.adr,
+        hsPct: s.hsPct,
+      };
+    })
+    .sort((a, b) => b.games - a.games);
+}
+
 export function dayStats(group: DayGroup): DayStats {
-  let wins = 0;
-  let draws = 0;
-  let kills = 0;
-  let deaths = 0;
-  let score = 0;
-  let rounds = 0;
-  let damage = 0;
-  let headshots = 0;
-  let shots = 0;
-  let rrTotal: number | null = null;
-  let rrMissing = 0;
+  const s = computeStats(group.matches);
   let minutes = 0;
-
-  const agents = new Map<string, SubAgg>();
-  const maps = new Map<string, SubAgg>();
-
-  for (const m of group.matches) {
-    // Empate = marcador igualado (p. ej. 14-14): no cuenta como derrota.
-    const isDraw = m.roundsWon === m.roundsLost;
-    if (isDraw) draws += 1;
-    else if (m.won) wins += 1;
-    kills += m.kills;
-    deaths += m.deaths;
-    score += m.score ?? m.acs * m.rounds;
-    rounds += m.rounds || 0;
-    damage += m.damageDealt ?? m.adr * m.rounds;
-    headshots += m.headshots ?? 0;
-    shots += m.shots ?? 0;
-    if (m.rrDelta != null) rrTotal = (rrTotal ?? 0) + m.rrDelta;
-    else rrMissing += 1;
-    minutes += m.durationMin || 0;
-
-    const a = agents.get(m.agent) ?? newSub(m.agent, m.agentIcon ?? null);
-    const mp = maps.get(m.map) ?? newSub(m.map, m.mapIcon ?? null);
-    for (const agg of [a, mp]) {
-      agg.games += 1;
-      if (isDraw) agg.draws += 1;
-      else if (m.won) agg.wins += 1;
-      agg.kills += m.kills;
-      agg.deaths += m.deaths;
-      agg.score += m.score ?? m.acs * m.rounds;
-      agg.rounds += m.rounds || 0;
-      agg.damage += m.damageDealt ?? m.adr * m.rounds;
-      agg.headshots += m.headshots ?? 0;
-      agg.shots += m.shots ?? 0;
-    }
-    agents.set(m.agent, a);
-    maps.set(m.map, mp);
-  }
+  for (const m of group.matches) minutes += m.durationMin || 0;
 
   // Mejor/peor partida del día por ACS.
   const withAcs = group.matches.filter((m) => m.acs > 0);
   const bestMatch = withAcs.length ? withAcs.reduce((a, b) => (b.acs > a.acs ? b : a)) : null;
   const worstMatch = withAcs.length ? withAcs.reduce((a, b) => (b.acs < a.acs ? b : a)) : null;
 
-  const n = group.matches.length;
-  const decisive = n - draws;
   return {
     key: group.key,
     label: group.label,
     dayStart: group.dayStart,
-    matches: n,
-    wins,
-    losses: n - wins - draws,
-    draws,
-    wr: decisive ? (wins / decisive) * 100 : 0,
-    kd: deaths ? kills / deaths : kills > 0 ? kills : 0,
-    acs: rounds ? Math.round(score / rounds) : 0,
-    adr: rounds ? Math.round(damage / rounds) : 0,
-    hsPct: shots ? Math.round((headshots / shots) * 1000) / 10 : 0,
-    rrTotal,
-    rrMissing,
+    matches: s.games,
+    wins: s.wins,
+    losses: s.losses,
+    draws: s.draws,
+    wr: s.wr,
+    kd: s.kd,
+    acs: s.acs,
+    adr: s.adr,
+    hsPct: s.hsPct,
+    rrTotal: s.rrTotal,
+    rrMissing: s.rrMissing,
     minutes,
     rows: group.matches,
-    byAgent: [...agents.values()].map(finishSub).sort((a, b) => b.games - a.games),
-    byMap: [...maps.values()].map(finishSub).sort((a, b) => b.games - a.games),
+    byAgent: subStats(group.matches, (m) => m.agent, (m) => m.agentIcon),
+    byMap: subStats(group.matches, (m) => m.map, (m) => m.mapIcon),
     bestMatch,
     worstMatch,
   };

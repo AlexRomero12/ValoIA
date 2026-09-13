@@ -109,7 +109,7 @@ DOMAIN=valoia.tudominio.com
 ```
 
 Opcionalmente añade `TZ=<tu zona IANA>` (por defecto el contenedor usa UTC).
-Afecta los cortes de día de la auditoría.
+Afecta los cortes de día de Reglas.
 
 Revisa que tenga al menos: `HENRIK_API_KEY`, `AUTH_SECRET`, `AUTH_USER`,
 `AUTH_PASSWORD`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `STORE_SHARD`.

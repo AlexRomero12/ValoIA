@@ -3,18 +3,18 @@
 import { useState } from 'react';
 import { AgentPicker } from './AgentPicker';
 import { ROLES } from '@/lib/roles';
-import { cloneAuditRules, type AuditPoolRule, type AuditRules, type Profile } from '@/lib/profileTypes';
+import { clampRulesPools, cloneSessionRules, POOL_BACKUP_MAX, POOL_MAIN_MAX, type PoolRule, type SessionRules, type Profile } from '@/lib/profileTypes';
 
-interface AuditRulesEditorProps {
-  rules: AuditRules;
+interface RulesEditorProps {
+  rules: SessionRules;
   maps: string[];
   otherProfiles: Profile[];
-  onChange: (rules: AuditRules) => void;
+  onChange: (rules: SessionRules) => void;
 }
 
-const DEFAULT_BACKUP: AuditPoolRule = { main: [], backup: [] };
+const DEFAULT_BACKUP: PoolRule = { main: [], backup: [] };
 
-function hasRule(rule: AuditPoolRule | undefined): boolean {
+function hasRule(rule: PoolRule | undefined): boolean {
   return Boolean(rule && (rule.main.length > 0 || rule.backup.length > 0));
 }
 
@@ -47,18 +47,18 @@ function NumberField({ label, value, onChange, min, max, step = 1, suffix }: {
 }
 
 /**
- * Editor de reglas de auditoría de un perfil: pool por mapa (principal/backup),
+ * Editor de reglas de sesión de un perfil: pool por mapa (principal/backup),
  * prohibidos (agentes y roles), cortes/pausas y metas. Incluye copiar de otro
  * perfil e importar/exportar JSON.
  */
-export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: AuditRulesEditorProps) {
+export function RulesEditor({ rules, maps, otherProfiles, onChange }: RulesEditorProps) {
   const [peek, setPeek] = useState(false);
   const [json, setJson] = useState('');
   const [jsonMsg, setJsonMsg] = useState<string | null>(null);
 
-  const patch = (p: Partial<AuditRules>) => onChange({ ...rules, ...p });
+  const patch = (p: Partial<SessionRules>) => onChange({ ...rules, ...p });
 
-  const setMapRule = (map: string, rule: AuditPoolRule) => {
+  const setMapRule = (map: string, rule: PoolRule) => {
     patch({ pool: { ...rules.pool, byMap: { ...rules.pool.byMap, [map]: rule } } });
   };
 
@@ -68,7 +68,7 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
     patch({ pool: { ...rules.pool, byMap: next } });
   };
 
-  const poolOf = (map: string): AuditPoolRule => rules.pool.byMap[map] ?? DEFAULT_BACKUP;
+  const poolOf = (map: string): PoolRule => rules.pool.byMap[map] ?? DEFAULT_BACKUP;
 
   return (
     <div className="rules-editor">
@@ -78,12 +78,12 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
           defaultValue=""
           onChange={(e) => {
             const src = otherProfiles.find((p) => p.id === e.target.value);
-            if (src?.audit) onChange({ ...cloneAuditRules(src.audit), rulesVersion: Math.max(rules.rulesVersion, src.audit.rulesVersion) });
+            if (src?.rules) onChange({ ...clampRulesPools(cloneSessionRules(src.rules)), rulesVersion: Math.max(rules.rulesVersion, src.rules.rulesVersion) });
             e.target.value = '';
           }}
         >
           <option value="" disabled>Elegir perfil…</option>
-          {otherProfiles.filter((p) => p.audit).map((p) => (
+          {otherProfiles.filter((p) => p.rules).map((p) => (
             <option key={p.id} value={p.id}>{p.label}</option>
           ))}
         </select>
@@ -93,7 +93,7 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
       <div className="rules-block">
         <div className="rules-block-head">
           <h4>Regla por defecto</h4>
-          <span className="window-info">Se usa en mapas sin regla propia (vacía = sin auditoría de pool en esos mapas).</span>
+          <span className="window-info">Se usa en mapas sin regla propia (vacía = sin reglas de pool en esos mapas). Un principal y hasta dos backups.</span>
         </div>
         <div className="pool-row">
           <span className="pool-tag main">Principal</span>
@@ -101,6 +101,7 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
             selected={rules.pool.default?.main ?? []}
             onChange={(main) => patch({ pool: { ...rules.pool, default: { main, backup: rules.pool.default?.backup ?? [] } } })}
             placeholder="Agregar principal…"
+            max={POOL_MAIN_MAX}
           />
         </div>
         <div className="pool-row">
@@ -109,6 +110,7 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
             selected={rules.pool.default?.backup ?? []}
             onChange={(backup) => patch({ pool: { ...rules.pool, default: { main: rules.pool.default?.main ?? [], backup } } })}
             placeholder="Agregar backup…"
+            max={POOL_BACKUP_MAX}
           />
         </div>
       </div>
@@ -116,7 +118,7 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
       <div className="rules-block">
         <div className="rules-block-head">
           <h4>Pool por mapa</h4>
-          <span className="window-info">La regla del mapa manda sobre la default. Vacía = usa la default.</span>
+          <span className="window-info">La regla del mapa manda sobre la default (un principal y hasta dos backups). Vacía = usa la default.</span>
         </div>
         <div className="rules-maps">
           {maps.map((map) => {
@@ -134,11 +136,11 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
                 </div>
                 <div className="pool-row">
                   <span className="pool-tag main">P</span>
-                  <AgentPicker selected={rule.main} onChange={(main) => setMapRule(map, { ...rule, main })} compact placeholder="Principal…" />
+                  <AgentPicker selected={rule.main} onChange={(main) => setMapRule(map, { ...rule, main })} compact placeholder="Principal…" max={POOL_MAIN_MAX} />
                 </div>
                 <div className="pool-row">
                   <span className="pool-tag backup">B</span>
-                  <AgentPicker selected={rule.backup} onChange={(backup) => setMapRule(map, { ...rule, backup })} compact placeholder="Backup…" />
+                  <AgentPicker selected={rule.backup} onChange={(backup) => setMapRule(map, { ...rule, backup })} compact placeholder="Backup…" max={POOL_BACKUP_MAX} />
                 </div>
               </div>
             );
@@ -150,7 +152,7 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
         <div className="rules-block-head">
           <h4>Prohibidos</h4>
           <span className="window-info">
-            Cada ranked con un agente prohibido (o de un rol prohibido) cuenta como violación en la auditoría.
+            Cada ranked con un agente prohibido (o de un rol prohibido) cuenta como violación.
           </span>
         </div>
         <div className="pool-row">
@@ -239,9 +241,9 @@ export function AuditRulesEditor({ rules, maps, otherProfiles, onChange }: Audit
                 type="button"
                 onClick={() => {
                   try {
-                    const parsed = JSON.parse(json) as AuditRules;
+                    const parsed = JSON.parse(json) as SessionRules;
                     if (!parsed?.pool || !parsed?.stop || !parsed?.sessions) throw new Error('faltan campos');
-                    onChange({ ...parsed, rulesVersion: Math.max(1, Number(parsed.rulesVersion) || 1) });
+                    onChange({ ...clampRulesPools(parsed), rulesVersion: Math.max(1, Number(parsed.rulesVersion) || 1) });
                     setJsonMsg('Reglas importadas.');
                   } catch (e) {
                     setJsonMsg(`JSON inválido: ${e instanceof Error ? e.message : String(e)}`);

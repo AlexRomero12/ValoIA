@@ -1,7 +1,7 @@
 import { readData, writeDataSync } from './persist';
 import { env } from './env';
-import type { AuditPoolRule, AuditRules, Profile, ProfileAccount } from './profileTypes';
-import { slugifyId } from './profileTypes';
+import type { PoolRule, SessionRules, Profile, ProfileAccount } from './profileTypes';
+import { clampPoolRule, slugifyId } from './profileTypes';
 import { adminUsername } from './auth';
 
 /**
@@ -46,7 +46,15 @@ function seedProfiles(): Profile[] {
 
 function readFile(): Profile[] {
   const file = readData<ProfilesFile>(PROFILES_FILE, { version: 1, profiles: [] });
-  return Array.isArray(file?.profiles) ? file.profiles : [];
+  const list = Array.isArray(file?.profiles) ? file.profiles : [];
+  // Migración del rename: perfiles guardados con el campo viejo `audit`.
+  return list.map((p) => {
+    const legacy = p as Profile & { audit?: Profile['rules'] };
+    if (legacy.rules || !legacy.audit) return legacy;
+    const next = { ...legacy, rules: legacy.audit } as Profile & { audit?: unknown };
+    delete next.audit;
+    return next;
+  });
 }
 
 function writeFile(profiles: Profile[]): void {
@@ -69,7 +77,7 @@ export function listProfiles(): Profile[] {
     next = next.map((p) => (p.owner ? p : { ...p, owner: defaultOwner }));
     changed = true;
   }
-  // Un principal por dueÃ±o (la AuditorÃ­a de cada usuario usa el suyo).
+  // Un principal por dueño (la página Reglas de cada usuario usa el suyo).
   for (const owner of new Set(next.map((p) => p.owner ?? defaultOwner))) {
     const own = next.filter((p) => (p.owner ?? defaultOwner) === owner);
     if (!own.some((p) => p.primary)) {
@@ -176,26 +184,21 @@ function cleanPrefs(prefs: unknown): Profile['prefs'] {
   return out.length ? out : undefined;
 }
 
-function cleanAudit(audit: unknown, previousVersion = 0): AuditRules | undefined {
-  if (!audit || typeof audit !== 'object') return undefined;
-  const a = audit as Partial<AuditRules>;
-  const byMap: Record<string, AuditPoolRule> = {};
-  const rawByMap = (a.pool?.byMap ?? {}) as Record<string, Partial<AuditPoolRule>>;
+function cleanProfileRules(rules: unknown, previousVersion = 0): SessionRules | undefined {
+  if (!rules || typeof rules !== 'object') return undefined;
+  const a = rules as Partial<SessionRules>;
+  const byMap: Record<string, PoolRule> = {};
+  const rawByMap = (a.pool?.byMap ?? {}) as Record<string, Partial<PoolRule>>;
   for (const [map, rule] of Object.entries(rawByMap)) {
-    byMap[map] = {
-      main: Array.isArray(rule?.main) ? rule.main.map(String).filter(Boolean) : [],
-      backup: Array.isArray(rule?.backup) ? rule.backup.map(String).filter(Boolean) : [],
-    };
+    // Un principal y hasta dos backups por mapa (los datos viejos se recortan).
+    byMap[map] = clampPoolRule(rule);
   }
   const def = a.pool?.default;
   return {
     rulesVersion: Math.max(1, Number(previousVersion) + 1 || Number(a.rulesVersion) || 1),
     pool: {
       default: def
-        ? {
-            main: Array.isArray(def.main) ? def.main.map(String).filter(Boolean) : [],
-            backup: Array.isArray(def.backup) ? def.backup.map(String).filter(Boolean) : [],
-          }
+        ? clampPoolRule(def)
         : undefined,
       byMap,
     },
@@ -230,7 +233,7 @@ export interface UpsertProfileInput {
   accounts?: ProfileAccount[];
   prefs?: Profile['prefs'];
   /** null = quitar reglas; undefined = conservar las existentes */
-  audit?: AuditRules | null;
+  rules?: SessionRules | null;
 }
 
 function forbidden(message = 'No tienes permiso sobre este perfil'): Error {
@@ -252,6 +255,8 @@ function profileLimit(owner: string): number {
  */
 export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer): Profile[] {
   const profiles = listProfiles();
+  // Compat: clientes con caché vieja aún mandan el campo `audit` en el payload.
+  const rulesInput = input.rules !== undefined ? input.rules : (input as { audit?: SessionRules | null }).audit;
   const name = String(input.name ?? '').trim();
   const tag = String(input.tag ?? '').trim();
   if (!name || !tag) throw new Error('El perfil necesita Riot ID (nombre#tag)');
@@ -285,10 +290,10 @@ export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer):
     primary: input.primary ?? existing?.primary ?? false,
     accounts,
     prefs,
-    audit:
-      input.audit === null
+    rules:
+      rulesInput === null
         ? undefined
-        : cleanAudit(input.audit, existing?.audit?.rulesVersion ?? 0) ?? existing?.audit,
+        : cleanProfileRules(rulesInput, existing?.rules?.rulesVersion ?? 0) ?? existing?.rules,
   };
 
   let merged = existing ? profiles.map((p) => (p.id === id ? next : p)) : [...profiles, next];

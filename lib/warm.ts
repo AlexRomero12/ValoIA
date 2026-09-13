@@ -4,7 +4,7 @@ import { BUCKET_LIMIT } from './henrik';
 
 /**
  * Sincroniza el bucket + MMR de los perfiles VISIBLES (los que aparecen en
- * Ranked/Auditoría), secuencialmente para respetar el throttle global de
+ * Ranked/Reglas), secuencialmente para respetar el throttle global de
  * Henrik (~18 req/min). El sync incremental hace que un ciclo típico sea
  * 1 request por perfil.
  */

@@ -4,13 +4,13 @@ import { viewerFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-/** Login RSO del usuario: {action:'login', username?, password?} | {action:'code', code} | {action:'cookie', ssid} */
+/** Login RSO del usuario: {action:'login', username?, password?} | {action:'code', code} | {action:'cookie', cookies|ssid} */
 export async function POST(req: NextRequest) {
   const viewer = viewerFromRequest(req);
   if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
   const user = viewer.username;
 
-  let body: { action?: string; username?: string; password?: string; code?: string; ssid?: string };
+  let body: { action?: string; username?: string; password?: string; code?: string; ssid?: string; cookies?: string };
   try {
     body = await req.json();
   } catch {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ ok: false, error: result.error }, { status: 400 });
     }
     if (body.action === 'cookie') {
-      const result = await rsoConnectCookie(user, body.ssid ?? '');
+      const result = await rsoConnectCookie(user, body.cookies ?? body.ssid ?? '');
       if (result.ok) return Response.json({ ok: true, status: await rsoStatus(user) });
       return Response.json({ ok: false, error: result.error }, { status: 400 });
     }

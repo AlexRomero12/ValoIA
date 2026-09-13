@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { SkinPreview } from './SkinPreview';
@@ -49,6 +49,7 @@ export function SkinPicker({
   const [search, setSearch] = useState('');
   const [favs, setFavs] = useState<Set<string>>(new Set(favoriteIds));
   const [preview, setPreview] = useState<PickerSkin | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const weaponsQ = useQuery<WeaponsResponse>({
     queryKey: ['store-weapons'],
@@ -89,6 +90,12 @@ export function SkinPicker({
     enabled: searching,
     staleTime: 60 * 1000,
   });
+
+  // Al cambiar de arma/categoría/búsqueda, el grid vuelve arriba: antes quedaba
+  // a mitad de scroll y el cambio de lista se sentía roto.
+  useEffect(() => {
+    gridRef.current?.scrollTo({ top: 0 });
+  }, [activeCategory, activeWeapon, searching, search]);
 
   const showing = searching ? (searchQ.data ?? []) : (skinsQ.data ?? []);
   const loadingSkins = (!searching && skinsQ.isFetching) || (searching && searchQ.isFetching);
@@ -209,7 +216,7 @@ export function SkinPicker({
             </p>
           </div>
         ) : (
-          <div className="picker-grid">
+          <div className="picker-grid" ref={gridRef}>
             {showing.map((s) => {
               const fav = favs.has(s.id);
               return (

@@ -2,6 +2,7 @@ import { env } from './env';
 import { cached, revalidate, invalidatePrefix } from './cache';
 import { readData, writeDataSync, deleteData } from './persist';
 import { adminUsername } from './auth';
+import { cookieHeader, mergeCookies, parseCookieInput, sessionEstimate, type CookieJar } from './rsoCookies';
 
 /**
  * Tienda diaria de Valorant — RSO por usuario.
@@ -124,8 +125,12 @@ interface RsoTokens {
 
 interface RsoState {
   tokens?: RsoTokens;
-  /** cookie ssid de la sesión web (para Cookie Reauth sin contraseña) */
+  /** Compat: sesión vieja con solo la cookie ssid suelta (se migra a `cookies`). */
   ssid?: string;
+  /** Jar de cookies de auth.riotgames.com para Cookie Reauth sin contraseña. */
+  cookies?: CookieJar;
+  /** Cuándo se conectó la sesión (para estimar su caducidad). */
+  connectedAt?: number;
   /** sesión 2FA pendiente: cookies del flujo para reanudar con el código */
   pending2fa?: { cookies: string; nonce: string };
 }
@@ -150,14 +155,16 @@ function readRsoState(user: string): RsoState {
 
   let state = readData<RsoState>(rsoFile(user), {});
   // Migración del archivo global (pre-multiusuario): solo para el admin.
-  if (!state.tokens && !state.ssid && !state.pending2fa && user === adminUsername()) {
+  if (!state.tokens && !state.ssid && !state.pending2fa && !state.cookies && user === adminUsername()) {
     const legacy = readData<RsoState>('rso.json', {});
-    if (legacy.tokens || legacy.ssid || legacy.pending2fa) {
+    if (legacy.tokens || legacy.ssid || legacy.pending2fa || legacy.cookies) {
       state = legacy;
       writeDataSync(rsoFile(user), state);
       deleteData('rso.json');
     }
   }
+  // Compat: sesiones conectadas antes de guardar el jar completo.
+  if (state.ssid && !state.cookies) state = { ...state, cookies: { ssid: state.ssid } };
   rsoCaches.set(user, state);
   return state;
 }
@@ -303,7 +310,7 @@ export async function rsoLogin(user: string, usernameArg?: string, passwordArg?:
       ok: false,
       needs2fa: false,
       error:
-        'Riot ya no acepta login programático con usuario/contraseña (exige hCaptcha de la página web). Conecta el respaldo con la cookie ssid: entra a auth.riotgames.com en tu navegador, copia la cookie «ssid» (F12 → Application → Cookies) y pégala en la página Tienda.',
+        'Riot ya no acepta login programático con usuario/contraseña (exige hCaptcha de la página web). Conecta el respaldo con la cookie ssid: entra a authenticate.riotgames.com en tu navegador, copia la cookie «ssid» (F12 → Application → Cookies) y pégala en la página Tienda.',
     };
   }
 
@@ -342,12 +349,37 @@ export async function rsoStatus(user: string): Promise<'ok' | 'needs_2fa' | 'nee
   const state = readRsoState(user);
   if (state.tokens && state.tokens.expiresAt > Date.now()) return 'ok';
   if (state.pending2fa) return 'needs_2fa';
-  if (state.ssid) {
-    // Revalidación silenciosa con la cookie guardada.
-    const r = await rsoCookieReauth(user, state.ssid);
+  const jar = state.cookies;
+  if (jar && Object.keys(jar).length) {
+    // Revalidación silenciosa con el jar guardado.
+    const r = await rsoCookieReauth(user, jar);
     if (r.ok) return 'ok';
   }
   return 'needs_cookie';
+}
+
+export interface RsoHealth {
+  status: 'ok' | 'needs_2fa' | 'needs_cookie';
+  /** Cuándo se conectó la sesión (null en sesiones previas a este dato). */
+  connectedAt: number | null;
+  /** Estimación de caducidad (heurística; Riot no la expone). */
+  estimateExpiresAt: number | null;
+  /** true = queda poco para la estimación: conviene reconectar. */
+  expiringSoon: boolean;
+}
+
+/** Estado + estimación de caducidad de la conexión de tienda del usuario. */
+export async function rsoHealth(user: string): Promise<RsoHealth> {
+  const status = await rsoStatus(user);
+  const state = readRsoState(user);
+  const jar = state.cookies;
+  const full = jar != null && Object.keys(jar).length > 1;
+  const connectedAt = state.connectedAt ?? null;
+  if (status !== 'ok' || connectedAt == null) {
+    return { status, connectedAt, estimateExpiresAt: null, expiringSoon: false };
+  }
+  const { estimateExpiresAt, expiringSoon } = sessionEstimate(connectedAt, full);
+  return { status, connectedAt, estimateExpiresAt, expiringSoon };
 }
 
 /**
@@ -357,12 +389,12 @@ export async function rsoStatus(user: string): Promise<'ok' | 'needs_2fa' | 'nee
  * Éxito = 301 hacia playvalorant.com/opt_in#access_token=...; fallo = 301
  * hacia authenticate.riotgames.com/login.
  */
-async function rsoCookieReauth(user: string, ssid: string): Promise<{ ok: boolean; newCookies?: string[]; error?: string }> {
+async function rsoCookieReauth(user: string, jar: CookieJar): Promise<{ ok: boolean; newCookies?: string[]; error?: string }> {
   const url = `https://auth.riotgames.com/authorize?redirect_uri=${encodeURIComponent(RSO_REDIRECT_URI)}&client_id=${RSO_CLIENT_ID}&response_type=${encodeURIComponent('token id_token')}&nonce=1&scope=${encodeURIComponent(RSO_SCOPE)}`;
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: { Cookie: `ssid=${ssid}`, 'User-Agent': 'RiotAuth/1.0.0 valo-ia' },
+      headers: { Cookie: cookieHeader(jar), 'User-Agent': 'RiotAuth/1.0.0 valo-ia' },
       redirect: 'manual',
       signal: AbortSignal.timeout(25_000),
     });
@@ -373,7 +405,7 @@ async function rsoCookieReauth(user: string, ssid: string): Promise<{ ok: boolea
   const newCookies = res.headers.getSetCookie?.().map((c) => c.split(';')[0]) ?? [];
 
   if (/authenticate\.riotgames\.com\/login/.test(location)) {
-    return { ok: false, error: 'La sesión (ssid) ya no es válida: entra a auth.riotgames.com en tu navegador y copia la cookie de nuevo.' };
+    return { ok: false, error: 'La sesión de tienda caducó: vuelve a copiar la cookie ssid (o la cabecera completa) y conéctala de nuevo.' };
   }
   if (!location) {
     return { ok: false, error: `Reauth sin redirección (HTTP ${res.status})` };
@@ -383,19 +415,29 @@ async function rsoCookieReauth(user: string, ssid: string): Promise<{ ok: boolea
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+  // Riot rota cookies en la respuesta: conservarlas TODAS alarga la sesión
+  // (guardar solo la ssid la acortaba a ~1 semana).
+  if (newCookies.length) {
+    const state = readRsoState(user);
+    state.cookies = mergeCookies(jar, newCookies);
+    setRsoState(user, state);
+  }
   return { ok: true, newCookies };
 }
 
-/** Conecta el respaldo con la cookie ssid del navegador (la valida y guarda). */
-export async function rsoConnectCookie(user: string, ssidRaw: string): Promise<{ ok: boolean; error?: string }> {
-  const ssid = ssidRaw.trim().replace(/^ssid=/i, '');
-  if (!ssid) return { ok: false, error: 'Falta la cookie ssid' };
-  const r = await rsoCookieReauth(user, ssid);
+/**
+ * Conecta la sesión de tienda con la cookie `ssid` suelta o con la cabecera
+ * cookie completa de auth.riotgames.com (jar completo = sesión más duradera).
+ */
+export async function rsoConnectCookie(user: string, raw: string): Promise<{ ok: boolean; error?: string }> {
+  const parsed = parseCookieInput(raw);
+  if ('error' in parsed) return { ok: false, error: parsed.error };
+  const r = await rsoCookieReauth(user, parsed.jar);
   if (!r.ok) return r;
   const state = readRsoState(user);
-  // Riot puede renovar la ssid en la respuesta: guardamos la más reciente.
-  const renewed = r.newCookies?.find((c) => c.startsWith('ssid='))?.slice(5);
-  state.ssid = renewed ?? ssid;
+  state.cookies = r.newCookies?.length ? mergeCookies(parsed.jar, r.newCookies) : parsed.jar;
+  state.connectedAt = Date.now();
+  delete state.ssid; // ya vive dentro del jar
   setRsoState(user, state);
   return { ok: true };
 }
@@ -404,9 +446,10 @@ async function rsoTokensFresh(user: string): Promise<RsoTokens | null> {
   const state = readRsoState(user);
   if (state.tokens && state.tokens.expiresAt > Date.now()) return state.tokens;
 
-  // Renovación silenciosa con la cookie ssid guardada (el cron la mantiene viva).
-  if (state.ssid) {
-    const r = await rsoCookieReauth(user, state.ssid);
+  // Renovación silenciosa con el jar guardado (el cron la mantiene viva).
+  const jar = state.cookies;
+  if (jar && Object.keys(jar).length) {
+    const r = await rsoCookieReauth(user, jar);
     if (r.ok) {
       const next = readRsoState(user).tokens ?? null;
       if (next) return next;

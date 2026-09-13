@@ -8,16 +8,16 @@ import { ROTATION_MAPS } from '@/lib/proneta';
 import { ROLES } from '@/lib/roles';
 import {
   PROFILE_COLORS,
-  cloneAuditRules,
-  emptyAuditRules,
+  cloneSessionRules,
+  emptySessionRules,
   joinRoles,
   parseRoles,
-  type AuditRules,
+  type SessionRules,
   type Profile,
   type ProfileAccount,
   type ProfilePref,
 } from '@/lib/profileTypes';
-import { AuditRulesEditor } from './AuditRulesEditor';
+import { RulesEditor } from './RulesEditor';
 
 interface ProfileFormProps {
   /** null = nuevo perfil */
@@ -37,11 +37,11 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
   const [visible, setVisible] = useState(profile?.visible ?? true);
   const [accounts, setAccounts] = useState<ProfileAccount[]>(profile?.accounts ?? []);
   const [prefs, setPrefs] = useState<ProfilePref[]>(profile?.prefs ?? []);
-  const [audit, setAudit] = useState<AuditRules | null>(profile?.audit ? cloneAuditRules(profile.audit) : null);
+  const [rules, setRules] = useState<SessionRules | null>(profile?.rules ? cloneSessionRules(profile.rules) : null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const iconState = useMemo(() => (audit ? 'on' : 'off'), [audit]);
+  const iconState = useMemo(() => (rules ? 'on' : 'off'), [rules]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -77,7 +77,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
       visible,
       accounts: accounts.filter((a) => a.name.trim() && a.tag.trim()),
       prefs: prefs.filter((p) => p.map && p.agents.length > 0),
-      audit: audit === null ? null : audit,
+      rules: rules === null ? null : rules,
     };
     const res = await actions.upsert(payload);
     setBusy(false);
@@ -112,7 +112,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
 
         <header className="pf-head">
           <h3>{profile ? `Editar ${profile.label}` : 'Nuevo perfil'}</h3>
-          <span className="window-info">Tu Riot ID, los roles que sueles jugar y las reglas de auditoría.</span>
+          <span className="window-info">Tu Riot ID, los roles que sueles jugar y las reglas de sesión.</span>
         </header>
 
         <section className="pf-section">
@@ -190,7 +190,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
             <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
             <span>Visible en Ranked</span>
           </label>
-          <p className="pf-help">El perfil principal (★) es el único que se audita en Reglas de sesión.</p>
+          <p className="pf-help">El perfil principal (★) es el único que se evalúa en Reglas de sesión.</p>
         </section>
 
         <section className="pf-section">
@@ -258,25 +258,25 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
         <section className="pf-section">
           <div className="pf-section-head">
             <h4>Reglas de sesión</h4>
-            {audit ? (
-              <button type="button" className="f-chip" onClick={() => setAudit(null)}>Quitar reglas</button>
+            {rules ? (
+              <button type="button" className="f-chip" onClick={() => setRules(null)}>Quitar reglas</button>
             ) : (
-              <button type="button" className={`f-chip${iconState === 'off' ? '' : ' player-on'}`} onClick={() => setAudit(emptyAuditRules())}>
+              <button type="button" className={`f-chip${iconState === 'off' ? '' : ' player-on'}`} onClick={() => setRules(emptySessionRules())}>
                 + Configurar reglas
               </button>
             )}
           </div>
-          {audit ? (
-            <AuditRulesEditor
-              rules={audit}
+          {rules ? (
+            <RulesEditor
+              rules={rules}
               maps={ROTATION_MAPS}
               otherProfiles={profiles.filter((p) => p.id !== profile?.id)}
-              onChange={setAudit}
+              onChange={setRules}
             />
           ) : (
             <p className="window-info">
-              Sin reglas: la auditoría solo medirá cortes/pausas con los defaults (2 derrotas con K/D &lt; 0.9 ·
-              pausa 3 h). <Link href="/auditoria">Genera una propuesta desde tus partidas</Link> y luego ajústala
+              Sin reglas: solo se miden cortes/pausas con los defaults (2 derrotas con K/D &lt; 0.9 ·
+              pausa 3 h). <Link href="/reglas">Genera una propuesta desde tus partidas</Link> y luego ajústala
               aquí.
             </p>
           )}

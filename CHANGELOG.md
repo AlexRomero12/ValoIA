@@ -2,6 +2,108 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.20.0] — 2026-09-13
+
+Tienda con menos fricción: conexión guiada y sesión más duradera.
+
+### Changed
+- **Conexión de tienda**: acepta la cabecera `cookie` completa de auth.riotgames.com (recomendada, dura ~3 semanas) o solo el valor de `ssid` (~1 semana); el reauth ahora guarda **todas** las cookies renovadas (antes solo la ssid), que es lo que alarga la vida útil
+- **Panel «Conexión con Riot»** en Tienda: pasos guiados, botón para abrir authenticate.riotgames.com, validación del pegado (detecta valor suelto, cabecera completa y errores), estado con la cuenta conectada, fecha y caducidad estimada, y botón Reconectar
+
+### Added
+- **Avisos de caducidad**: banner proactivo cuando la estimación se acerca, y push de reconexión (máx. 1/semana) a los dispositivos de quien tenga favoritas cuando la sesión cae
+
+## [1.19.0] — 2026-09-13
+
+Hub Equipo y navegación final de la IA.
+
+### Added
+- **Hub Equipo con tabs** (`Comparar · Composiciones`, enlazables con `?tab=`): la tab Comparar absorbe `/comparativo` (selector multi-perfil, filtros, evolución, ranking y agentes) y Composiciones mantiene las comps por mapa
+- **Redirect `/comparativo` → `/team?tab=comparar`** para enlaces viejos
+- **Trend de rango mejorado**: resumen del período (rango inicial → actual, pico, RR neto y récord), leyenda V/D/E y detalle interactivo por partida al pasar o tocar cada punto (fecha, mapa, agente, marcador, K/D/A, ACS, ±RR y rango)
+
+### Changed
+- **Navegación final** (escritorio y móvil): `Ranked · Equipo · Reglas · Tienda · Perfiles`; el bottom nav móvil incluye Perfiles y desaparece el chip duplicado del menú de usuario
+- **Pool de reglas con límites**: un solo principal por mapa (y en la regla default) y hasta dos backups; el editor limita la selección, la propuesta genera un principal, las recomendaciones al subir/bajar respetan los topes y el guardado normaliza datos viejos que los excedan
+
+### Fixed
+- **Propuesta de reglas con diff**: el detalle marca cada mapa como «ya aplicado» o «pendiente», lista qué prohibidos/roles/metas ya están y cuántos pendientes quedan; si todo lo propuesto ya está, lo dice (aunque tengas ajustes propios) en vez de seguir mostrándolo como si faltara hacerlo. Añadir mains/backups extra no invalida lo aplicado (se valida inclusión, no igualdad exacta)
+- **Aplicar propuestas/recomendaciones de reglas**: el panel «Propuesta de reglas» deriva el estado "aplicada" de las reglas vigentes (si las editas o las quitas, vuelve a ofrecer aplicarla) y las recomendaciones esperan el guardado mostrando «aplicado» o el error, en vez de dispararlo en segundo plano
+- **Snapshots de reglas**: se regraban al subir la versión de reglas solo en los días evaluados en vivo; los días históricos guardados no se reescriben
+- **Explorar arsenal**: el grid de skins scrollea en su propia zona con altura estable del modal, scrollbar visible y sin encadenar a la página; el scroll vuelve arriba al cambiar de arma/categoría/búsqueda, y en móvil las categorías van en una fila con scroll horizontal (más altura para las skins)
+
+## [1.18.0] — 2026-09-13
+
+Filtros multi-selección directamente en el historial.
+
+### Added
+- **Barra de filtros en «Partidas recientes»**: selects de Agente/Mapa con conteo («Jett · 12p»), chips removibles, Limpiar y contador («12 de 87 partidas · 5 días»)
+- **Multi-selección**: varios agentes y/o mapas a la vez (OR dentro del mismo tipo, AND entre tipos)
+- En Agentes/Mapas, las filas se marcan/desmarcan y aparece **«Ver partidas (N) →»** para volver al historial filtrado
+
+### Changed
+- Los paneles de WR y las tablas resaltan todas las filas seleccionadas (antes una sola)
+- Se eliminan los chips viejos `Filtro: X ✕` en favor de la barra con Limpiar
+
+## [1.17.0] — 2026-09-13
+
+Ranked como hub con tabs: el historial por día manda en Resumen.
+
+### Added
+- **Tabs internas en Ranked** (`?tab=resumen|agentes|mapas|arsenal`, deep-linkables): Resumen (KPIs + historial + top 3 + trend), Agentes y Mapas con tabla completa y ordenable, y Arsenal
+- **Tablas completas de Agentes/Mapas** (`StatsTable`): PJ, récord, WR%, K/D, ACS, ADR y HS%, ordenables por columna; click en fila filtra el historial y vuelve a Resumen
+
+### Changed
+- **Resumen reordenado**: los KPIs van primero y el historial por día pasa a ser el protagonista (antes quedaba tras los paneles de WR)
+- El día más reciente aparece expandido al entrar (el resto, colapsado)
+- Los headers de día muestran **WR%** (escritorio y móvil) además de V-D-E, K/D, ACS, ADR y ±RR
+- Los paneles de WR del Resumen muestran el top 3 con **"Ver todos"** hacia su tab
+- **Con filtro de agente/mapa activo, el historial se despliega completo** (y la paginación vuelve a la primera página); al quitarlo, vuelve al día más reciente
+- El chevron del día y "abrir análisis" ahora son botones separados (HTML válido y mejor accesible)
+
+### Fixed
+- `useSearchParams` va dentro de un Suspense boundary (requisito de Next 16 en páginas prerenderizadas)
+- Los deltas de KPI se muestran siempre debajo del valor (antes saltaban al lado según el ancho de la tarjeta)
+
+## [1.16.0] — 2026-09-13
+
+Contexto en Ranked: forma reciente, racha y deltas contra la ventana anterior.
+
+### Added
+- **Forma y racha**: franja en Ranked con las últimas 5 competitivas (V/D/E) y la racha actual; el empate la corta (`lib/form.ts`, con tests)
+- **Deltas de KPIs**: el summary calcula la ventana anterior de igual duración (en temporada, el acto previo que alcance el archivo) y cada tarjeta muestra la variación contra esa muestra (mínimo 3 partidas); en multi-cuenta se combinan ponderando por partidas
+
+### Changed
+- El conteo de primeras sangres/muertes del kill feed usa un único helper (`henrikFirsts`), compartido entre el summary y la ventana anterior
+
+## [1.15.0] — 2026-09-13
+
+Una sola fuente de stats (`lib/stats.ts`) y de nombres de rango (`lib/ranks.ts`), con tests.
+
+### Changed
+- **Agregación unificada**: `lib/stats.ts` (`computeStats`) reemplaza los cálculos paralelos de WR/K/D/ACS/ADR/HS% del cliente (`lib/compare.ts`, `lib/dayAnalysis.ts`), del servidor Henrik y del fallback Riot (`lib/valorant.ts`); la evolución de Comparar también consume la misma fuente
+- **Nombres de rango unificados** en `lib/ranks.ts` (antes en `lib/metas.ts`, `lib/valorant.ts` y `lib/compare.ts`); los iconos siguen en `lib/tiers.ts`
+- Eliminados re-exports redundantes (`wrColor` en RankingTable, `esc` en FiltersBar)
+
+### Added
+- **Tests con Vitest** (`npm run test`): 14 pruebas golden de `computeStats` (rondas, empates, RR, impacto y fallbacks) y de nombres/abreviaturas de rango
+
+### Fixed
+- ACS y ADR se muestran como enteros (redondeo en `computeStats`): el detalle por día había empezado a mostrar decimales largos
+- El HS% de un día sin totales crudos (proveedor Riot) ahora usa el promedio ponderado por rondas, en vez de 0, como el resto de vistas
+- `window.rrTotal` es `null` cuando ninguna partida trae RR (antes el servidor devolvía 0)
+
+## [1.14.0] — 2026-09-13
+
+Rename de "auditoría" a "reglas" en código, datos y URLs, con migración automática de lo persistido.
+
+### Changed
+- **Ruta `/reglas`** (antes `/auditoria`) con redirect temporal; la API pasa a `GET|POST /api/valorant/rules-history` (redirect desde la ruta vieja)
+- **Módulos renombrados**: `lib/rules.ts`, `lib/rulesHistory*.ts`, `lib/rulesProposal.ts`, `lib/rulesWatch.ts` y `components/rules/*`; tipos `SessionRules`, `PoolRule`, `DayEvaluation`, `RulesWeek`, `StoredRulesDay`; clases CSS `rules-*`
+- **Campo de perfil `rules`** (antes `audit`) y export `.valoia.json` v2; los perfiles y archivos viejos se migran solos (el import sigue aceptando el formato viejo)
+- **Push semanal**: flag `VAL_RULES_PUSH` (el nombre viejo `VAL_AUDIT_PUSH` sigue funcionando una versión)
+- Datos históricos en `rules-history.json` / `rules-notified.json`, migrados desde los archivos previos en la primera lectura
+
 ## [1.13.0] — 2026-09-11
 
 Experiencia de usuario: acceso claro, perfiles explicados, auditoría guiada, export/import, ayudas inline y Comparar en tarjetas.

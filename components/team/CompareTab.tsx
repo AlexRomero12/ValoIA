@@ -10,6 +10,7 @@ import { TrendCompare } from '@/components/compare/TrendCompare';
 import { AgentByPlayerCards, AgentByAgentCards } from '@/components/compare/AgentCards';
 import { ProfilePicker } from '@/components/profiles/ProfilePicker';
 import { ProfileForm } from '@/components/profiles/ProfileForm';
+import { EquipoTabs, type EquipoTabProps } from './EquipoTabs';
 import { useCooldown } from '@/lib/useCooldown';
 import { DEFAULT_LIMIT, nextLimit, MAX_LIMIT, useProfiles } from '@/lib/hooks';
 import { memberAccounts, profileColor, type Profile } from '@/lib/profileTypes';
@@ -18,15 +19,15 @@ import {
   buildTimeline,
   mergeAccountSummaries,
   resolveGranularity,
-  statsFromMatches,
   unionOf,
-  tierShort,
   RANK_AXIS_MIN,
   type CompareFilters,
   type Granularity,
   type MetricKey,
   DEFAULT_FILTERS,
 } from '@/lib/compare';
+import { computeStats } from '@/lib/stats';
+import { tierShort } from '@/lib/ranks';
 import type { ValSummary } from '@/lib/types';
 
 type WinValue = WindowValue;
@@ -38,7 +39,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export default function ComparativoPage() {
+export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
   const [win, setWin] = useState<WinValue>('season');
   const [filters, setFilters] = useState<CompareFilters>(DEFAULT_FILTERS);
   const [gran, setGran] = useState<Granularity>('auto');
@@ -197,7 +198,7 @@ export default function ComparativoPage() {
       entries
         .map((e, i) => {
           if (!e.data) return null;
-          const stats = statsFromMatches(filteredPerPlayer[i]);
+          const stats = computeStats(filteredPerPlayer[i]);
           if (stats.games < filters.minGames) return null;
           const row: RankRow & { matchesCount: number } = {
             id: e.member.id,
@@ -313,7 +314,7 @@ export default function ComparativoPage() {
     if (metric === 'rank') {
       return e.data?.currentElo ?? (e.data?.currentTier ? e.data.currentTier * 100 : Number.NEGATIVE_INFINITY);
     }
-    const s = statsFromMatches(filteredPerPlayer[i] ?? []);
+    const s = computeStats(filteredPerPlayer[i] ?? []);
     if (metric === 'acs') return s.acs;
     if (metric === 'kd') return s.kd;
     return s.wr;
@@ -342,8 +343,8 @@ export default function ComparativoPage() {
     <div className="wrap">
       <TopBar
         accent="red"
-        title="Comparar"
-        subtitle={['Equipo', 'Perfiles']}
+        title="Equipo"
+        subtitle={['Comparar', 'perfiles']}
         chip={
           <span className="chip-red">
             {loadingProfiles || coldLoad
@@ -355,8 +356,10 @@ export default function ComparativoPage() {
         onRefresh={refresh}
         loading={isRefreshing}
         disabled={cooldown.locked || selected.length === 0}
-        activePage="comparar"
+        activePage="equipo"
       />
+
+      <EquipoTabs tab={hubTab} onTab={onTab} />
 
       <LoadingOverlay
         open={loadingProfiles}
@@ -440,7 +443,7 @@ export default function ComparativoPage() {
                 <b>{e.member.label}{e.accounts > 1 ? ` · ${e.accounts} cuentas` : ''}</b>
                 {e.data ? (
                   <span className="mini-stats">
-                    {statsFromMatches(filteredPerPlayer[i]).games}p · {metricLabel}{' '}
+                    {computeStats(filteredPerPlayer[i]).games}p · {metricLabel}{' '}
                     {Number.isFinite(v) ? fmtMetric(v) : '—'}
                   </span>
                 ) : (

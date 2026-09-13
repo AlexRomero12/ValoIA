@@ -16,13 +16,15 @@ interface WrPanelProps {
   rows: WrRow[];
   icons: Map<string, string | null>;
   onPick?: (name: string) => void;
-  /** Fila seleccionada (resaltada) cuando el panel filtra la tabla de partidas */
-  active?: string | null;
+  /** Filas seleccionadas (resaltadas) cuando el panel filtra las partidas */
+  active?: string[];
   /** Colapsa la lista a N filas con botón "Ver más" */
   limit?: number;
+  /** Si viene, el botón lleva a otra vista (p. ej. la tab de Agentes) en vez de expandir */
+  onMore?: () => void;
 }
 
-export function WrPanel({ label, rows, icons, onPick, active, limit }: WrPanelProps) {
+export function WrPanel({ label, rows, icons, onPick, active, limit, onMore }: WrPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const sorted = [...rows].sort((a, b) => b.matches - a.matches || b.wr - a.wr);
   const kind = label === 'Agente' ? 'agent-icon' : 'map-icon';
@@ -36,8 +38,8 @@ export function WrPanel({ label, rows, icons, onPick, active, limit }: WrPanelPr
       <h2>Winrate · {label}</h2>
       {onPick && sorted.length ? (
         <p className="wr-hint">
-          Filtros dinámicos: toca {label === 'Agente' ? 'un agente' : 'un mapa'} para filtrar «Partidas recientes»
-          por él; tócalo otra vez para quitar el filtro.
+          Filtros dinámicos: toca {label === 'Agente' ? 'un agente' : 'un mapa'} para añadirlo o quitarlo del filtro
+          del historial.
         </p>
       ) : null}
       {!sorted.length ? (
@@ -54,7 +56,7 @@ export function WrPanel({ label, rows, icons, onPick, active, limit }: WrPanelPr
             return (
               <div
                 key={name}
-                className={`wr-row${onPick ? ' pickable' : ''}${active === name ? ' on' : ''}`}
+                className={`wr-row${onPick ? ' pickable' : ''}${active?.includes(name) ? ' on' : ''}`}
                 title={`${name} — ${record}${onPick ? ' · click para filtrar Partidas recientes' : ''}`}
                 onClick={onPick ? () => onPick(name) : undefined}
               >
@@ -76,8 +78,12 @@ export function WrPanel({ label, rows, icons, onPick, active, limit }: WrPanelPr
       )}
       {capped ? (
         <div className="filter-bar" style={{ justifyContent: 'center', marginTop: 8 }}>
-          <button className="f-chip" onClick={() => setExpanded((v) => !v)}>
-            {expanded ? 'Ver menos' : `Ver más (${hidden} ${noun}${hidden === 1 ? '' : 's'} más)`}
+          <button className="f-chip" onClick={onMore ?? (() => setExpanded((v) => !v))}>
+            {onMore
+              ? `Ver todos (${sorted.length} ${noun}s) →`
+              : expanded
+                ? 'Ver menos'
+                : `Ver más (${hidden} ${noun}${hidden === 1 ? '' : 's'} más)`}
           </button>
         </div>
       ) : null}

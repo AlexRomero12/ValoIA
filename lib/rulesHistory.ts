@@ -1,16 +1,16 @@
-import type { AuditDay } from './audit';
+import type { DayEvaluation } from './rules';
 
 /**
- * Tipos y helpers puros de la copia histórica de auditoría.
+ * Tipos y helpers puros de la copia histórica de reglas.
  * SIN `node:fs`: este módulo se importa desde el client bundle (la página
- * /auditoria). La lectura/escritura en disco vive en `auditHistoryStore.ts`.
+ * /reglas). La lectura/escritura en disco vive en `rulesHistoryStore.ts`.
  *
  * Clave del snapshot: `${profileId}:${YYYY-MM-DD}` — cada perfil tiene su
  * historial independiente. Snapshots viejos sin prefijo se asignan al primer
  * perfil del dueño.
  */
 
-export interface StoredAuditDay {
+export interface StoredRulesDay {
   /** `${profileId}:${YYYY-MM-DD}` */
   key: string;
   profileId: string;
@@ -47,8 +47,8 @@ export function storedDayOf(key: string): string {
   return i >= 0 ? key.slice(i + 1) : key;
 }
 
-/** Snapshot de un día auditado (para persistir). */
-export function toStoredAuditDay(d: AuditDay, profileId: string, rulesVersion?: number): StoredAuditDay {
+/** Snapshot de un día evaluado (para persistir). */
+export function toStoredRulesDay(d: DayEvaluation, profileId: string, rulesVersion?: number): StoredRulesDay {
   return {
     key: storedDayKey(profileId, d.key),
     profileId,
@@ -73,8 +73,8 @@ export function toStoredAuditDay(d: AuditDay, profileId: string, rulesVersion?: 
   };
 }
 
-/** Reconstruye un AuditDay desde la copia guardada (sin detalle por partida). */
-export function storedToAuditDay(s: StoredAuditDay): AuditDay {
+/** Reconstruye un DayEvaluation desde la copia guardada (sin detalle por partida). */
+export function storedToRulesDay(s: StoredRulesDay): DayEvaluation {
   return {
     key: storedDayOf(s.key),
     label: s.label,
@@ -101,9 +101,13 @@ export function storedToAuditDay(s: StoredAuditDay): AuditDay {
 }
 
 /** Compara contenido (sin savedAt) para no regrabar snapshots idénticos. */
-export function sameAuditDay(a: StoredAuditDay, b: StoredAuditDay): boolean {
+export function sameRulesDay(a: StoredRulesDay, b: StoredRulesDay): boolean {
   return (
+    // La versión forma parte del snapshot: al cambiar reglas debe regrabarse
+    // aunque la evaluación del día no cambie (evita quedar marcado como viejo).
+    a.rulesVersion === b.rulesVersion &&
     a.matches === b.matches &&
+    a.bannedCount === b.bannedCount &&
     a.realRR === b.realRR &&
     a.planRR === b.planRR &&
     a.planPoolRR === b.planPoolRR &&

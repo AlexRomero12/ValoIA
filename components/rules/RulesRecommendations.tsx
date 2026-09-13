@@ -2,18 +2,18 @@
 
 import { useMemo, useState } from 'react';
 import type { MatchRow } from '@/lib/types';
-import type { AuditDay } from '@/lib/audit';
-import { cloneAuditRules, poolRuleFor, type AuditRules, type Profile } from '@/lib/profileTypes';
+import type { DayEvaluation } from '@/lib/rules';
+import { clampPoolRule, cloneSessionRules, poolRuleFor, type SessionRules, type Profile } from '@/lib/profileTypes';
 
-interface AuditRecommendationsProps {
+interface RulesRecommendationsProps {
   profile: Profile;
-  rules?: AuditRules;
+  rules?: SessionRules;
   /** Partidas del ámbito (semana actual o semana pasada concreta). */
   matches: MatchRow[];
-  /** Días auditados del ámbito (incluye snapshots sin detalle). */
-  days: AuditDay[];
-  onApply: (next: AuditRules) => Promise<void>;
-  onConfigure: () => Promise<void>;
+  /** Días evaluados del ámbito (incluye snapshots sin detalle). */
+  days: DayEvaluation[];
+  onApply: (next: SessionRules) => Promise<boolean>;
+  onConfigure: () => Promise<boolean>;
   /** Texto del ámbito, p. ej. "semana actual" o "semana del 1 · 9" */
   scopeLabel?: string;
   /** true = sin tarjeta propia (para incrustar en la tabla de semanas) */
@@ -25,7 +25,7 @@ interface Suggestion {
   tone: 'bad' | 'warn' | 'info' | 'good';
   title: string;
   detail: string;
-  action?: { label: string; run: () => void };
+  action?: { label: string; run: () => Promise<boolean> };
 }
 
 const MIN_GAMES = 5;
@@ -38,12 +38,12 @@ function fmtRR(v: number): string {
 }
 
 /**
- * Recomendaciones de auditoría calculadas con datos ya cargados ($0 requests):
+ * Recomendaciones de reglas calculadas con datos ya cargados ($0 requests):
  * violaciones recurrentes, cortes ignorados, reglas vs datos (subir/bajar
  * agente), metas y mapas jugados sin regla. Todo se limita al ámbito recibido
  * (semana actual arriba; semanas pasadas dentro de su "Ver más").
  */
-export function AuditRecommendations({
+export function RulesRecommendations({
   profile,
   rules,
   matches,
@@ -52,7 +52,7 @@ export function AuditRecommendations({
   onConfigure,
   scopeLabel = 'semana actual',
   embedded = false,
-}: AuditRecommendationsProps) {
+}: RulesRecommendationsProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -63,12 +63,10 @@ export function AuditRecommendations({
         id: 'nopool',
         tone: 'warn',
         title: 'Sin pool configurado',
-        detail: 'Define principales, backups y prohibidos para auditar la disciplina de pick de este perfil.',
+        detail: 'Define principales, backups y prohibidos para aplicar tus reglas la disciplina de pick de este perfil.',
         action: {
           label: 'Configurar',
-          run: () => {
-            void onConfigure();
-          },
+          run: () => onConfigure(),
         },
       });
     }
@@ -137,15 +135,15 @@ export function AuditRecommendations({
             detail: `Por debajo del ${MAIN_LOW_WR}%. Considera bajarlo a backup y probar otra opción.`,
             action: {
               label: 'Bajar a backup',
-              run: () => {
-                if (!rules) return;
-                const next = cloneAuditRules(rules);
+              run: async () => {
+                if (!rules) return false;
+                const next = cloneSessionRules(rules);
                 const current = next.pool.byMap[map] ?? { main: [...rule.main], backup: [...rule.backup] };
-                next.pool.byMap[map] = {
+                next.pool.byMap[map] = clampPoolRule({
                   main: current.main.filter((a) => a !== agent),
                   backup: current.backup.includes(agent) ? current.backup : [...current.backup, agent],
-                };
-                void onApply(next);
+                });
+                return onApply(next);
               },
             },
           });
@@ -162,15 +160,16 @@ export function AuditRecommendations({
             detail: `Por encima del ${BACKUP_HIGH_WR}%. Puede subir a principal.`,
             action: {
               label: 'Subir a principal',
-              run: () => {
-                if (!rules) return;
-                const next = cloneAuditRules(rules);
+              run: async () => {
+                if (!rules) return false;
+                const next = cloneSessionRules(rules);
                 const current = next.pool.byMap[map] ?? { main: [...rule.main], backup: [...rule.backup] };
-                next.pool.byMap[map] = {
-                  main: current.main.includes(agent) ? current.main : [...current.main, agent],
-                  backup: current.backup.filter((a) => a !== agent),
-                };
-                void onApply(next);
+                // El agente pasa a principal (el anterior cae a backup si cabe).
+                next.pool.byMap[map] = clampPoolRule({
+                  main: [agent],
+                  backup: [...current.backup.filter((a) => a !== agent), ...current.main.filter((a) => a !== agent)],
+                });
+                return onApply(next);
               },
             },
           });
@@ -230,7 +229,7 @@ export function AuditRecommendations({
           id: 'unruled',
           tone: 'info',
           title: `Sin regla en ${unruled.join(', ')}`,
-          detail: 'Jugaste esos mapas pero no tienen pool definido: sin regla la auditoría no puede marcarlos.',
+          detail: 'Jugaste esos mapas pero no tienen pool definido: sin regla no se pueden marcar.',
         });
       }
     }
@@ -267,7 +266,10 @@ export function AuditRecommendations({
                     setBusy(s.id);
                     setMsg(null);
                     try {
-                      await s.action!.run();
+                      const ok = await s.action!.run();
+                      setMsg(ok ? `«${s.action!.label}» aplicado` : 'No se pudo aplicar — revisa el aviso de arriba.');
+                    } catch (e) {
+                      setMsg(`No se pudo aplicar: ${e instanceof Error ? e.message : String(e)}`);
                     } finally {
                       setBusy(null);
                     }

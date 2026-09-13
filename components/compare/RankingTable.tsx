@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { wrColor } from '@/lib/metas';
-import { tierShort } from '@/lib/compare';
+import { tierShort } from '@/lib/ranks';
 import { TierIcon } from '@/components/TierIcon';
-import type { PlayerStats } from '@/lib/compare';
+import type { PlayerStats } from '@/lib/stats';
 
 export interface RankRow {
   id: string;
@@ -253,5 +253,3 @@ function bestId(rows: RankRow[], k: SortKey, better: 'high' | 'low'): string | n
   }
   return best?.id ?? null;
 }
-
-export { wrColor };

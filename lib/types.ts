@@ -118,6 +118,8 @@ export interface ValSummary {
     truncated?: boolean;
   };
   kpis: ValKpis;
+  /** Ventana anterior de igual duración (deltas de KPIs); null si no hay datos. */
+  prev?: ValKpis | null;
   currentTier: number;
   startTier: number;
   currentElo?: number | null;

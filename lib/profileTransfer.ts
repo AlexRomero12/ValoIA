@@ -1,4 +1,4 @@
-import type { AuditRules, Profile, ProfileAccount, ProfilePref } from './profileTypes';
+import type { SessionRules, Profile, ProfileAccount, ProfilePref } from './profileTypes';
 
 /**
  * Export/import de configuración de perfiles (solo datos del perfil, nunca
@@ -7,7 +7,7 @@ import type { AuditRules, Profile, ProfileAccount, ProfilePref } from './profile
  */
 
 export const TRANSFER_KIND = 'valoia.profiles';
-export const TRANSFER_VERSION = 1;
+export const TRANSFER_VERSION = 2;
 
 export interface ProfileExport {
   label: string;
@@ -19,7 +19,7 @@ export interface ProfileExport {
   primary?: boolean;
   accounts?: ProfileAccount[];
   prefs?: ProfilePref[];
-  audit?: AuditRules;
+  rules?: SessionRules;
 }
 
 export interface TransferFile {
@@ -40,7 +40,7 @@ export function toExportable(p: Profile): ProfileExport {
     primary: p.primary,
     accounts: p.accounts,
     prefs: p.prefs,
-    audit: p.audit,
+    rules: p.rules,
   };
 }
 
@@ -103,7 +103,12 @@ function cleanProfileExport(raw: unknown): ProfileExport | null {
     primary: r.primary === true,
     accounts,
     prefs,
-    audit: r.audit && typeof r.audit === 'object' ? (r.audit as AuditRules) : undefined,
+    rules:
+      r.rules && typeof r.rules === 'object'
+        ? (r.rules as SessionRules)
+        : r.audit && typeof r.audit === 'object'
+          ? (r.audit as SessionRules)
+          : undefined,
   };
 }
 

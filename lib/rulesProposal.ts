@@ -1,9 +1,9 @@
 import { agentRole } from './roles';
 import type { MatchRow } from './types';
-import type { AuditPoolRule, AuditRules } from './profileTypes';
+import { poolRuleFor, type PoolRule, type SessionRules } from './profileTypes';
 
 /**
- * Propuesta inicial de reglas de auditoría a partir de las partidas ya cargadas
+ * Propuesta inicial de reglas de sesión a partir de las partidas ya cargadas
  * (30 días competitivos). Puro y determinista: sin red ni DOM, fácil de testear.
  *
  * Criterios conservadores por muestra (editables arriba): un mapa necesita 3
@@ -39,8 +39,8 @@ export interface ProposalMapRule {
   backup: ProposalCandidate[];
 }
 
-export interface AuditProposal {
-  rules: AuditRules;
+export interface RulesProposal {
+  rules: SessionRules;
   maps: ProposalMapRule[];
   bannedAgents: ProposalCandidate[];
   bannedRoles: ProposalCandidate[];
@@ -71,7 +71,7 @@ function wrOf(s: Stat): number {
 }
 
 /** Construye la propuesta; `null` si no hay muestra suficiente (mín. 5 partidas). */
-export function buildAuditProposal(matches: MatchRow[]): AuditProposal | null {
+export function buildRulesProposal(matches: MatchRow[]): RulesProposal | null {
   const valid = matches.filter((m) => m.map && m.map !== '?' && m.agent && m.agent !== '?');
   if (valid.length < 5) return null;
 
@@ -101,14 +101,14 @@ export function buildAuditProposal(matches: MatchRow[]): AuditProposal | null {
   }
 
   const maps: ProposalMapRule[] = [];
-  const byMap: Record<string, AuditPoolRule> = {};
+  const byMap: Record<string, PoolRule> = {};
   for (const [map, perAgent] of mapAgents) {
     if ((mapGames.get(map) ?? 0) < PROPOSAL.mapMinGames) continue;
     const cands: ProposalCandidate[] = [...perAgent.entries()]
       .filter(([, s]) => s.games >= PROPOSAL.agentMainMinGames)
       .map(([name, s]) => ({ name, wr: wrOf(s), games: s.games }))
       .sort((a, b) => b.wr - a.wr || b.games - a.games);
-    const main = cands.filter((c) => c.wr >= PROPOSAL.agentMainMinWr).slice(0, 2);
+    const main = cands.filter((c) => c.wr >= PROPOSAL.agentMainMinWr).slice(0, 1);
     if (!main.length) continue;
     const mainSet = new Set(main.map((c) => c.name));
     const backup = cands.filter((c) => !mainSet.has(c.name)).slice(0, 2);
@@ -126,7 +126,7 @@ export function buildAuditProposal(matches: MatchRow[]): AuditProposal | null {
     .map(([name, s]) => ({ name, wr: wrOf(s), games: s.games }))
     .sort((a, b) => a.wr - b.wr);
 
-  const rules: AuditRules = {
+  const rules: SessionRules = {
     rulesVersion: 1,
     pool: { default: { main: [], backup: [] }, byMap },
     bannedAgents: bannedAgents.map((b) => b.name),
@@ -137,4 +137,70 @@ export function buildAuditProposal(matches: MatchRow[]): AuditProposal | null {
   };
 
   return { rules, maps, bannedAgents, bannedRoles, matches: valid.length };
+}
+
+function containsAll(list: string[], items: ProposalCandidate[]): boolean {
+  const set = new Set(list);
+  return items.every((c) => set.has(c.name));
+}
+
+export interface ProposalDiff {
+  /** Mapas cuyo pool propuesto ya coincide con las reglas vigentes. */
+  mapsApplied: string[];
+  /** Mapas propuestos que aún no coinciden (aplicar los cambia). */
+  mapsPending: ProposalMapRule[];
+  bannedApplied: string[];
+  bannedPending: ProposalCandidate[];
+  rolesApplied: string[];
+  rolesPending: ProposalCandidate[];
+  /** Las metas del plan difieren de las vigentes. */
+  goalsPending: boolean;
+  /** Total de cosas por aplicar (mapas + prohibidos + roles + metas). */
+  pendingTotal: number;
+}
+
+/**
+ * Compara la propuesta con las reglas vigentes para mostrar qué parte ya está
+ * aplicada y qué queda pendiente (el conjunto puede coincidir en mapas pero no
+ * en metas o prohibidos, y al revés).
+ */
+export function diffProposal(proposal: RulesProposal, current?: SessionRules): ProposalDiff {
+  const mapsApplied: string[] = [];
+  const mapsPending: ProposalMapRule[] = [];
+  for (const m of proposal.maps) {
+    const rule: PoolRule | null = poolRuleFor(current, m.map);
+    // Aplicado si lo propuesto está incluido en las reglas vigentes: añadir
+    // mains/backups extra (ajustes propios) no invalida lo ya hecho.
+    const ok = rule != null && containsAll(rule.main, m.main) && containsAll(rule.backup, m.backup);
+    if (ok) mapsApplied.push(m.map);
+    else mapsPending.push(m);
+  }
+
+  const bannedApplied = proposal.bannedAgents.filter((b) => current?.bannedAgents.includes(b.name)).map((b) => b.name);
+  const bannedPending = proposal.bannedAgents.filter((b) => !current?.bannedAgents.includes(b.name));
+  const rolesApplied = proposal.bannedRoles.filter((r) => current?.bannedRoles.includes(r.name)).map((r) => r.name);
+  const rolesPending = proposal.bannedRoles.filter((r) => !current?.bannedRoles.includes(r.name));
+
+  const p = proposal.rules.goals;
+  const g = current?.goals;
+  const goalsPending = !(
+    g &&
+    g.wr === p.wr &&
+    g.kd === p.kd &&
+    g.acs === p.acs &&
+    g.hsPct === p.hsPct &&
+    g.adr === p.adr &&
+    Boolean(g.fbPositive) === Boolean(p.fbPositive)
+  );
+
+  return {
+    mapsApplied,
+    mapsPending,
+    bannedApplied,
+    bannedPending,
+    rolesApplied,
+    rolesPending,
+    goalsPending,
+    pendingTotal: mapsPending.length + bannedPending.length + rolesPending.length + (goalsPending ? 1 : 0),
+  };
 }

@@ -1,9 +1,9 @@
 import { readData, writeData } from './persist';
 import { listProfiles } from './profiles';
-import type { StoredAuditDay } from './auditHistory';
+import type { StoredRulesDay } from './rulesHistory';
 
 /**
- * Persistencia de la copia histórica de auditoría (server-only, usa `node:fs`).
+ * Persistencia de la copia histórica de reglas (server-only, usa `node:fs`).
  *
  * El mmr-history de Henrik solo cubre las últimas ~20 competitivas: cuando un
  * día sale de esa ventana, su RR deja de ser recuperable desde la API. Aquí se
@@ -14,20 +14,22 @@ import type { StoredAuditDay } from './auditHistory';
  * Clave por perfil: `${profileId}:${YYYY-MM-DD}`. Los snapshots viejos (sin
  * prefijo, de la época sin perfiles) se asignan una vez al primer perfil.
  *
- * Durabilidad: mismo patrón que favoritas/comentarios — `data/audit-history.json`
+ * Durabilidad: mismo patrón que favoritas/comentarios — `data/rules-history.json`
  * (volumen Docker `valo-data`), externo al cache, con writes atómicos.
  */
 
-interface AuditHistoryFile {
+interface RulesHistoryFile {
   version: number;
-  days: Record<string, StoredAuditDay>;
+  days: Record<string, StoredRulesDay>;
 }
 
-const HISTORY_FILE = 'audit-history.json';
+const HISTORY_FILE = 'rules-history.json';
+/** Archivo previo al rename: se migra a `rules-history.json` en la primera lectura. */
+const LEGACY_HISTORY_FILE = 'audit-history.json';
 
-function migrate(days: Record<string, StoredAuditDay>): { days: Record<string, StoredAuditDay>; changed: boolean } {
+function migrate(days: Record<string, StoredRulesDay>): { days: Record<string, StoredRulesDay>; changed: boolean } {
   let changed = false;
-  const out: Record<string, StoredAuditDay> = {};
+  const out: Record<string, StoredRulesDay> = {};
   for (const [key, day] of Object.entries(days)) {
     if (!day) continue;
     if (key.includes(':')) {
@@ -43,20 +45,27 @@ function migrate(days: Record<string, StoredAuditDay>): { days: Record<string, S
   return { days: out, changed };
 }
 
-function readHistory(): Record<string, StoredAuditDay> {
-  const file = readData<AuditHistoryFile>(HISTORY_FILE, { version: 1, days: {} });
+function readHistory(): Record<string, StoredRulesDay> {
+  let file = readData<RulesHistoryFile>(HISTORY_FILE, { version: 2, days: {} });
+  if (!file?.days || Object.keys(file.days).length === 0) {
+    const legacy = readData<RulesHistoryFile>(LEGACY_HISTORY_FILE, { version: 2, days: {} });
+    if (legacy?.days && Object.keys(legacy.days).length > 0) {
+      file = { version: 2, days: legacy.days };
+      writeData(HISTORY_FILE, file);
+    }
+  }
   const raw = file?.days && typeof file.days === 'object' ? file.days : {};
   const { days, changed } = migrate(raw);
   if (changed) writeData(HISTORY_FILE, { version: 2, days });
   return days;
 }
 
-export async function getAuditHistory(): Promise<Record<string, StoredAuditDay>> {
+export async function getRulesHistory(): Promise<Record<string, StoredRulesDay>> {
   return readHistory();
 }
 
 /** Upsert de días (por key compuesta). Devuelve el estado completo. */
-export async function upsertAuditDays(days: StoredAuditDay[]): Promise<Record<string, StoredAuditDay>> {
+export async function upsertRulesDays(days: StoredRulesDay[]): Promise<Record<string, StoredRulesDay>> {
   const current = readHistory();
   const next = { ...current };
   for (const d of days) {

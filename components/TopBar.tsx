@@ -17,7 +17,7 @@ interface TopBarProps {
   disabled?: boolean;
   /** Motivo a mostrar cuando `disabled` lo apaga por algo que no es cooldown. */
   disabledReason?: string;
-  activePage: 'ranked' | 'comparar' | 'team' | 'tienda' | 'auditoria' | 'perfiles';
+  activePage: 'ranked' | 'equipo' | 'tienda' | 'reglas' | 'perfiles';
 }
 
 const REFRESH_COOLDOWN_S = 60;
@@ -72,12 +72,11 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
       </div>
 
       <nav className="nav" style={{ ['--accent-nav' as string]: emColor }}>
-        <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''}>Perfiles</Link>
         <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''}>Ranked</Link>
-        <Link href="/comparativo" className={activePage === 'comparar' ? 'active' : ''}>Comparar</Link>
-        <Link href="/team" className={activePage === 'team' ? 'active' : ''}>Equipo</Link>
-        <Link href="/auditoria" className={activePage === 'auditoria' ? 'active' : ''}>Reglas</Link>
+        <Link href="/team" className={activePage === 'equipo' ? 'active' : ''}>Equipo</Link>
+        <Link href="/reglas" className={activePage === 'reglas' ? 'active' : ''}>Reglas</Link>
         <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>
+        <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''}>Perfiles</Link>
       </nav>
 
       <MobileNav activePage={activePage} />

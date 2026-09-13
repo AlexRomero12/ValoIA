@@ -11,13 +11,15 @@ interface AgentPickerProps {
   /** true = chips compactos sin panel de búsqueda (para filas de pool) */
   compact?: boolean;
   placeholder?: string;
+  /** Tope de selección (p. ej. 1 principal, 2 backups). */
+  max?: number;
 }
 
 /**
  * Selector multi-agente con iconos del catálogo. Muestra los ya elegidos como
  * chips removibles y un panel buscable con el resto.
  */
-export function AgentPicker({ selected, onChange, label, accent = '#ff4655', compact = false, placeholder = 'Agregar agente…' }: AgentPickerProps) {
+export function AgentPicker({ selected, onChange, label, accent = '#ff4655', compact = false, placeholder = 'Agregar agente…', max }: AgentPickerProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const boxRef = useRef<HTMLDivElement>(null);
@@ -56,8 +58,15 @@ export function AgentPicker({ selected, onChange, label, accent = '#ff4655', com
       .map((name) => ({ name, icon: iconOf.get(name.toLowerCase()) ?? known.get(name.toLowerCase())?.icon ?? null }));
   }, [catalog, selected, q, iconOf]);
 
+  const full = max != null && selected.length >= max;
+
   const toggle = (name: string) => {
-    onChange(selected.includes(name) ? selected.filter((a) => a !== name) : [...selected, name]);
+    if (selected.includes(name)) {
+      onChange(selected.filter((a) => a !== name));
+      return;
+    }
+    if (full) return;
+    onChange([...selected, name]);
   };
 
   return (
@@ -78,20 +87,25 @@ export function AgentPicker({ selected, onChange, label, accent = '#ff4655', com
       {open && (
         <div className="agent-panel">
           <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar agente…" className="agent-search" />
+          {full ? <span className="agent-picker-label">Máximo {max} — quita uno para agregar otro</span> : null}
           <div className="agent-grid">
             {options.length === 0 && <span className="empty">Sin resultados</span>}
-            {options.map(({ name, icon }) => (
-              <button
-                key={name}
-                type="button"
-                className={`agent-opt${selected.includes(name) ? ' on' : ''}`}
-                onClick={() => toggle(name)}
-                title={name}
-              >
-                {icon ? <img src={icon} alt="" /> : <span className="agent-opt-none" />}
-                <span>{name}</span>
-              </button>
-            ))}
+            {options.map(({ name, icon }) => {
+              const on = selected.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  className={`agent-opt${on ? ' on' : ''}`}
+                  onClick={() => toggle(name)}
+                  disabled={!on && full}
+                  title={!on && full ? `Máximo ${max}` : name}
+                >
+                  {icon ? <img src={icon} alt="" /> : <span className="agent-opt-none" />}
+                  <span>{name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

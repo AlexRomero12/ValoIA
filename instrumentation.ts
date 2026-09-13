@@ -1,7 +1,7 @@
 import { env } from './lib/env';
 import { warmAllPlayers } from './lib/warm';
 import { watchStoreAndNotify } from './lib/storeWatch';
-import { watchWeeklyAudit } from './lib/auditWatch';
+import { watchWeeklyRules } from './lib/rulesWatch';
 
 /**
  * Mantenimiento en background del dashboard (opcional, opt-in):
@@ -18,8 +18,8 @@ import { watchWeeklyAudit } from './lib/auditWatch';
  * favoritas y suscripciones push, se refresca el storefront (local o RSO) y se
  * notifica cuando una favorita aparece en la tienda (una vez por día por skin).
  *
- * La auditoría semanal (lunes por la mañana, dedupe semanal) manda un push por
- * perfil con cortes ignorados/violaciones de pool (VAL_AUDIT_PUSH=0 lo apaga).
+ * El aviso semanal de reglas (lunes por la mañana, dedupe semanal) manda un push
+ * por perfil con cortes ignorados/violaciones de pool (VAL_RULES_PUSH=0 lo apaga).
  */
 export function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
@@ -64,22 +64,22 @@ export function register() {
   setTimeout(() => void storeCycle(), 45_000);
   setInterval(() => void storeCycle(), 60 * 60 * 1000);
 
-  // Aviso semanal de auditoría: revisa cada 60 min y envía una vez por semana.
-  let auditRunning = false;
-  const auditCycle = async () => {
-    if (auditRunning) return;
-    auditRunning = true;
+  // Aviso semanal de reglas: revisa cada 60 min y envía una vez por semana.
+  let rulesRunning = false;
+  const rulesCycle = async () => {
+    if (rulesRunning) return;
+    rulesRunning = true;
     try {
-      const result = await watchWeeklyAudit();
+      const result = await watchWeeklyRules();
       if (result.checked && result.sent > 0) {
-        console.log(`[audit] resumen semanal ${result.week}: ${result.sent} push enviado(s)`);
+        console.log(`[rules] resumen semanal ${result.week}: ${result.sent} push enviado(s)`);
       }
     } catch (e) {
-      console.error(`[audit] aviso semanal falló: ${e instanceof Error ? e.message : String(e)}`);
+      console.error(`[rules] aviso semanal falló: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      auditRunning = false;
+      rulesRunning = false;
     }
   };
-  setTimeout(() => void auditCycle(), 90_000);
-  setInterval(() => void auditCycle(), 60 * 60 * 1000);
+  setTimeout(() => void rulesCycle(), 90_000);
+  setInterval(() => void rulesCycle(), 60 * 60 * 1000);
 }

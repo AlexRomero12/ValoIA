@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { agentCombos, agentMatrix, type AgentCombo, type CompareFilters, type PlayerStats } from '@/lib/compare';
+import { agentCombos, agentMatrix, type AgentCombo, type CompareFilters } from '@/lib/compare';
+import type { PlayerStats } from '@/lib/stats';
 import type { MatchRow } from '@/lib/types';
 import { wrColor } from '@/lib/metas';
 import { useAgentIcons, agentIconLookup } from '@/lib/hooks';
