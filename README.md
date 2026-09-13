@@ -2,7 +2,7 @@
 
 Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) con cache persistente, Docker y **perfiles configurables** (tú decides a quién ver y qué reglas aplicar).
 
-> Estado actual: **v1.20.0** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado actual: **v1.21.0** — ver [CHANGELOG.md](./CHANGELOG.md)
 
 ## Estructura
 
@@ -40,7 +40,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Forma reciente y deltas**: últimas 5 partidas (V/D/E) con racha actual, y cada KPI con su variación contra la ventana anterior de igual duración (mín. 3 partidas)
 - Winrate por agente y por mapa con íconos oficiales (click filtra las partidas); el panel de **agente muestra los 6 más jugados** con **Ver más/Ver menos** (el resto queda a un toque, sin estirar el layout)
 - **Arsenal · Uso de armas** por perfil: kills por arma con barra de uso, K/D por arma y "con qué te matan" — calculado desde el kill feed del archivo acumulativo ($0 requests), con íconos y categorías de valorant-api.com
-- **Trend de rango**: resumen del período (rango inicial → actual, pico, RR neto y récord), leyenda V/D/E y detalle de cada partida al pasar o tocar el punto (fecha, mapa, agente, marcador, K/D/A, ACS, ±RR y rango)
+- **Trend de rango** (últimas 20 partidas, con nota «de N»): resumen del período (rango inicial → actual, pico, RR neto y récord), leyenda V/D/E y detalle de cada partida al pasar o tocar el punto (fecha, mapa, agente, marcador, K/D/A, ACS, ±RR y rango)
 - **Partidas recientes**: agrupadas por día (el día más reciente expandido al entrar; el resto, colapsado), con WR%, V-D-E, K/D, ACS, ADR y ±RR en el resumen de cada día; click en el día abre el análisis completo con mejores/peores partidas, por agente y por mapa
 - **Columnas por partida**: íconos de agente/mapa, K/D, ACS, ADR, HS%, ±RR con tooltip de MMR; stats en verde al cumplir meta
 - **Filtros multi en el historial**: agrega varios agentes/mapas desde la barra de «Partidas recientes» (selects con conteo, chips para quitar, Limpiar y contador `N de M partidas · D días`); también se filtran desde los iconos de cada fila, los paneles de WR y las tablas de Agentes/Mapas («Ver partidas»); con filtro activo el historial se despliega completo
@@ -79,7 +79,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 ### Página Tienda (`/tienda`)
 - **Tienda diaria por usuario**: cada uno conecta **su** Riot desde un panel guiado con la cabecera `cookie` completa de `auth.riotgames.com` (recomendada: dura ~3 semanas; también sirve solo `ssid`, ~1 semana); el server renueva tokens solo cada hora y avisa (banner + push) cuando la sesión caduca. Ve su rotación de 4 skins + bundle destacado con precio/descuento/tiempo restante — todo **privado** (el admin tampoco ve lo ajeno)
 - Si la sesión conectada no es la del perfil principal del usuario, se avisa y no se muestra la tienda ajena; sin perfil principal, invita a crearlo en Perfiles
-- **Previsualización**: click en cualquier skin (tienda, bundle, favoritas o explorador) abre un lightbox con el render a tamaño grande y sus **variantes de color (chromas)** para cambiar el color en vivo
+- **Previsualización**: click en cualquier skin (tienda, bundle, favoritas o explorador) abre un lightbox con el render a tamaño grande, sus **niveles de evolución** y sus **variantes de color (chromas)** para cambiar en vivo; las imágenes se sirven optimizadas (`next/image`, WebP, caché 31 días)
 - **Skins favoritas persistentes por usuario**: explorador del arsenal completo por categoría de arma (Sidearms → Melee) con iconos, contador de skins por arma y búsqueda por nombre; snapshot denormalizado en `data/favorites.<usuario>.json` (volumen Docker `valo-data`, inmune al borrado del cache)
 - Badge **"¡EN TIENDA!"** sobre las favoritas disponibles hoy, con precio
 - **Web Push**: activa notificaciones y el cron avisa al instante cuando una favorita aparece en la tienda (una vez por día por skin, sin spam); botón **Enviar prueba** para verificar el pipeline
@@ -87,6 +87,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 ### Transversal
 - **Loader de cargas grandes**: panel flotante con progreso (perfil i/N) y cronómetro, sin sensación de app congelada; overlay bloqueante en cargas iniciales
 - Cache L1 memoria + L2 disco persistente (sobrevive reinicios)
+- **Medios ligeros**: iconos de agente vía `killfeedPortrait` (~24 KB) y assets del CDN optimizados con `next/image` (WebP, caché 31 días, volumen `valo-next-cache`); catálogos con caché privada y `preconnect` al CDN
 - **Escrituras atómicas** (`.tmp` + rename) en todos los datos persistentes (favoritas, comentarios, tokens RSO, archivo) — un crash nunca corrompe un JSON
 - **Archivo acumulativo de partidas** (modelo tracker.gg, `lib/archive.ts`): toda partida sincronizada se guarda para siempre en `data/archive/` (un JSON por partida + índice), **externo al cache** — inmune a `invalidateAll`, al borrado de `.cache/` y a rebuilds de Docker (volumen dedicado). Las agregaciones de temporada y ventanas largas calculan sobre bucket + archivo, así jugar 100+ partidas en el acto ya no recorta la vista de agentes/mapas
 - **Backfill profundo** (`POST /api/valorant/backfill`): pagina el historial competitivo más allá del bucket y lo archiva; una pasada (default 40 páginas ≈ 400 partidas) y no se repite salvo `force=1`
@@ -205,7 +206,7 @@ Oracle Cloud Always Free (ARM) con `docker-compose.prod.yml` + Caddy
 | `GET /api/store/status` | Tienda de hoy + bundle + favoritas (con coincidencias y estado de notificación) + estado RSO/push; `?refresh=1` fuerza revalidación |
 | `GET /api/store/catalog?q=\|weapon=` | Búsqueda en el catálogo de skins o todas las skins de un arma |
 | `GET /api/store/weapons` | Armas agrupadas por categoría con iconos y contador de skins |
-| `GET /api/store/chromas?id=` | Variantes de color (chromas) de una skin |
+| `GET /api/store/chromas?id=` | Niveles de evolución y variantes de color (chromas) de una skin |
 | `POST /api/store/favorites` | `{action: add\|remove, offerId}` — favoritas del usuario |
 | `POST /api/store/auth` | `{action: cookie, cookies\|ssid}` (y login/2FA) — conexión RSO del usuario |
 | `GET /api/store/status` | Tienda del usuario (perfil principal, cuenta conectada, favoritas y push propios) |

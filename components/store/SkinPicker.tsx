@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { SkinPreview } from './SkinPreview';
 
@@ -134,8 +135,8 @@ export function SkinPicker({
       {createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal picker" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} title="Cerrar">
-          Cerrar
+        <button className="modal-close" onClick={onClose} aria-label="Cerrar" title="Cerrar">
+          ✕
         </button>
         <div className="md-head">
           <div className="md-title">
@@ -189,7 +190,7 @@ export function SkinPicker({
                       onClick={() => setWeapon(w.name)}
                       title={`${w.count} skins`}
                     >
-                      {w.icon ? <img src={w.icon} alt="" loading="lazy" /> : null}
+                      {w.icon ? <Image src={w.icon} alt="" width={34} height={22} style={{ objectFit: 'contain' }} /> : null}
                       {w.name}
                       <b>{w.count}</b>
                     </button>
@@ -227,7 +228,9 @@ export function SkinPicker({
                     title={s.icon ? 'Ver en grande' : undefined}
                     role={s.icon ? 'button' : undefined}
                   >
-                    {s.icon ? <img src={s.icon} alt="" loading="lazy" /> : null}
+                    {s.icon ? (
+                      <Image src={s.icon} alt="" fill sizes="(max-width: 720px) 45vw, 140px" style={{ objectFit: 'contain' }} />
+                    ) : null}
                   </div>
                   <span className="skin-cell-name">{s.name}</span>
                   <span className="skin-cell-weapon">{s.weapon}</span>

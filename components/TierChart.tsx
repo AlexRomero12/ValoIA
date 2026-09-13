@@ -10,13 +10,17 @@ import type { MatchRow } from '@/lib/types';
 
 interface TierChartProps {
   matchesAsc: MatchRow[];
+  /** Muestra solo las últimas N partidas para que el gráfico no se sature. */
+  limit?: number;
 }
 
 /** Trend de rango: resumen del período + puntos por partida con detalle al tocar. */
-export function TierChart({ matchesAsc }: TierChartProps) {
+export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
   const { ref, width: boxW } = useElementWidth(940);
   const tierIcons = useTierIcons().data ?? {};
   const [sel, setSel] = useState<number | null>(null);
+  // Ventana recortada: con muchas partidas el gráfico se vuelve ilegible.
+  const matchesAsc = limit > 0 && allAsc.length > limit ? allAsc.slice(-limit) : allAsc;
   if (!matchesAsc.length) return <p className="empty">Sin competitivas en esta ventana.</p>;
 
   const validTiers = matchesAsc.map((m) => m.tier).filter((t): t is number => typeof t === 'number' && t > 0);
@@ -122,7 +126,7 @@ export function TierChart({ matchesAsc }: TierChartProps) {
       })
       .join(' ') || `M${xAt(0).toFixed(1)} ${(PT + ch).toFixed(1)} Z`;
 
-  const aria = `Tendencia de rango: ${first ? tierName(first.tier) : 'sin rango'} a ${last ? tierName(last.tier) : 'sin rango'} en ${matchesAsc.length} partidas`;
+  const aria = `Tendencia de rango${allAsc.length > matchesAsc.length ? ` (últimas ${matchesAsc.length} de ${allAsc.length} partidas)` : ''}: ${first ? tierName(first.tier) : 'sin rango'} a ${last ? tierName(last.tier) : 'sin rango'}`;
 
   return (
     <div className="chart-wrap" ref={ref}>
@@ -260,7 +264,10 @@ export function TierChart({ matchesAsc }: TierChartProps) {
         <span><span className="sw" style={{ background: '#e8c97a' }} />Empate</span>
         {hasTierChange ? <span>▲/▼ cambio de rango</span> : null}
         {hasUnrated ? <span><span className="sw" style={{ background: '#5d7080' }} />Sin rango</span> : null}
-        <span className="chart-hint">Pasa o toca un punto para ver la partida</span>
+        <span className="chart-hint">
+          {allAsc.length > matchesAsc.length ? `Últimas ${matchesAsc.length} de ${allAsc.length} · ` : ''}
+          Pasa o toca un punto para ver la partida
+        </span>
       </div>
     </div>
   );

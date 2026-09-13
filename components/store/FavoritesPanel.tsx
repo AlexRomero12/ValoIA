@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { SkinPicker } from './SkinPicker';
 import { SkinPreview, type PreviewSkin } from './SkinPreview';
 
@@ -66,7 +67,7 @@ export function FavoritesPanel({
                 title={f.icon ? 'Ver en grande' : undefined}
                 role={f.icon ? 'button' : undefined}
               >
-                {f.icon ? <img src={f.icon} alt="" loading="lazy" /> : null}
+                {f.icon ? <Image src={f.icon} alt="" fill sizes="64px" style={{ objectFit: 'contain' }} /> : null}
               </div>
               <div className="fav-info">
                 <div className="fav-name" title={f.name}>{f.name}</div>

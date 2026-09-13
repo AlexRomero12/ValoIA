@@ -33,13 +33,14 @@ interface WeaponEntry {
   shopData?: { category?: string };
   skins?: Array<{
     displayName?: string;
-    levels?: Array<{ uuid?: string }>;
+    levels?: Array<{ uuid?: string; displayName?: string; displayIcon?: string | null }>;
     chromas?: Array<{ uuid?: string; displayName?: string; displayIcon?: string | null }>;
   }>;
 }
 
 const CATALOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const CATALOG_KEY = 'valo:skins-catalog';
+// v2: el catálogo ahora incluye niveles de evolución además de variantes.
+const CATALOG_KEY = 'valo:skins-catalog:v2';
 
 /** Orden de categorías del juego (in-game). */
 const CATEGORY_ORDER = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Snipers', 'Machine Guns', 'Melee'];
@@ -74,6 +75,21 @@ export interface ChromaInfo {
   label: string;
 }
 
+/** Nivel de evolución de una skin (Base, Nivel 2, Nivel 3…). */
+export interface SkinLevelInfo {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+/** Niveles y variantes de una skin, indexados por uuid de cualquiera de ellos. */
+export interface SkinVariants {
+  /** Nombre base de la skin (sin sufijo "Level N") */
+  baseName: string;
+  levels: SkinLevelInfo[];
+  chromas: ChromaInfo[];
+}
+
 export interface SkinsCatalog {
   /** uuid del skinlevel -> SkinInfo */
   byId: Map<string, SkinInfo>;
@@ -81,8 +97,8 @@ export interface SkinsCatalog {
   list: SkinInfo[];
   /** armas con categoría e icono, para navegar el arsenal */
   weapons: WeaponGroup[];
-  /** uuid (nivel o chroma) -> variantes de su skin */
-  chromasByLevelId: Map<string, ChromaInfo[]>;
+  /** uuid (nivel o chroma) -> niveles y variantes de su skin */
+  variantsBySkinId: Map<string, SkinVariants>;
 }
 
 async function fetchCatalogRaw(): Promise<SkinsCatalog> {
@@ -163,9 +179,9 @@ async function fetchCatalogRaw(): Promise<SkinsCatalog> {
     if (group && isBaseSkin(s.name)) group.skins.push(s);
   }
 
-  // Índice de variantes (chromas) por uuid de nivel/chroma: al previsualizar
-  // una skin se pueden ver todas sus variantes de color.
-  const chromasByLevelId = new Map<string, ChromaInfo[]>();
+  // Índice de niveles y variantes por uuid (de cualquier nivel o chroma):
+  // al previsualizar una skin se ven sus niveles de evolución y sus colores.
+  const variantsBySkinId = new Map<string, SkinVariants>();
   const labelFor = (name: string, idx: number): string => {
     const m = name.match(/\(([^)]+)\)\s*$/);
     if (m) return m[1];
@@ -173,6 +189,17 @@ async function fetchCatalogRaw(): Promise<SkinsCatalog> {
   };
   for (const w of weapons.data ?? []) {
     for (const s of w.skins ?? []) {
+      const levels: SkinLevelInfo[] = [];
+      (s.levels ?? []).forEach((l, idx) => {
+        if (!l.uuid) return;
+        const raw = clean(l.displayName ?? '');
+        const m = raw.match(/Level (\d+)/i);
+        levels.push({
+          id: l.uuid,
+          label: idx === 0 ? 'Base' : m ? `Nivel ${m[1]}` : `Nivel ${idx + 1}`,
+          icon: l.displayIcon ?? '',
+        });
+      });
       const chromas: ChromaInfo[] = [];
       (s.chromas ?? []).forEach((c, idx) => {
         if (!c.uuid) return;
@@ -183,13 +210,10 @@ async function fetchCatalogRaw(): Promise<SkinsCatalog> {
           label: labelFor(clean(c.displayName ?? ''), idx),
         });
       });
-      if (chromas.length < 2) continue;
-      const ids = [
-        ...(s.levels ?? []).map((l) => l.uuid),
-        ...chromas.map((c) => c.id),
-      ];
-      for (const id of ids) {
-        if (id) chromasByLevelId.set(id, chromas);
+      if (!levels.length && !chromas.length) continue;
+      const variants: SkinVariants = { baseName: clean(s.displayName ?? ''), levels, chromas };
+      for (const id of [...levels.map((l) => l.id), ...chromas.map((c) => c.id)]) {
+        variantsBySkinId.set(id, variants);
       }
     }
   }
@@ -198,7 +222,7 @@ async function fetchCatalogRaw(): Promise<SkinsCatalog> {
     (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category) || a.name.localeCompare(b.name),
   );
 
-  return { byId, list: [...byId.values()], weapons: weaponGroupsList, chromasByLevelId };
+  return { byId, list: [...byId.values()], weapons: weaponGroupsList, variantsBySkinId };
 }
 
 export async function getSkinsCatalog(): Promise<SkinsCatalog> {
@@ -209,7 +233,7 @@ export async function getSkinsCatalog(): Promise<SkinsCatalog> {
       cat.byId.size > 1000 &&
       Array.isArray(cat.weapons) &&
       cat.weapons.length > 0 &&
-      cat.chromasByLevelId instanceof Map
+      cat.variantsBySkinId instanceof Map
     );
   });
 }
@@ -233,10 +257,10 @@ export async function getSkinsByWeapon(weaponName: string): Promise<SkinInfo[]> 
   return group?.skins ?? [];
 }
 
-/** Variantes (chromas) de la skin a la que pertenece un uuid. */
-export async function getSkinsChromas(id: string): Promise<ChromaInfo[]> {
+/** Niveles y variantes (chromas) de la skin a la que pertenece un uuid. */
+export async function getSkinVariants(id: string): Promise<SkinVariants | null> {
   const cat = await getSkinsCatalog();
-  return cat.chromasByLevelId.get(id) ?? [];
+  return cat.variantsBySkinId.get(id) ?? null;
 }
 
 /** Búsqueda por nombre (case-insensitive, prefijo primero, luego substring). */

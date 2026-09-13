@@ -199,7 +199,7 @@ async function loadContent(): Promise<ContentDicts> {
       fetch('https://valorant-api.com/v1/weapons', { signal: AbortSignal.timeout(15_000) }),
     ]);
     const agents = agentsRes.ok
-      ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null; role?: { displayName?: string } | null }[] }
+      ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null; killfeedPortrait?: string | null; role?: { displayName?: string } | null }[] }
       : null;
     const maps = mapsRes.ok
       ? (await mapsRes.json()) as { data?: { uuid?: string; displayName?: string; mapUrl?: string; displayIcon?: string | null }[] }
@@ -212,7 +212,9 @@ async function loadContent(): Promise<ContentDicts> {
       if (a.uuid && a.displayName) {
         dict.agents[a.uuid.toLowerCase()] = {
           name: a.displayName,
-          icon: a.displayIcon ?? null,
+          // killfeedPortrait pesa ~24 KB frente a ~555 KB del displayIcon y se
+          // usa a 18–40 px en todo el dash (matches, paneles, pickers, detalle).
+          icon: a.killfeedPortrait ?? a.displayIcon ?? null,
           role: a.role?.displayName ?? null,
         };
       }
@@ -241,9 +243,9 @@ async function loadContent(): Promise<ContentDicts> {
 }
 
 export function getContent(): Promise<ContentDicts> {
-  // v2: el dict ahora incluye armas; la clave nueva evita servir desde el cache
-  // una entrada vieja sin `weapons` (cacheada 24 h antes de este cambio).
-  if (!contentPromise) contentPromise = cached('val:content:v3', 24 * 60 * 60 * 1000, loadContent);
+  // v4: iconos de agente ahora usan killfeedPortrait (~24 KB vs ~555 KB);
+  // la clave nueva evita servir del cache los iconos pesados de v3.
+  if (!contentPromise) contentPromise = cached('val:content:v4', 24 * 60 * 60 * 1000, loadContent);
   return contentPromise;
 }
 

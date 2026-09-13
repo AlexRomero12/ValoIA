@@ -9,6 +9,7 @@ import { RulesIntro } from '@/components/rules/RulesIntro';
 import { RulesProposal } from '@/components/rules/RulesProposal';
 import { RulesRecommendations } from '@/components/rules/RulesRecommendations';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { useElementWidth } from '@/lib/useElementWidth';
 import { evaluateDay, groupEvaluationWeeks, mondayOf, type DayEvaluation, type RulesWeek } from '@/lib/rules';
 import { sameRulesDay, storedDayKey, storedToRulesDay, toStoredRulesDay, type StoredRulesDay } from '@/lib/rulesHistory';
 import { useProfileActions, useProfiles, useValSummary } from '@/lib/hooks';
@@ -81,6 +82,9 @@ export default function ReglasPage() {
   const [history, setHistory] = useState<Record<string, StoredRulesDay>>({});
   const [applyError, setApplyError] = useState<string | null>(null);
   const [openWeek, setOpenWeek] = useState<string | null>(null);
+  // Acordeón móvil: undefined = auto (día más reciente), null = todos cerrados.
+  const [openDayKey, setOpenDayKey] = useState<string | null | undefined>(undefined);
+  const { ref: daysRef, width: daysW } = useElementWidth(1200);
   const saving = useRef(false);
   // Lunes de la semana actual, fijado una sola vez al montar la página.
   const [mondayTs] = useState(() => mondayOf(Date.now()).getTime());
@@ -188,6 +192,40 @@ export default function ReglasPage() {
     const end = start + 7 * 86_400_000;
     return (data?.matches ?? []).filter((m) => m.timestamp >= start && m.timestamp < end);
   };
+
+  // Móvil: acordeón (un día abierto) y tarjetas en lugar de tablas anchas.
+  const mobileRules = daysW < 720;
+  const activeOpenDay = openDayKey === undefined ? (currentDays[0]?.key ?? null) : openDayKey;
+
+  /** Detalle de una semana pasada: se reutiliza en la tabla y en las tarjetas. */
+  const weekDetail = (w: RulesWeek) => (
+    <>
+      <RulesRecommendations
+        embedded
+        profile={profile!}
+        rules={rules}
+        matches={weekMatchesOf(w)}
+        days={w.days}
+        scopeLabel={`semana del ${w.label}`}
+        onApply={applyRules}
+        onConfigure={configureRules}
+      />
+      {w.days.filter((d) => d.matches.length > 0).map((d) => (
+        <RulesDay
+          key={d.key}
+          day={d}
+          rules={rules}
+          comments={comments}
+          onSaveComment={saveComment}
+        />
+      ))}
+      {w.days.some((d) => d.matches.length === 0) ? (
+        <p className="rules-cover-note">
+          {w.days.filter((d) => d.matches.length === 0).length} día(s) solo con snapshot (sin detalle de partidas).
+        </p>
+      ) : null}
+    </>
+  );
 
   // Persistir los días COMPLETOS que aún no están guardados (o que cambiaron):
   // cuando la API deje de devolver su RR, seguiremos teniendo el snapshot.
@@ -364,22 +402,26 @@ export default function ReglasPage() {
             onConfigure={configureRules}
           />
 
-          {currentDays.length === 0 ? (
-            <p className="empty" style={{ marginTop: 20 }}>
-              Sin competitivas desde el lunes. Juega ranked y aquí aparece la evaluación del día.
-            </p>
-          ) : (
-            currentDays.map((d, i) => (
-              <RulesDay
-                key={d.key}
-                day={d}
-                rules={rules}
-                comments={comments}
-                onSaveComment={saveComment}
-                defaultOpen={i === 0}
-              />
-            ))
-          )}
+          <div ref={daysRef}>
+            {currentDays.length === 0 ? (
+              <p className="empty" style={{ marginTop: 20 }}>
+                Sin competitivas desde el lunes. Juega ranked y aquí aparece la evaluación del día.
+              </p>
+            ) : (
+              currentDays.map((d, i) => (
+                <RulesDay
+                  key={d.key}
+                  day={d}
+                  rules={rules}
+                  comments={comments}
+                  onSaveComment={saveComment}
+                  {...(mobileRules
+                    ? { open: activeOpenDay === d.key, onToggle: (o: boolean) => setOpenDayKey(o ? d.key : null) }
+                    : { defaultOpen: i === 0 })}
+                />
+              ))
+            )}
+          </div>
 
           {pastWeeks.length > 0 && (
             <div className="panel" style={{ marginTop: 20 }}>
@@ -388,7 +430,7 @@ export default function ReglasPage() {
                 Basado en las últimas {LIMIT} competitivas de la API + snapshots guardados de días completos
                 (la API solo conserva el RR de las ~20 partidas más recientes).
               </p>
-              <div className="table-scroll">
+              <div className="table-scroll desktop-only">
                 <table className="score-table rules-table">
                   <thead>
                     <tr>
@@ -432,38 +474,65 @@ export default function ReglasPage() {
                         </tr>
                         {openWeek === w.key ? (
                           <tr className="week-detail-row">
-                            <td colSpan={9}>
-                              <RulesRecommendations
-                                embedded
-                                profile={profile}
-                                rules={rules}
-                                matches={weekMatchesOf(w)}
-                                days={w.days}
-                                scopeLabel={`semana del ${w.label}`}
-                                onApply={applyRules}
-                                onConfigure={configureRules}
-                              />
-                              {w.days.filter((d) => d.matches.length > 0).map((d) => (
-                                <RulesDay
-                                  key={d.key}
-                                  day={d}
-                                  rules={rules}
-                                  comments={comments}
-                                  onSaveComment={saveComment}
-                                />
-                              ))}
-                              {w.days.some((d) => d.matches.length === 0) ? (
-                                <p className="rules-cover-note">
-                                  {w.days.filter((d) => d.matches.length === 0).length} día(s) solo con snapshot (sin detalle de partidas).
-                                </p>
-                              ) : null}
-                            </td>
+                            <td colSpan={9}>{weekDetail(w)}</td>
                           </tr>
                         ) : null}
                       </Fragment>
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Móvil: una tarjeta por semana (sin tabla ancha) */}
+              <div className="rules-weeks-cards">
+                {pastWeeks.map((w) => (
+                  <div key={w.key} className="rules-week-card">
+                    <div className="rwc-head">
+                      <b>{w.label}</b>
+                      {w.rrPartial ? (
+                        <span className="rules-warn">· parcial</span>
+                      ) : w.days.every((d) => d.stored) ? (
+                        <span className="rules-warn">· guardado</span>
+                      ) : null}
+                    </div>
+                    <div className="rwc-row">
+                      <span>Partidas</span>
+                      <b>{w.matches}</b>
+                      <span>FB/FD</span>
+                      <b>{renderWeekImpact(w)}</b>
+                    </div>
+                    <div className="rwc-row">
+                      <span>RR real</span>
+                      <b className={(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}>{fmtRR(w.realRR)}</b>
+                      <span>Con regla</span>
+                      <b>{fmtRR(w.planRR)}</b>
+                    </div>
+                    <div className="rwc-row">
+                      <span>Regla+pool</span>
+                      <b>{fmtRR(w.planPoolRR)}</b>
+                      <span>Fuera de pool</span>
+                      <b>
+                        {w.violationCount
+                          ? `${w.violationCount}${w.bannedCount ? ` (${w.bannedCount} proh.)` : ''} · ${fmtRR(w.violationLoss)}`
+                          : '—'}
+                      </b>
+                    </div>
+                    <div className="rwc-row">
+                      <span>Cortes</span>
+                      <b>{w.cutsTotal ? `${w.cutsIgnored}/${w.cutsTotal} ignorados` : '—'}</b>
+                      <span />
+                      <span />
+                    </div>
+                    <button
+                      className="f-chip"
+                      onClick={() => setOpenWeek(openWeek === w.key ? null : w.key)}
+                      aria-expanded={openWeek === w.key}
+                    >
+                      {openWeek === w.key ? 'Ver menos' : 'Ver más'}
+                    </button>
+                    {openWeek === w.key ? <div className="rwc-detail">{weekDetail(w)}</div> : null}
+                  </div>
+                ))}
               </div>
             </div>
           )}

@@ -23,9 +23,12 @@ services:
       - valo-cache:/app/data/cache
       - valo-archive:/app/data/archive
       - valo-data:/app/data
+      # Caché del optimizador de imágenes de Next (persiste entre reinicios).
+      - valo-next-cache:/app/.next/cache
     restart: unless-stopped
 
 volumes:
   valo-cache:
   valo-archive:
   valo-data:
+  valo-next-cache:

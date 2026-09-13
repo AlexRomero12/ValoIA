@@ -16,15 +16,22 @@ interface RulesDayProps {
   defaultOpen?: boolean;
   /** Reglas del perfil (para el umbral de K/D mostrado). */
   rules?: SessionRules;
+  /** Modo controlado (acordeón en móvil): si viene, manda sobre el estado interno. */
+  open?: boolean;
+  onToggle?: (open: boolean) => void;
 }
 
 const W = 940;
 const PL = 50;
 const PR = 24;
 const BAR_MAX_RR = 20;
+// El lienzo reserva bajo la línea base espacio para la barra negativa más larga
+// (BAR_MAX_RR × escala) + su etiqueta + la banda de hora/mapa/contador: si no,
+// los RR negativos se dibujaban encima de la hora y el mapa de la partida.
 const BASELINE = 120;
 const TOP = 18;
-const BOTTOM = 252;
+const BOTTOM = 261;
+const VALUE_GAP = 58; // margen mínimo de la etiqueta de RR sobre la banda de textos
 
 function rrColor(m: MatchRow): string {
   return isDraw(m) ? '#e8c97a' : m.won ? '#2fd08a' : '#ff5c69';
@@ -48,9 +55,25 @@ function fmtRR(v: number | null): string {
   return v == null ? '—' : `${v > 0 ? '+' : ''}${v}`;
 }
 
-export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, rules }: RulesDayProps) {
+/** Estado de la partida frente a las reglas (columna «Reglas» y tarjetas móviles). */
+function ruleStateLabel(r: EvaluatedMatch, stopKd: number): string {
+  if (r.cutPoint) return 'CORTE AQUÍ';
+  if (r.afterCut) return 'no debiste jugarla';
+  if (r.pickClass === 'banned') return 'prohibido';
+  if (r.violation) return 'fuera de pool';
+  if (!r.match.won && !isDraw(r.match) && r.kd >= stopKd) return 'kd ok · no suma';
+  return '';
+}
+
+export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, rules, open: openProp, onToggle }: RulesDayProps) {
   const stopKd = rules?.stop.kdBelow ?? STOP_KD;
-  const [open, setOpen] = useState(defaultOpen);
+  const [openState, setOpenState] = useState(defaultOpen);
+  const open = openProp ?? openState;
+  const toggleOpen = () => {
+    const next = !open;
+    if (openProp === undefined) setOpenState(next);
+    onToggle?.(next);
+  };
   /** Partida seleccionada al tocar una barra (reemplaza el tooltip en táctil). */
   const [sel, setSel] = useState<number | null>(null);
   // Ancho real medido: en compacto el SVG se dibuja en píxeles reales con un
@@ -65,7 +88,7 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
   const PRc = compact ? 14 : PR;
   const TOPc = compact ? 14 : TOP;
   const BASELINEc = compact ? 96 : BASELINE;
-  const BOTTOMc = compact ? 196 : BOTTOM;
+  const BOTTOMc = compact ? 228 : BOTTOM;
   const slotW = plotW / n;
   const barW = Math.min(compact ? 34 : 48, slotW * (compact ? 0.72 : 0.62));
   const cx = (i: number) => PLc + slotW * i + slotW / 2;
@@ -92,7 +115,7 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
     <div className="panel rules-day">
       <button
         className="rules-day-head"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
         aria-expanded={open}
         aria-controls={`rules-body-${day.key}`}
       >
@@ -184,6 +207,10 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
               {' · '}K/D {rows[sel].kd.toFixed(2)}
               {' · '}{rows[sel].match.rrDelta == null ? 'sin RR' : `${rows[sel].match.rrDelta > 0 ? '+' : ''}${rows[sel].match.rrDelta} RR`}
             </div>
+          ) : null}
+
+          {compact ? (
+            <p className="rules-scroll-hint">Desliza para ver todas las partidas →</p>
           ) : null}
 
           <div className="rules-svg-scroll" ref={boxRef}>
@@ -305,7 +332,7 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
                     <text
                       key={i}
                       x={cx(i)}
-                      y={Math.min(BOTTOMc - 26, Math.max(TOPc + 2, y))}
+                      y={Math.min(BOTTOMc - VALUE_GAP, Math.max(TOPc + 2, y))}
                       fill={rrColor(r.match)}
                       opacity={r.afterCut ? 0.6 : 1}
                     >
@@ -344,9 +371,16 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
             </svg>
           </div>
 
-          <RulesCumulative day={day} W={Wc} PL={PLc} PR={PRc} compact={compact} sel={sel} onPick={setSel} />
+          {compact ? (
+            <details className="rules-cumulative">
+              <summary>Ver RR acumulado real vs plan</summary>
+              <RulesCumulative day={day} W={Wc} PL={PLc} PR={PRc} compact={compact} sel={sel} onPick={setSel} />
+            </details>
+          ) : (
+            <RulesCumulative day={day} W={Wc} PL={PLc} PR={PRc} compact={compact} sel={sel} onPick={setSel} />
+          )}
 
-          <div className="table-scroll">
+          <div className="table-scroll desktop-only">
             <table className="score-table rules-table">
               <thead>
                 <tr>
@@ -396,17 +430,7 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
                       </td>
                       <td className={`num ${r.cutPoint ? 'rules-cut-num' : ''}`}>{r.afterCut ? '—' : r.counterAfter}</td>
                       <td className="rules-note-cell">
-                        {r.cutPoint
-                          ? 'CORTE AQUÍ'
-                          : r.afterCut
-                            ? 'no debiste jugarla'
-                            : r.pickClass === 'banned'
-                              ? 'prohibido'
-                              : r.violation
-                                ? 'fuera de pool'
-                                : !r.match.won && !isDraw(r.match) && r.kd >= stopKd
-                                  ? 'kd ok · no suma'
-                                  : ''}
+                        {ruleStateLabel(r, stopKd)}
                       </td>
                       <td>
                         <NoteCell
@@ -420,6 +444,49 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Móvil: mismas partidas en tarjetas (sin tabla de 10 columnas) */}
+          <div className="rules-matches-cards">
+            {[...rows].reverse().map((r) => {
+              const badge = resultBadge(r);
+              const pick = pickBadge(r.pickClass);
+              const state = ruleStateLabel(r, stopKd);
+              const rr = r.match.rrDelta;
+              return (
+                <div
+                  key={r.match.matchId}
+                  className={`rules-match-card${r.cutPoint ? ' cut' : ''}${r.afterCut ? ' skip' : ''}`}
+                >
+                  <span className={`res-badge ${badge.cls}`}>{badge.text}</span>
+                  <div className="rmc-main">
+                    <div className="rmc-line1">
+                      <b>{new Date(r.match.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</b>
+                      <span className="mc-dot">·</span>
+                      {r.match.mapIcon ? <img className="map-icon" src={r.match.mapIcon} alt="" loading="lazy" /> : null}
+                      {esc(r.match.map)}
+                      <span className="mc-dot">·</span>
+                      {r.match.agentIcon ? <img className="agent-icon" src={r.match.agentIcon} alt="" loading="lazy" /> : null}
+                      {esc(r.match.agent)}
+                      {pick ? <span className={`res-badge ${pick.cls}`} title={pick.title}>{pick.text}</span> : null}
+                    </div>
+                    <div className="rmc-line2">
+                      <b>{r.match.roundsWon}–{r.match.roundsLost}</b>
+                      <span className="mc-dot">·</span>
+                      K/D <b className={r.kd >= 1 ? 'stat-ok' : ''}>{r.kd.toFixed(2)}</b>
+                      <span className="mc-dot">·</span>
+                      <span className={rr == null ? '' : rr > 0 ? 'stat-win' : 'stat-loss'}>
+                        {rr == null ? 'sin RR' : `${rr > 0 ? '+' : ''}${rr} RR`}
+                      </span>
+                    </div>
+                    {state ? (
+                      <div className={`rmc-state${r.cutPoint || r.afterCut || r.violation ? ' bad' : ''}`}>{state}</div>
+                    ) : null}
+                  </div>
+                  <NoteCell matchId={r.match.matchId} comment={comments[r.match.matchId]} onSave={onSaveComment} />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

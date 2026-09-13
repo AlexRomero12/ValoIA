@@ -54,6 +54,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${anton.variable} ${chakra.variable}`}>
+      {/* React los eleva al <head>: adelantan la conexión con el CDN de assets */}
+      <link rel="preconnect" href="https://media.valorant-api.com" crossOrigin="anonymous" />
+      <link rel="dns-prefetch" href="https://media.valorant-api.com" />
       <body>
         <Providers>{children}</Providers>
       </body>

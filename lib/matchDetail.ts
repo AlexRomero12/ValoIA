@@ -69,7 +69,9 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NOT_CACHED' });
   }
   const preferred = candidates.find((m) => m.id === playerId) ?? candidates[0];
-  const cacheKey = `val:detail:v2:${preferred.id}:${matchId}`;
+  // v3: los DTO guardan URLs de iconos; la clave nueva evita servir detalles
+  // cacheados 7 días con los iconos de agente pesados (~555 KB).
+  const cacheKey = `val:detail:v3:${preferred.id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 

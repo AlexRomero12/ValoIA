@@ -2,6 +2,29 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.21.0] — 2026-09-13
+
+Rendimiento de medios (imágenes hasta 26× más ligeras), Reglas móvil y tienda sin fricción.
+
+### Changed
+- **Iconos de agente**: ahora usan `killfeedPortrait` (~24 KB) en vez de `displayIcon` (~555 KB) — Ranked, Equipo, Reglas, pickers y detalle bajan de megas a cientos de KB en iconos (cachés `val:content:v4` y `val:detail:v3`)
+- **Tienda y arsenal con `next/image`**: los PNG del CDN se sirven en **WebP** (~43 KB → ~1,6–2,2 KB en 96 px) con caché de 31 días, `minimumCacheTTL` configurado y volumen Docker `valo-next-cache` para que la caché del optimizador sobreviva a los despliegues
+- **Catálogos con caché privada**: `agents`/`tiers` 24 h, `store/weapons` 1 h y `catalog` 5 min; `preconnect`/`dns-prefetch` al CDN en el layout
+- **Detalle de skin**: el lightbox muestra **Niveles** de evolución y **Variantes** de color (solo imágenes; los videos de Riot pesan 28–117 MB y se descartan), con el nivel o variante activa resaltada
+- **Reglas en móvil**: fix de raíz en `useElementWidth` (callback ref) que generaba el gráfico RR con ancho de escritorio al expandir días; stats en rejilla 2 col, RR acumulado plegable, partidas en tarjetas, días plegables en acordeón y semanas anteriores en tarjetas con detalle
+
+### Fixed
+- **Tienda**: el botón de cerrar de los modales se veía cortado en móvil (ahora `✕` unificado con `aria-label`), y los chips del bundle ya no desbordan el panel (truncado con elipsis)
+- **Niveles de skin**: la API solo trae render del nivel base; los niveles sin imagen ahora se ven como chip de texto (sin slot roto) y al elegirlos la previsualización mantiene el render del skin (antes quedaba en blanco). Igual para las variantes sin icono
+- **Reglas · RR negativos**: en el gráfico por partida el valor ya no se dibuja encima de la hora y el mapa (el lienzo ahora reserva la banda de textos completa bajo la línea base)
+- **Iconos de agente**: `killfeedPortrait` es un primer plano y llenaba el círculo; se reduce un 15% para que respire como antes
+
+## [1.20.1] — 2026-09-13
+
+### Fixed
+- **Trend de rango**: faltaba el estilo del resumen del período (se veía todo pegado) y ahora el gráfico muestra solo las últimas 20 partidas, con nota «Últimas N de M», para que no se sature (también en móvil)
+- **Filtros del historial en móvil**: selects apilados a ancho completo con chips y contador ordenados (antes se veían apretados y desparejos)
+
 ## [1.20.0] — 2026-09-13
 
 Tienda con menos fricción: conexión guiada y sesión más duradera.

@@ -22,7 +22,7 @@ export async function GET() {
       name,
       weapons: weapons.map((w) => ({ name: w.name, icon: w.icon, count: w.skins.length })),
     }));
-    return Response.json({ categories } satisfies WeaponsResponse, { headers: { 'Cache-Control': 'no-store' } });
+    return Response.json({ categories } satisfies WeaponsResponse, { headers: { 'Cache-Control': 'private, max-age=3600' } });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err), categories: [] }, { status: 500 });
   }

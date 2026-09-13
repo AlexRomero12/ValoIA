@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { SkinPreview, type PreviewSkin } from './SkinPreview';
 
 export interface StoreDailyItemUI {
@@ -79,7 +80,9 @@ export function StorePanel({
                 title="Ver en grande"
                 role={d.icon ? 'button' : undefined}
               >
-                {d.icon ? <img src={d.icon} alt="" loading="lazy" /> : null}
+                {d.icon ? (
+                  <Image src={d.icon} alt="" fill sizes="(max-width: 720px) 45vw, 160px" style={{ objectFit: 'contain' }} />
+                ) : null}
               </div>
               <div className="store-name" title={d.name}>{d.name}</div>
               <div className="store-meta">
@@ -121,7 +124,7 @@ export function StorePanel({
                 onClick={() => openPreview({ id: it.itemId, name: it.name, icon: it.icon, weapon: it.weapon })}
                 role={it.icon ? 'button' : undefined}
               >
-                {it.icon ? <img src={it.icon} alt="" loading="lazy" /> : null}
+                {it.icon ? <Image src={it.icon} alt="" width={44} height={28} style={{ objectFit: 'contain' }} /> : null}
                 <span>{it.name}</span>
               </div>
             ))}

@@ -10,11 +10,11 @@ export async function GET(req: NextRequest) {
   try {
     if (weapon) {
       const results = await getSkinsByWeapon(weapon);
-      return Response.json({ results }, { headers: { 'Cache-Control': 'no-store' } });
+      return Response.json({ results }, { headers: { 'Cache-Control': 'private, max-age=3600' } });
     }
     if (q) {
       const results = await searchSkins(q, 24);
-      return Response.json({ results }, { headers: { 'Cache-Control': 'no-store' } });
+      return Response.json({ results }, { headers: { 'Cache-Control': 'private, max-age=300' } });
     }
     return Response.json({ results: [] });
   } catch (err) {

@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const icons = await getTierIcons();
-    return Response.json({ icons }, { headers: { 'Cache-Control': 'no-store' } });
+    return Response.json({ icons }, { headers: { 'Cache-Control': 'private, max-age=86400' } });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err), icons: {} }, { status: 500 });
   }

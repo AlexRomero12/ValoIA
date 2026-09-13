@@ -389,6 +389,9 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
   border: 1px solid var(--line-strong);
   background: #0a0f16;
   flex: none;
+  /* killfeedPortrait es un primer plano: se reduce un poco para que la cara
+     no llene el círculo y respire como antes (displayIcon traía más aire). */
+  transform: scale(0.85);
 }
 .map-icon {
   width: 36px;
@@ -1302,7 +1305,10 @@ svg image { cursor: default; }
   border: 1px solid var(--line);
   padding: 4px 10px 4px 5px;
   white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
 }
+.bundle-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .bundle-item img { width: 44px; height: 28px; object-fit: contain; background: #0a0f16; }
 
 .store-foot {
@@ -1635,6 +1641,8 @@ svg image { cursor: default; }
 }
 .skin-preview-var:hover { color: var(--bone); border-color: var(--mute); }
 .skin-preview-var.on { border-color: var(--red); color: #fff; background: rgba(255, 70, 85, 0.14); }
+/* Sin render en la API (niveles salvo el base): chip de solo texto, sin slot roto. */
+.skin-preview-var.no-img { padding: 5px 12px; gap: 0; }
 .store-icon.previewable, .bundle-item.previewable, .fav-icon.previewable { cursor: zoom-in; }
 .store-icon.previewable:hover, .fav-icon.previewable:hover { border-color: var(--red); }
 .bundle-item.previewable:hover { border-color: var(--red); }
@@ -3057,6 +3065,7 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
   font-size: 12px;
   padding: 6px 8px;
   cursor: pointer;
+  color-scheme: dark;
   clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
 }
 .hf-select:hover { border-color: var(--red); }
@@ -3064,9 +3073,12 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
 .hf-count { margin-left: auto; }
 
 @media (max-width: 720px) {
-  .history-filters { margin: 8px 0 12px; }
-  .hf-select { flex: 1 1 calc(50% - 8px); min-height: 42px; }
-  .hf-count { margin-left: 0; width: 100%; }
+  .history-filters { gap: 8px; margin: 8px 0 12px; }
+  .hf-label { flex: 1 1 100%; }
+  /* Selects apilados a ancho completo: en 50% se veían apretados y desparejos */
+  .hf-select { flex: 1 1 100%; width: 100%; min-height: var(--touch); }
+  .history-filters .f-chip { min-height: 38px; justify-content: center; }
+  .hf-count { margin-left: 0; flex: 1 1 100%; }
 }
 
 /* ---------- Tienda: conexión guiada con Riot ---------- */
@@ -3097,4 +3109,166 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
   .store-connect-row .f-chip,
   .store-connect-row .primary-red { width: 100%; justify-content: center; min-height: var(--touch); }
   .store-connect-row .window-info { width: 100%; }
+}
+
+/* ---------- Trend de rango: resumen y leyenda ---------- */
+.chart-summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 10px;
+}
+.chart-sum-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.chart-sum-item .lbl {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.chart-sum-item b {
+  color: var(--bone);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.chart-sum-item .up,
+.chart-sum-item .down { font-size: 11px; font-weight: 700; }
+.chart-sum-item .up,
+.chart-sum-item b.up { color: var(--win); }
+.chart-sum-item .down,
+.chart-sum-item b.down { color: var(--loss); }
+.chart-hint { margin-left: auto; color: var(--faint); font-size: 11px; }
+
+@media (max-width: 720px) {
+  .chart-summary { gap: 6px 14px; margin-bottom: 8px; }
+  .chart-sum-item { font-size: 11.5px; }
+  .chart-hint { margin-left: 0; width: 100%; }
+}
+
+/* ---------- Tienda: next/image y filas de niveles/variantes ---------- */
+.store-icon, .fav-icon, .skin-cell-icon, .skin-preview-img { position: relative; }
+.skin-preview-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.spr-label {
+  color: var(--faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.skin-preview-row .skin-preview-vars { margin-bottom: 0; }
+
+/* ---------- Reglas: móvil (tarjetas, plegables y acordeón) ---------- */
+.rules-scroll-hint { display: none; }
+.rules-matches-cards { display: none; }
+.rules-weeks-cards { display: none; }
+
+@media (max-width: 720px) {
+  .desktop-only { display: none; }
+
+  .rules-scroll-hint {
+    display: block;
+    color: var(--faint);
+    font-size: 11px;
+    margin: 0 0 6px;
+    letter-spacing: 0.03em;
+  }
+
+  /* Stats del día en rejilla 2×N con separadores de 1px (sin bordes colgando) */
+  .rules-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .rules-stat { background: var(--steel); border: none; padding: 8px 12px; }
+  .rules-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+  /* Un solo scroll horizontal (el gráfico), sin barra visible */
+  .rules-svg-scroll { scrollbar-width: none; overscroll-behavior-x: contain; }
+  .rules-svg-scroll::-webkit-scrollbar { display: none; }
+  .rules-cumulative { margin-top: 10px; border: 1px solid var(--line); background: var(--steel-2); }
+  .rules-cumulative > summary {
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--mute);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    list-style: none;
+  }
+  .rules-cumulative > summary::-webkit-details-marker { display: none; }
+  .rules-cumulative[open] > summary { border-bottom: 1px solid var(--line); }
+  .rules-cumulative .rules-svg-scroll { padding: 0 10px 8px; }
+
+  /* Partidas en tarjetas (sin tabla de 10 columnas) */
+  .rules-matches-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .rules-match-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border: 1px solid var(--line);
+    background: var(--steel-2);
+    padding: 9px 10px;
+  }
+  .rules-match-card .res-badge { min-width: 24px; padding: 3px 6px; }
+  .rules-match-card.cut {
+    background: repeating-linear-gradient(45deg, rgba(232, 201, 122, 0.12) 0 7px, transparent 7px 14px);
+    border-color: rgba(232, 201, 122, 0.5);
+  }
+  .rules-match-card.skip { opacity: 0.55; }
+  .rmc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .rmc-line1,
+  .rmc-line2 {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .rmc-line1 b, .rmc-line2 b { color: var(--bone); }
+  .rmc-line1 img { vertical-align: middle; }
+  .rmc-state { font-size: 11px; font-weight: 700; color: var(--gold); }
+  .rmc-state.bad { color: var(--loss); }
+  .rules-match-card .rules-note-btn { flex: none; max-width: 96px; }
+
+  /* Semanas anteriores en tarjetas */
+  .rules-weeks-cards { display: flex; flex-direction: column; gap: 10px; }
+  .rules-week-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid var(--line);
+    background: var(--steel-2);
+    padding: 10px 12px;
+  }
+  .rwc-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--bone); text-transform: capitalize; }
+  .rwc-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    gap: 3px 10px;
+    font-size: 11.5px;
+    color: var(--faint);
+    align-items: baseline;
+  }
+  .rwc-row b { color: var(--bone); font-variant-numeric: tabular-nums; }
+  .rules-week-card > .f-chip { align-self: flex-start; min-height: 38px; }
+  .rwc-detail { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
 }

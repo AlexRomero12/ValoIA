@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  images: {
+    // Assets del juego: PNGs grandes en un CDN inmutable. Se optimizan a WebP
+    // y se cachean 31 días (los uuid no cambian entre parches).
+    remotePatterns: [{ protocol: 'https', hostname: 'media.valorant-api.com' }],
+    formats: ['image/webp'],
+    minimumCacheTTL: 31 * 24 * 60 * 60,
+  },
   async redirects() {
     return [
       // Rename de la sección: rutas viejas siguen funcionando un tiempo.
