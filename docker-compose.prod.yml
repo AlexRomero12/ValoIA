@@ -29,6 +29,9 @@ services:
     container_name: valo-caddy
     depends_on:
       - valo-dash
+    # Permite a Caddy llegar al gateway de OpenClaw en el host (18789).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DOMAIN: ${DOMAIN}
     ports:
