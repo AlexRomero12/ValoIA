@@ -37,6 +37,31 @@ using the production schema; after approval we switch to live data. Monetization
 if any: ads on the free tier and optional premium analysis features; no player
 data is sold.
 
+## VALORANT API Requirements Acknowledgement (marcar TODAS)
+
+| Declaración | Marcar | Por qué |
+|---|---|---|
+| Leí la documentación de VALORANT y entiendo los requisitos | ✅ | Revisada y aplicada en el producto |
+| No es para uso personal, educativo, pruebas ni un grupo pequeño de amigos | ✅ | Producto público: landing, registro abierto, perfiles con opt-in; sin flujo de aprobación de amigos |
+| No desarrollaré un **item store checker** | ✅ | La Tienda se **eliminó** del producto (rama y sitio desplegado) |
+| Entiendo que la API no da datos en tiempo real ni esports profesional | ✅ | No se usan datos en vivo ni de esports |
+| No se recopila info de jugadores ni se muestran stats sin **OAuth con RSO** | ✅ | Diseño RSO ya implementado (`lib/identity/rso.ts`); el perfil es privado por defecto y solo se muestra con vinculación + opt-in explícito. La demo usa un proveedor *mock* con la **cuenta del propio desarrollador** porque las credenciales RSO se entregan tras la aprobación |
+| La aplicación incluye un **prototipo funcional** o flujo visual | ✅ | `https://valoia.duckdns.org` en vivo (registro → vincular Riot → consentimiento → dashboard) |
+| Los sitios WIP están **públicos** o se entregan **credenciales** | ✅ | Sitio público + credenciales demo abajo (Riot no crea cuentas) |
+
+### Credenciales para el revisor (incluir en el mensaje de la solicitud)
+
+```
+Demo: https://valoia.duckdns.org/login
+User: valoia-demo
+Pass: ValoIA-Demo-2026!
+```
+
+La cuenta demo ya está creada y con el flujo completo hecho: vinculada a la
+identidad demo (AlexRomero12#LAN, proveedor *mock*), consentimiento aceptado,
+perfil público activo y dashboard con 83 partidas de ejemplo claramente
+etiquetadas como datos de demostración.
+
 ## Después de enviar
 
 1. Riot puede pedir la verificación del dominio: `https://valoia.duckdns.org/riot.txt`
