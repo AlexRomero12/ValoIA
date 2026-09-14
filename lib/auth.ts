@@ -80,7 +80,10 @@ function readUsers(): UserRecord[] {
   const users = Array.isArray(file?.users) ? file.users : [];
   // Migración: si hay usuarios pero ninguno es admin (archivo previo al flag),
   // el más antiguo pasa a serlo para no dejar la app sin administrador.
-  if (users.length > 0 && !users.some((u) => u.admin)) {
+  // En modo público NO se promueve al primer registrado: el admin solo se
+  // siembra desde AUTH_USER/AUTH_PASSWORD (evita que un desconocido herede
+  // permisos de moderación y quede bloqueado para borrar su cuenta).
+  if (!isPublicMode() && users.length > 0 && !users.some((u) => u.admin)) {
     const oldest = [...users].sort((a, b) => a.createdAt - b.createdAt)[0];
     const next = users.map((u) => (u.username === oldest.username ? { ...u, admin: true } : u));
     writeDataSync(USERS_FILE, { version: 1, users: next });
