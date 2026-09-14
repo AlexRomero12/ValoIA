@@ -92,7 +92,8 @@ aggregate stats, plus consented community comparisons.
 
 ## Requested APIs
 
-- `ACCOUNT-V1`, `VAL-MATCH-V1`, `VAL-CONTENT-V1`, `VAL-STATUS-V1`
+- `ACCOUNT-V1`, `VAL-MATCH-V1`, `VAL-CONTENT-V1` (this is the exact set the app
+  uses: identity + routing, matchlists/matches and content).
 - RSO client (OAuth2 authorization code) → requested after key approval
 
 ## Links (before submitting)
