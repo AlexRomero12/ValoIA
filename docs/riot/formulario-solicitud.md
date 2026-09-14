@@ -51,11 +51,21 @@ data is sold.
 
 ### Credenciales para el revisor (incluir en el mensaje de la solicitud)
 
+El formulario no tiene campo de notas: envía las credenciales por **mensaje del
+portal** en la app (App ID 881084) o por ticket en
+`support-developer.riotgames.com`.
+
 ```
 Demo: https://valoia.duckdns.org/login
 User: valoia-demo
 Pass: ValoIA-Demo-2026!
 ```
+
+Además, la landing tiene un botón **“Ver demo (datos de ejemplo)”** que abre la
+cuenta demo **sin credenciales** (`https://valoia.duckdns.org` → botón), pensado
+para que el revisor no tenga que crear cuenta. La cuenta demo es de solo
+lectura: no puede borrar la cuenta, cambiar contraseña, desvincular Riot ni
+cambiar el consentimiento.
 
 La cuenta demo ya está creada y con el flujo completo hecho: vinculada a la
 identidad demo (AlexRomero12#LAN, proveedor *mock*), consentimiento aceptado,

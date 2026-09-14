@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { clearSessionCookie, deleteOwnAccount, sessionFromRequest } from '@/lib/auth';
+import { clearSessionCookie, deleteOwnAccount, isDemoAccount, sessionFromRequest } from '@/lib/auth';
 import { purgeUserData } from '@/lib/accountCleanup';
 import { logConsent } from '@/lib/consentLog';
 import { logAuth } from '@/lib/authLog';
@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
   if (!isPublicMode()) return NextResponse.json({ error: 'No disponible' }, { status: 403 });
   const session = sessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+  if (isDemoAccount(session.u)) {
+    return NextResponse.json({ error: 'La cuenta demo es de solo lectura' }, { status: 403 });
+  }
 
   let body: { action?: string; password?: string };
   try {

@@ -28,6 +28,9 @@ export function Landing() {
           <Link className="f-chip" href="/login" style={{ textDecoration: 'none' }}>
             {t('landing.ctaLogin')}
           </Link>
+          <a className="f-chip" href="/api/demo/login" style={{ textDecoration: 'none' }}>
+            {t('landing.demo')}
+          </a>
         </div>
       </section>
 

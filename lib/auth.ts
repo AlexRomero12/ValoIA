@@ -177,6 +177,15 @@ export function isAdmin(username: string): boolean {
   return user?.admin === true;
 }
 
+/**
+ * Cuenta demo de solo lectura (la que usa el revisor de Riot desde el botón de
+ * la landing). Sus acciones destructivas quedan bloqueadas para que la demo no
+ * se pueda romper desde fuera.
+ */
+export function isDemoAccount(username: string): boolean {
+  return normalizeUsername(username) === normalizeUsername(process.env.DEMO_USER ?? 'valoia-demo');
+}
+
 export function mustChangePassword(username: string): boolean {
   const user = readUsers().find((u) => u.username === normalizeUsername(username));
   return user?.mustChangePassword === true;

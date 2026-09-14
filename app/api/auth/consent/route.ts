@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUser, sessionFromRequest, setConsent } from '@/lib/auth';
+import { getUser, isDemoAccount, sessionFromRequest, setConsent } from '@/lib/auth';
 import { logConsent } from '@/lib/consentLog';
 import { clientIp } from '@/lib/clientIp';
 import { isPublicMode } from '@/lib/appMode';
@@ -16,6 +16,9 @@ export async function POST(req: NextRequest) {
   if (!isPublicMode()) return NextResponse.json({ error: 'No disponible' }, { status: 403 });
   const session = sessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+  if (isDemoAccount(session.u)) {
+    return NextResponse.json({ error: 'La cuenta demo es de solo lectura' }, { status: 403 });
+  }
 
   let body: { accept?: boolean; publicProfile?: boolean };
   try {

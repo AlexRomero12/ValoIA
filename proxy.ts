@@ -14,7 +14,7 @@ import { isPublicMode } from './lib/appMode';
  */
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/terms', '/privacy', '/riot.txt']);
-const PUBLIC_APIS = new Set(['/api/auth/login', '/api/auth/register', '/api/riot/link/callback']);
+const PUBLIC_APIS = new Set(['/api/auth/login', '/api/auth/register', '/api/riot/link/callback', '/api/demo/login']);
 // Permitidas mientras el usuario debe cambiar su contraseña.
 const MUST_CHANGE_ALLOWED = new Set(['/api/auth/users', '/api/auth/session', '/api/auth/logout']);
 const MUST_CHANGE_PAGE = '/cuenta';

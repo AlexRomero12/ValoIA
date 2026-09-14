@@ -5,6 +5,7 @@ import {
   deleteUser,
   getUserPublic,
   isAdmin,
+  isDemoAccount,
   listUsers,
   sessionFromRequest,
   verifyCredentials,
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest) {
   const session = isPublicMode() ? sessionFromRequest(req) : null;
   if (isPublicMode() && !session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   const requester = session?.u ?? 'invitado';
+  if (isDemoAccount(requester)) {
+    return NextResponse.json({ error: 'La cuenta demo es de solo lectura' }, { status: 403 });
+  }
   const admin = !isPublicMode() || isAdmin(requester);
   const ip = clientIp(req);
 

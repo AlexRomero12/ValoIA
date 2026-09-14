@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sessionFromRequest, unlinkRiot } from '@/lib/auth';
+import { isDemoAccount, sessionFromRequest, unlinkRiot } from '@/lib/auth';
 import { logConsent } from '@/lib/consentLog';
 import { clientIp } from '@/lib/clientIp';
 import { isPublicMode } from '@/lib/appMode';
@@ -11,6 +11,9 @@ export async function POST(req: NextRequest) {
   if (!isPublicMode()) return NextResponse.json({ error: 'No disponible' }, { status: 403 });
   const session = sessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+  if (isDemoAccount(session.u)) {
+    return NextResponse.json({ error: 'La cuenta demo es de solo lectura' }, { status: 403 });
+  }
 
   const updated = unlinkRiot(session.u);
   if (!updated) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
