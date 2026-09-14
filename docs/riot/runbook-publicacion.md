@@ -137,3 +137,35 @@ Capturar (ES y EN si es posible):
    ajustar `lib/riot/mapper.ts`.
 4. Eliminar/etiquetar claramente los fixtures demo y regenerar si hiciera falta.
 5. Revisar el límite de la key (headers `X-RateLimit`) y subir tráfico gradual.
+
+## 8. Migrar dominio o VPS después de la aprobación
+
+La production key **no está atada al dominio ni al servidor**: puedes mudar el
+producto. Los dos únicos puntos que dependen del dominio son **RSO** (redirect
+URI registrado) y la **verificación (`riot.txt`)**.
+
+### Cambiar de dominio (p. ej. `valoia.duckdns.org` → `valoia.app`)
+
+1. DNS del dominio nuevo (`A` → IP del VPS), bloque en `Caddyfile.vps`
+   (`PUBLIC_DOMAIN`) y `DOMAIN` en `.env`; Caddy emite el certificado solo.
+2. Servir `riot.txt` **también** en el dominio nuevo y mantener el viejo
+   accesible durante la transición.
+3. Pedir a Riot por mensaje del portal que **agregue/actualice el redirect URI
+   del RSO client** al dominio nuevo. Si el RSO aún no está montado, lo ideal
+   es migrar **antes** del kickoff y registrar el dominio final desde el inicio.
+4. Actualizar el **Product URL** en el portal solo **después** de aprobado:
+   editar la solicitud pendiente reinicia la posición en la cola.
+5. Actualizar `docs/riot/aplicacion.md` y, si cambia el correo,
+   `CONTACT_EMAIL` en `components/public/LegalDoc.tsx`.
+
+### Cambiar de VPS
+
+1. Crear la VM nueva (p. ej. Hetzner CX23), abrir 22/80/443 e instalar Docker.
+2. En el VPS viejo: `bash scripts/backup.sh` (respalda `data`, `archive` y
+   `public-data`).
+3. Copiar el repo (clone + checkout de la rama) y el `.env` a la VM nueva, y
+   restaurar el `tar.gz` en los volúmenes (ver `docs/despliegue.md`, sección 8).
+4. `docker compose -f docker-compose.vps.yml up -d --build`; verificar HTTPS y
+   login. Baja el TTL del DNS antes para propagar rápido.
+5. Apagar el VPS viejo **solo** después de validar el nuevo (Caddy re-emite los
+   certificados automáticamente).
