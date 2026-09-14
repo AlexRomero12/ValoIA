@@ -4,6 +4,7 @@ import { identityProvider, syncRiotProfile } from '@/lib/identity';
 import { logConsent } from '@/lib/consentLog';
 import { clientIp } from '@/lib/clientIp';
 import { isPublicMode } from '@/lib/appMode';
+import { relativeRedirect } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,10 +17,10 @@ export async function GET(req: NextRequest) {
   const state = sp.get('state');
   const error = sp.get('error');
   if (error) {
-    return NextResponse.redirect(new URL(`/cuenta?error=${encodeURIComponent(error)}`, req.url));
+    return relativeRedirect(`/cuenta?error=${encodeURIComponent(error)}`);
   }
   if (!code || !state) {
-    return NextResponse.redirect(new URL('/cuenta?error=callback', req.url));
+    return relativeRedirect('/cuenta?error=callback');
   }
 
   try {
@@ -27,10 +28,10 @@ export async function GET(req: NextRequest) {
     setRiotLink(username, identity);
     syncRiotProfile(username, identity);
     logConsent({ user: username, action: 'link', detail: `${identity.gameName}#${identity.tagLine} (rso)`, ip: clientIp(req) });
-    return NextResponse.redirect(new URL('/cuenta?linked=1', req.url));
+    return relativeRedirect('/cuenta?linked=1');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[rso] callback: ${msg}`);
-    return NextResponse.redirect(new URL(`/cuenta?error=${encodeURIComponent('link')}`, req.url));
+    return relativeRedirect(`/cuenta?error=${encodeURIComponent('link')}`);
   }
 }

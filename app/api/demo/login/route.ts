@@ -3,6 +3,7 @@ import { getUser, startSession } from '@/lib/auth';
 import { isPublicMode } from '@/lib/appMode';
 import { rateLimit } from '@/lib/rateLimit';
 import { clientIp } from '@/lib/clientIp';
+import { relativeRedirect } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   if (!getUser(demoUser)) {
     return NextResponse.json({ error: 'La cuenta demo no existe', code: 'DEMO_MISSING' }, { status: 404 });
   }
-  const res = NextResponse.redirect(new URL('/valorant', req.url));
+  const res = relativeRedirect('/valorant');
   const sid = startSession(res, demoUser, req);
   if (!sid) {
     return NextResponse.json({ error: 'No se pudo iniciar la demo', code: 'DEMO_FAILED' }, { status: 500 });
