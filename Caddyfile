@@ -32,7 +32,10 @@
 asistentepersonal.duckdns.org {
 	encode zstd gzip
 
-	reverse_proxy host.docker.internal:18789
+	reverse_proxy host.docker.internal:18789 {
+		# OpenClaw exige atribucion del cliente: reescribe XFF con la IP real.
+		header_up X-Forwarded-For {remote_host}
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
