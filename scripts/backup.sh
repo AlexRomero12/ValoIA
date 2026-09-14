@@ -12,6 +12,7 @@ mkdir -p "$OUT_DIR"
 
 DATA_VOL="$(docker volume ls --format '{{.Name}}' | grep -E '_valo-data$' | head -1 || true)"
 ARCH_VOL="$(docker volume ls --format '{{.Name}}' | grep -E '_valo-archive$' | head -1 || true)"
+PUBLIC_DATA_VOL="$(docker volume ls --format '{{.Name}}' | grep -E '_valo-public-data$' | head -1 || true)"
 
 if [ -z "$DATA_VOL" ]; then
   echo "ERROR: no encuentro el volumen *_valo-data (¿levantaste docker-compose.prod.yml?)" >&2
@@ -26,6 +27,10 @@ MOUNTS=(-v "$DATA_VOL":/data:ro)
 if [ -n "$ARCH_VOL" ]; then
   TARGETS="data archive"
   MOUNTS+=(-v "$ARCH_VOL":/archive:ro)
+fi
+if [ -n "$PUBLIC_DATA_VOL" ]; then
+  TARGETS="$TARGETS public-data"
+  MOUNTS+=(-v "$PUBLIC_DATA_VOL":/public-data:ro)
 fi
 
 docker run --rm \
