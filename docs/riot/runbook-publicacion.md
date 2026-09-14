@@ -61,9 +61,9 @@ dominio, `DOMAIN`, `CONTACT_EMAIL` si cambia, y desplegar el mismo compose.
 
 - [ ] Landing con descripción del producto y disclaimers (ya implementado).
 - [ ] `/terms` y `/privacy` visibles y enlazados desde el footer (ya implementado).
-- [ ] `public/riot.txt` con el token que **Riot entrega al aplicar**. Sustituir
-      el placeholder `PENDING-RIOT-VERIFICATION-TOKEN` por el valor exacto y
-      redesplegar. Verificar en `https://TU-DOMINIO/riot.txt`.
+- [x] `public/riot.txt` con el token de verificación de Riot
+      (`d56eddd3-6f2b-4f4b-88b4-20aa9f77f478`), accesible en
+      `https://valoia.duckdns.org/riot.txt`. Verificado.
 
 ## 3. Desplegar el demo público
 

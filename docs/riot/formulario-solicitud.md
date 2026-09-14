@@ -64,9 +64,9 @@ etiquetadas como datos de demostración.
 
 ## Después de enviar
 
-1. Riot puede pedir la verificación del dominio: `https://valoia.duckdns.org/riot.txt`
-   ya responde, pero hay que reemplazar el placeholder
-   `PENDING-RIOT-VERIFICATION-TOKEN` por el token exacto que entregue Riot.
+1. `https://valoia.duckdns.org/riot.txt` ya sirve el token de verificación de
+   Riot (`d56eddd3-6f2b-4f4b-88b4-20aa9f77f478`); pulsa **Verify URL** en el
+   portal.
 2. Adjuntar capturas/video (ver `runbook-publicacion.md`, sección 4).
 3. La espera real es de **3–8 meses**; no edites la solicitud mientras está en
    cola. RSO se habilita después de la aprobación (Riot contacta por app
