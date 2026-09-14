@@ -1,6 +1,5 @@
 import { env } from './lib/env';
 import { warmAllPlayers } from './lib/warm';
-import { watchStoreAndNotify } from './lib/storeWatch';
 import { watchWeeklyRules } from './lib/rulesWatch';
 
 /**
@@ -8,18 +7,12 @@ import { watchWeeklyRules } from './lib/rulesWatch';
  *  VAL_BACKGROUND_REFRESH=1  activa el cron
  *  VAL_REFRESH_INTERVAL_MIN=15  (por defecto)
  *
- * Cada ciclo sincroniza el bucket de partidas + MMR de los perfiles visibles,
- * secuencialmente. El sync incremental suele costar 1 request por jugador,
- * así el abrir el dashboard cuesta $0 requests de Henrik. Cada partida nueva
- * detectada también se archiva en el archivo acumulativo (lib/archive.ts),
- * así el historial crece solo aunque el bucket rote a las 40.
- *
- * La tienda diaria se vigila con frecuencia menor (cada 60 min): si hay skins
- * favoritas y suscripciones push, se refresca el storefront (local o RSO) y se
- * notifica cuando una favorita aparece en la tienda (una vez por día por skin).
+ * Cada ciclo sincroniza las partidas del perfil único (Riot dev + mock o Riot
+ * producción), secuencialmente. Cada partida nueva detectada también se archiva
+ * en el archivo acumulativo (lib/archive.ts), así el historial crece solo.
  *
  * El aviso semanal de reglas (lunes por la mañana, dedupe semanal) manda un push
- * por perfil con cortes ignorados/violaciones de pool (VAL_RULES_PUSH=0 lo apaga).
+ * con cortes ignorados/violaciones de pool (VAL_RULES_PUSH=0 lo apaga).
  */
 export function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
@@ -39,30 +32,10 @@ export function register() {
     }
   };
 
-  let storeRunning = false;
-  const storeCycle = async () => {
-    if (storeRunning) return;
-    storeRunning = true;
-    try {
-      const result = await watchStoreAndNotify();
-      if (result.checked && result.matches.length > 0) {
-        console.log(`[store] ${result.matches.length} favorita(s) en tienda · ${result.sent} push enviado(s)`);
-      }
-    } catch (e) {
-      console.error(`[store] vigilancia falló: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      storeRunning = false;
-    }
-  };
-
   // Primer ciclo unos segundos después del arranque (no bloquear el startup)
   // y luego en intervalos fijos.
   setTimeout(() => void cycle(), 30_000);
   setInterval(() => void cycle(), intervalMs);
-
-  // Vigilancia de tienda: cada 60 min (la tienda rota cada 24h, con 1h basta).
-  setTimeout(() => void storeCycle(), 45_000);
-  setInterval(() => void storeCycle(), 60 * 60 * 1000);
 
   // Aviso semanal de reglas: revisa cada 60 min y envía una vez por semana.
   let rulesRunning = false;

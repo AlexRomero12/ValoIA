@@ -73,3 +73,16 @@ export async function setComment(
   writeDataSync(COMMENTS_FILE, { version: 1, comments: next });
   return visibleTo(next, viewer);
 }
+
+/** Borra todas las notas de un autor (baja de cuenta). */
+export function removeUserComments(author: string): number {
+  const current = readComments();
+  const next: Record<string, MatchComment> = {};
+  let removed = 0;
+  for (const [id, c] of Object.entries(current)) {
+    if (c.author === author) removed += 1;
+    else next[id] = c;
+  }
+  if (removed) writeDataSync(COMMENTS_FILE, { version: 1, comments: next });
+  return removed;
+}

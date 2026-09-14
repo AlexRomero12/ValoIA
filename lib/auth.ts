@@ -3,6 +3,7 @@ import { readData, writeDataSync } from './persist';
 import { authConfigured, signSession, SESSION_COOKIE, SESSION_MAX_AGE, usingDevSecret, verifySession, type SessionPayload } from './authToken';
 import { createSession, getSession, revokeUserSessions, touchSession } from './sessions';
 import { clientIp } from './clientIp';
+import { isPublicMode } from './appMode';
 import type { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -16,6 +17,15 @@ import type { NextRequest, NextResponse } from 'next/server';
  * así se pueden revocar (cambio de contraseña, borrar usuario, cerrar remoto).
  */
 
+export interface RiotLink {
+  gameName: string;
+  tagLine: string;
+  puuid: string;
+  linkedAt: number;
+  /** Vinculación simulada (demo sin credenciales RSO). */
+  mock: boolean;
+}
+
 export interface UserRecord {
   username: string;
   hash: string;
@@ -27,9 +37,27 @@ export interface UserRecord {
   mustChangePassword?: boolean;
   /** IP con la que se creó el usuario (visible para el admin). */
   createdIp?: string;
+  /** Vinculación de la cuenta de Riot (Riot Sign-On). */
+  riot?: RiotLink;
+  /** Aceptación del tratamiento de datos (versión de la política). */
+  consentAt?: number;
+  consentVersion?: number;
+  /** Perfil público (opt-in): visible para otros usuarios en comparativas. */
+  publicProfile?: boolean;
+  optInAt?: number;
+  optOutAt?: number;
+  /** Baja de cuenta solicitada por el usuario (se purga sus datos). */
+  deletedAt?: number;
 }
 
-export type PublicUser = Pick<UserRecord, 'username' | 'createdAt' | 'updatedAt' | 'admin' | 'mustChangePassword' | 'createdIp'>;
+export type RiotLinkPublic = Pick<RiotLink, 'gameName' | 'tagLine' | 'linkedAt' | 'mock'>;
+
+export type PublicUser = Pick<
+  UserRecord,
+  'username' | 'createdAt' | 'updatedAt' | 'admin' | 'mustChangePassword' | 'createdIp' | 'consentAt' | 'publicProfile' | 'optInAt' | 'optOutAt'
+> & {
+  riot: RiotLinkPublic | null;
+};
 
 interface UsersFile {
   version: number;
@@ -110,13 +138,18 @@ function getDummyHash(): string {
 
 function toPublicUsers(users: UserRecord[]): PublicUser[] {
   return users
-    .map(({ username, createdAt, updatedAt, admin, mustChangePassword, createdIp }) => ({
+    .map(({ username, createdAt, updatedAt, admin, mustChangePassword, createdIp, consentAt, publicProfile, optInAt, optOutAt, riot }) => ({
       username,
       createdAt,
       updatedAt,
       admin: admin === true,
       mustChangePassword: mustChangePassword === true,
       createdIp,
+      consentAt,
+      publicProfile: publicProfile === true,
+      optInAt,
+      optOutAt,
+      riot: riot ? { gameName: riot.gameName, tagLine: riot.tagLine, linkedAt: riot.linkedAt, mock: riot.mock } : null,
     }))
     .sort((a, b) => Number(b.admin) - Number(a.admin) || a.username.localeCompare(b.username));
 }
@@ -236,6 +269,102 @@ export function verifyCredentials(rawUsername: string, password: string): boolea
     return false;
   }
   return checkPassword(password, user.hash);
+}
+
+// ---------- Cuenta pública: vinculación Riot y consentimiento ----------
+
+/** Registro completo del usuario (server-only; incluye hash). */
+export function getUser(rawUsername: string): UserRecord | null {
+  const username = normalizeUsername(rawUsername);
+  return readUsers().find((u) => u.username === username) ?? null;
+}
+
+export function getUserPublic(rawUsername: string): PublicUser | null {
+  const user = getUser(rawUsername);
+  return user ? toPublicUsers([user])[0] : null;
+}
+
+function updateUser(rawUsername: string, patch: (u: UserRecord) => UserRecord): PublicUser | null {
+  const username = normalizeUsername(rawUsername);
+  const users = readUsers();
+  let updated: UserRecord | null = null;
+  const next = users.map((u) => {
+    if (u.username !== username) return u;
+    updated = { ...patch(u), updatedAt: Date.now() };
+    return updated;
+  });
+  if (!updated) return null;
+  writeUsers(next);
+  return toPublicUsers([updated])[0];
+}
+
+/** Vincula (o reemplaza) la cuenta de Riot del usuario. */
+export function setRiotLink(rawUsername: string, link: Omit<RiotLink, 'linkedAt'> & { linkedAt?: number }): PublicUser | null {
+  return updateUser(rawUsername, (u) => ({
+    ...u,
+    riot: { ...link, linkedAt: link.linkedAt ?? Date.now() },
+    // Desvincular/relinkear exige reconfirmar el opt-in público.
+    publicProfile: false,
+    optOutAt: Date.now(),
+  }));
+}
+
+/** Desvincula Riot y desactiva el perfil público al instante. */
+export function unlinkRiot(rawUsername: string): PublicUser | null {
+  return updateUser(rawUsername, (u) => ({ ...u, riot: undefined, publicProfile: false, optOutAt: Date.now() }));
+}
+
+/**
+ * Registra el consentimiento de datos. `publicProfile` solo puede activarse con
+ * consentimiento aceptado y cuenta de Riot vinculada.
+ */
+export function setConsent(
+  rawUsername: string,
+  opts: { publicProfile: boolean; policyVersion: number },
+): PublicUser | null {
+  return updateUser(rawUsername, (u) => {
+    const now = Date.now();
+    const canPublish = Boolean(u.riot) && opts.publicProfile;
+    return {
+      ...u,
+      consentAt: now,
+      consentVersion: opts.policyVersion,
+      publicProfile: canPublish,
+      optInAt: canPublish ? (u.publicProfile ? u.optInAt ?? now : now) : u.optInAt,
+      optOutAt: canPublish ? u.optOutAt : now,
+    };
+  });
+}
+
+/** Usuarios con Riot vinculado, consentimiento y perfil público (para comparativas). */
+export function listPublicUsers(): PublicUser[] {
+  return toPublicUsers(
+    readUsers().filter((u) => u.riot && u.publicProfile === true && u.consentAt != null && !u.deletedAt),
+  );
+}
+
+/** Baja de cuenta del propio usuario (verifica contraseña). */
+export function deleteOwnAccount(rawUsername: string, password: string): { ok: boolean; error?: string } {
+  const username = normalizeUsername(rawUsername);
+  const user = getUser(username);
+  if (!user || !checkPassword(password, user.hash)) return { ok: false, error: 'Credenciales inválidas' };
+  const users = readUsers();
+  const isLastAdmin = user.admin === true && users.filter((u) => u.admin).length <= 1;
+  if (isLastAdmin) return { ok: false, error: 'El administrador no puede borrar su cuenta' };
+  writeUsers(users.filter((u) => u.username !== username));
+  revokeUserSessions(username);
+  return { ok: true };
+}
+
+/**
+ * Visor de la request o el sintético del modo `single` (instancia personal).
+ * En modo público sin sesión devuelve null (la ruta responde 401).
+ */
+export function viewerOrSingle(req: NextRequest): { username: string; admin: boolean } | null {
+  const viewer = viewerFromRequest(req);
+  if (viewer) return viewer;
+  if (!isPublicMode()) return { username: '__single__', admin: true };
+  return null;
 }
 
 // ---------- Sesiones ----------

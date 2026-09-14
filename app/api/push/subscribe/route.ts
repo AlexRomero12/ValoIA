@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { addSubscription, removeSubscription, pushEnabled, type PushSubscriptionData } from '@/lib/push';
-import { viewerFromRequest } from '@/lib/auth';
+import { viewerOrSingle } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,7 @@ interface SubBody {
 }
 
 export async function POST(req: NextRequest) {
-  const viewer = viewerFromRequest(req);
+  const viewer = viewerOrSingle(req);
   if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
   if (!pushEnabled()) {
     return Response.json({ error: 'Web Push no configurado (faltan VAPID keys en .env)' }, { status: 400 });
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const viewer = viewerFromRequest(req);
+  const viewer = viewerOrSingle(req);
   if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
   const endpoint = req.nextUrl.searchParams.get('endpoint');
   if (!endpoint) return Response.json({ error: 'Falta endpoint' }, { status: 400 });

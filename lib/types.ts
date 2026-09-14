@@ -2,6 +2,8 @@ export interface ValAccount {
   gameName: string;
   tagLine: string;
   puuid?: string;
+  /** Identidad servida por el fallback del modo demo (sin dev key válida). */
+  demo?: boolean;
 }
 
 export interface ValKpis {
@@ -15,9 +17,9 @@ export interface ValKpis {
   acs: number;
   adr: number;
   hsPct: number;
-  /** Primeras sangres por partida (promedio). Solo proveedor Henrik. */
+  /** Primeras sangres por partida (promedio). */
   fb?: number;
-  /** Primeras muertes por partida (promedio). Solo proveedor Henrik. */
+  /** Primeras muertes por partida (promedio). */
   fd?: number;
 }
 
@@ -50,24 +52,18 @@ export interface MatchRow {
   acs: number;
   adr: number;
   hsPct: number;
-  /** Primeras sangres del jugador (primer kill del round). Solo proveedor Henrik. */
+  /** Primeras sangres del jugador (primer kill del round). */
   firstBloods?: number;
-  /** Primeras muertes del jugador (primera muerte del round). Solo proveedor Henrik. */
+  /** Primeras muertes del jugador (primera muerte del round). */
   firstDeaths?: number;
-  /** Totales crudos para agregar por día con precisión (opcional, proveedor Henrik/Riot) */
+  /** Totales crudos para agregar por día con precisión */
   score?: number;
   damageDealt?: number;
   headshots?: number;
   shots?: number;
   tier: number;
   tierChange: number;
-  /** Tier sin respaldo del mmr-history (aproximado): el punto de rango lleva ~. */
-  tierApprox?: boolean;
   durationMin: number;
-  rrDelta?: number | null;
-  rr?: number | null;
-  elo?: number | null;
-  eloDelta?: number | null;
   agentIcon?: string | null;
   mapIcon?: string | null;
   /** Rol del agente (Duelist/Initiator/Controller/Sentinel) */
@@ -105,15 +101,10 @@ export interface ValSummary {
     consideredMatches: number;
     /** Partidas en el archivo acumulativo (histórico completo sincronizado) */
     archivedMatches?: number;
-    seasonShort?: string | null;
-    rrTotal?: number | null;
-    /** Partidas de la ventana sin dato de RR: rrTotal es parcial si > 0. */
-    rrMissing?: number;
-    eloTotal?: number | null;
-    /** Bucket Henrik: fecha ISO de la última sincronización contra la API */
+    /** Origen de los datos de partidas: mock (dev) o live (key productiva) */
+    source?: 'mock' | 'live';
+    /** Bucket Riot: fecha ISO de la última sincronización */
     syncedAt?: string | null;
-    /** MMR-history: fecha ISO de su última descarga (TTL distinto al bucket) */
-    mmrSyncedAt?: string | null;
     /** La ventana puede estar recortada (bucket al tope sin cobertura total) */
     truncated?: boolean;
   };
@@ -122,13 +113,10 @@ export interface ValSummary {
   prev?: ValKpis | null;
   currentTier: number;
   startTier: number;
-  currentElo?: number | null;
-  /** Puntos de rango (RR dentro del tier actual, 0-100). Solo proveedor Henrik. */
-  currentRR?: number | null;
   byAgent: (GroupRow & { agent: string })[];
   byMap: (GroupRow & { map: string })[];
   matches: MatchRow[];
-  /** Solo proveedor Henrik: uso de armas derivado del kill feed */
+  /** Uso de armas derivado del kill feed */
   arsenal?: ValArsenal;
 }
 

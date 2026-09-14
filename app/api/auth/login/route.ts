@@ -2,83 +2,52 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authConfigured, ensureSeedUser, mustChangePassword, startSession, verifyCredentials } from '@/lib/auth';
 import { logAuth } from '@/lib/authLog';
 import { clientIp } from '@/lib/clientIp';
-import { clearRateLimit, rateLimit } from '@/lib/rateLimit';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Login con rate-limit por IP, por usuario y por par IP+usuario.
- * Si no hay AUTH_SECRET (producción) responde 503 con instrucciones.
- */
-
-function tooMany(retryAfterSec: number | undefined) {
-  return Response.json(
-    { error: 'Demasiados intentos. Espera unos minutos.' },
-    { status: 429, headers: retryAfterSec ? { 'Retry-After': String(retryAfterSec) } : undefined },
-  );
-}
-
+/** Inicio de sesión (cuenta local). Rate-limit por IP+usuario, usuario e IP. */
 export async function POST(req: NextRequest) {
+  ensureSeedUser();
   if (!authConfigured()) {
-    return Response.json(
-      {
-        error: 'Falta AUTH_SECRET en el servidor. Genera uno con: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64url\'))" y reinicia.',
-        code: 'AUTH_NOT_CONFIGURED',
-      },
-      { status: 503 },
+    return NextResponse.json(
+      { error: 'Falta AUTH_SECRET en el entorno (firma de sesiones)', code: 'NOT_CONFIGURED' },
+      { status: 500 },
     );
   }
-
-  let body: { username?: unknown; password?: unknown };
+  let body: { username?: string; password?: string };
   try {
     body = await req.json();
   } catch {
-    return Response.json({ error: 'Body JSON inválido' }, { status: 400 });
+    return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 });
   }
   const username = String(body.username ?? '').trim();
   const password = String(body.password ?? '');
-  if (!username || !password) {
-    return Response.json({ error: 'Usuario y contraseña requeridos' }, { status: 400 });
-  }
-  if (username.length > 64 || password.length > 128) {
-    return Response.json({ error: 'Usuario o contraseña incorrectos' }, { status: 401 });
-  }
+  if (!username || !password) return NextResponse.json({ error: 'Faltan credenciales' }, { status: 400 });
 
   const ip = clientIp(req);
-  const userKey = username.toLowerCase();
-  const pairKey = `login:pair:${ip}:${userKey}`;
-
-  // Del más específico al más amplio.
-  const checks: [string, number, number][] = [
-    [pairKey, 5, 10 * 60_000],
-    [`login:user:${userKey}`, 10, 15 * 60_000],
-    [`login:ip:${ip}`, 30, 15 * 60_000],
+  const buckets = [
+    rateLimit(`login:pair:${ip}:${username.toLowerCase()}`, 5, 10 * 60 * 1000),
+    rateLimit(`login:user:${username.toLowerCase()}`, 10, 15 * 60 * 1000),
+    rateLimit(`login:ip:${ip}`, 30, 15 * 60 * 1000),
   ];
-  for (const [key, max, windowMs] of checks) {
-    const r = rateLimit(key, max, windowMs);
-    if (!r.ok) {
-      logAuth('login_blocked', { user: userKey, ip });
-      return tooMany(r.retryAfterSec);
+  for (const rl of buckets) {
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Demasiados intentos. Espera ${rl.retryAfterSec}s`, code: 'RATE_LIMITED' },
+        { status: 429, headers: rl.retryAfterSec ? { 'Retry-After': String(rl.retryAfterSec) } : undefined },
+      );
     }
   }
 
-  // Primer arranque: crea el usuario inicial desde AUTH_USER/AUTH_PASSWORD si no hay ninguno.
-  ensureSeedUser();
-
   if (!verifyCredentials(username, password)) {
-    logAuth('login_fail', { user: userKey, ip });
-    return Response.json({ error: 'Usuario o contraseña incorrectos' }, { status: 401 });
+    logAuth('login_fail', { user: username.toLowerCase(), ip });
+    return NextResponse.json({ error: 'Credenciales inválidas', code: 'INVALID' }, { status: 401 });
   }
 
-  clearRateLimit(pairKey);
-  logAuth('login_ok', { user: userKey, ip });
-  const res = NextResponse.json({
-    ok: true,
-    user: { username: userKey },
-    mustChangePassword: mustChangePassword(userKey),
-  });
-  if (!startSession(res, userKey, req)) {
-    return Response.json({ error: 'No se pudo iniciar la sesión', code: 'AUTH_NOT_CONFIGURED' }, { status: 503 });
-  }
+  const res = NextResponse.json({ ok: true, mustChangePassword: mustChangePassword(username) });
+  const sid = startSession(res, username, req);
+  if (!sid) return NextResponse.json({ error: 'No se pudo iniciar sesión' }, { status: 500 });
+  logAuth('login_ok', { user: username.toLowerCase(), ip });
   return res;
 }

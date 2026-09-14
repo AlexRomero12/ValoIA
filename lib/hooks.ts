@@ -5,9 +5,7 @@ import type { ValSummary, AgentIconInfo } from './types';
 import type { MatchDetail } from './matchDetail';
 import type { Profile, SessionRules } from './profileTypes';
 
-export type ValWindowMode =
-  | { kind: 'season' }
-  | { kind: 'days'; days: number };
+export type ValWindowMode = { kind: 'days'; days: number };
 
 export const DEFAULT_LIMIT = 10;
 export const LIMIT_STEPS = [10, 20, 40] as const;
@@ -19,7 +17,7 @@ export function nextLimit(current: number): number | null {
 }
 
 export function summaryUrl(mode: ValWindowMode, playerId: string, limit: number, refresh = false): string {
-  const qs = mode.kind === 'season' ? 'season=current' : `days=${mode.days}`;
+  const qs = `days=${mode.days}`;
   return `/api/valorant/summary?${qs}&limit=${limit}&player=${encodeURIComponent(playerId)}${refresh ? '&refresh=1' : ''}`;
 }
 
@@ -95,7 +93,22 @@ export const PROFILES_KEY = ['val-profiles'] as const;
 
 export function useProfiles() {
   return useQuery<Profile[]>({
-    queryKey: PROFILES_KEY,
+    queryKey: ['val-profiles', 'viewable'],
+    queryFn: async () => {
+      // `viewable`: propios + perfiles públicos de terceros con opt-in (solo lectura).
+      const res = await fetch('/api/valorant/profiles?viewable=1');
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || 'No se pudieron cargar los perfiles');
+      return (json.profiles ?? []) as Profile[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Solo los perfiles propios (página de configuración de perfil). */
+export function useOwnProfiles() {
+  return useQuery<Profile[]>({
+    queryKey: ['val-profiles', 'own'],
     queryFn: async () => {
       const res = await fetch('/api/valorant/profiles');
       const json = await res.json();
@@ -128,25 +141,12 @@ export function useProfileActions() {
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json.error) return { ok: false, error: (json as { error?: string }).error || 'No se pudo guardar el perfil' };
     const profiles = (json.profiles ?? []) as Profile[];
-    client.setQueryData(PROFILES_KEY, profiles);
+    client.setQueryData(['val-profiles', 'viewable'], profiles);
     // Refresca también desde el servidor: garantiza que lo normalizado en el
     // guardado (p. ej. rulesVersion) se refleje en cualquier vista activa.
-    void client.invalidateQueries({ queryKey: PROFILES_KEY });
+    void client.invalidateQueries({ queryKey: ['val-profiles'] });
     return { ok: true, profiles };
   };
 
-  const remove = async (id: string): Promise<ProfileMutation> => {
-    const res = await fetch('/api/valorant/profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete', id }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || json.error) return { ok: false, error: (json as { error?: string }).error || 'No se pudo borrar el perfil' };
-    const profiles = (json.profiles ?? []) as Profile[];
-    client.setQueryData(PROFILES_KEY, profiles);
-    return { ok: true, profiles };
-  };
-
-  return { upsert, remove };
+  return { upsert };
 }

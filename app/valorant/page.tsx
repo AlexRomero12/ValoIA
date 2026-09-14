@@ -13,7 +13,7 @@ import { TierChart } from '@/components/TierChart';
 import { MatchesTable } from '@/components/MatchesTable';
 import { FormStrip } from '@/components/FormStrip';
 import { RankedTabs, isRankedTab, type RankedTab } from '@/components/ranked/RankedTabs';
-import { StatsTable } from '@/components/ranked/StatsTable';
+import { StatsTable, type TopAgent } from '@/components/ranked/StatsTable';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useProfiles, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { useCooldown } from '@/lib/useCooldown';
@@ -22,7 +22,7 @@ import { memberAccounts } from '@/lib/profileTypes';
 import { tierName } from '@/lib/ranks';
 import type { ValSummary } from '@/lib/types';
 
-type WindowValue = 'season' | '7' | '14' | '30' | '90';
+type WindowValue = '7' | '14' | '30' | '90';
 
 const POLL_MS = 4_000;
 const POLL_TIMEOUT_MS = 120_000;
@@ -41,7 +41,7 @@ export default function ValorantPage() {
 }
 
 function RankedPage() {
-  const [win, setWin] = useState<WindowValue>('season');
+  const [win, setWin] = useState<WindowValue>('30');
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [want, setWant] = useState<number>(DEFAULT_LIMIT);
   const [fMaps, setFMaps] = useState<string[]>([]);
@@ -79,7 +79,7 @@ function RankedPage() {
     queries: accounts.map((_, ai) => ({
       queryKey: ['val-summary', activeId, ai, win, want],
       queryFn: async () => {
-        const qs = win === 'season' ? 'season=current' : `days=${win}`;
+        const qs = `days=${win}`;
         const res = await fetch(
           `/api/valorant/summary?${qs}&limit=${want}&player=${encodeURIComponent(activeId)}&account=${ai}`,
         );
@@ -105,7 +105,7 @@ function RankedPage() {
     setRefreshProgress({ done: 0, total: queries.length });
     const before = queries.map((q) => {
       const w = (q.data as ValSummary | undefined)?.window;
-      return `${w?.syncedAt ?? ''}|${w?.mmrSyncedAt ?? ''}`;
+      return w?.syncedAt ?? '';
     });
     try {
       await Promise.all(
@@ -123,9 +123,9 @@ function RankedPage() {
         const results = await Promise.all(queries.map((q) => q.refetch()));
         const synced = results.map((r) => {
           const w = (r.data as ValSummary | undefined)?.window;
-          return `${w?.syncedAt ?? ''}|${w?.mmrSyncedAt ?? ''}`;
+          return w?.syncedAt ?? '';
         });
-        const okCount = synced.filter((s, i) => s === '|' || s !== before[i]).length;
+        const okCount = synced.filter((s, i) => s === '' || s !== before[i]).length;
         setRefreshProgress({ done: okCount, total: synced.length });
         done = okCount === synced.length;
         if (done) break;
@@ -161,19 +161,48 @@ function RankedPage() {
 
   const who = data?.account.gameName ?? member?.label ?? '—';
   const rankLabel = data
-    ? `${member?.label ?? who} · ${tierName(data.currentTier ?? 0)}${data.currentElo != null ? ` · ${data.currentElo} MMR` : ''}${data.startTier > 0 && data.currentTier !== data.startTier ? ` (desde ${tierName(data.startTier)})` : ''}`
+    ? `${member?.label ?? who} · ${tierName(data.currentTier ?? 0)}${data.startTier > 0 && data.currentTier !== data.startTier ? ` (desde ${tierName(data.startTier)})` : ''}`
     : `${member?.label ?? '—'} —`;
 
-  const rrMissing = data?.window.rrMissing ?? 0;
-  const rrTxt = data?.window.rrTotal != null ? ` · RR ${data.window.rrTotal > 0 ? '+' : ''}${data.window.rrTotal}${rrMissing > 0 ? '~' : ''}` : '';
   const windowInfo = data
-    ? `${data.window.seasonShort ? `Temporada ${data.window.seasonShort} · ` : ''}${data.window.consideredMatches} competitivas${rrTxt}${rrMissing > 0 ? ` (RR de ${data.window.consideredMatches - rrMissing}/${data.window.consideredMatches})` : ''}${data.window.truncated ? ' · ventana truncada' : ''}`
+    ? `${data.window.consideredMatches} competitivas${data.window.source === 'mock' ? ' · datos mock (dev)' : ''}${data.window.truncated ? ' · ventana truncada' : ''}`
     : '';
 
   const agentIcons = new Map<string, string | null>((data?.matches ?? []).map((m) => [m.agent, m.agentIcon ?? null]));
   const mapIcons = new Map<string, string | null>((data?.matches ?? []).map((m) => [m.map, m.mapIcon ?? null]));
   const agentRows = (data?.byAgent ?? []).map((a) => ({ ...a, name: a.agent }));
   const mapRows = (data?.byMap ?? []).map((m) => ({ ...m, name: m.map }));
+
+  // Agente con más victorias por mapa (desempate: más partidas y luego nombre).
+  const topAgentsByMap = useMemo(() => {
+    const acc = new Map<string, Map<string, { wins: number; games: number; icon: string | null }>>();
+    for (const m of data?.matches ?? []) {
+      if (!m.map || !m.agent) continue;
+      const byAgent = acc.get(m.map) ?? new Map();
+      const cur = byAgent.get(m.agent) ?? { wins: 0, games: 0, icon: m.agentIcon ?? null };
+      cur.games += 1;
+      if (m.won) cur.wins += 1;
+      if (!cur.icon && m.agentIcon) cur.icon = m.agentIcon;
+      byAgent.set(m.agent, cur);
+      acc.set(m.map, byAgent);
+    }
+    const out = new Map<string, TopAgent>();
+    for (const [map, byAgent] of acc) {
+      let best: { agent: string; wins: number; games: number; icon: string | null } | null = null;
+      for (const [agent, s] of byAgent) {
+        if (
+          !best ||
+          s.wins > best.wins ||
+          (s.wins === best.wins && s.games > best.games) ||
+          (s.wins === best.wins && s.games === best.games && agent < best.agent)
+        ) {
+          best = { agent, wins: s.wins, games: s.games, icon: s.icon };
+        }
+      }
+      if (best && best.wins > 0) out.set(map, { agent: best.agent, icon: best.icon, wins: best.wins });
+    }
+    return out;
+  }, [data]);
 
   // Filtros multi: OR dentro del mismo tipo, AND entre tipos.
   const toggleFilter = (kind: 'map' | 'agent', value: string) => {
@@ -214,7 +243,6 @@ function RankedPage() {
               <>
                 <TierIcon tier={data.currentTier ?? 0} size={18} />
                 <span>{who}</span>
-                {data.currentRR != null ? <span>· {data.currentRR} RR</span> : null}
                 {data.startTier > 0 && data.currentTier !== data.startTier ? (
                   <span className="chip-since">
                     desde <TierIcon tier={data.startTier} size={15} />
@@ -295,7 +323,6 @@ function RankedPage() {
             </div>
             <label htmlFor="window">Periodo</label>
             <select id="window" value={win} onChange={(e) => setWin(e.target.value as WindowValue)}>
-              <option value="season">Temporada actual</option>
               <option value="7">Últimos 7 días</option>
               <option value="14">Últimos 14 días</option>
               <option value="30">Últimos 30 días</option>
@@ -385,6 +412,7 @@ function RankedPage() {
               kind="map-icon"
               active={fMaps}
               onPick={(name) => toggleFilter('map', name)}
+              topAgents={topAgentsByMap}
               filteredCount={filteredMatches.length}
               onViewHistory={goHistory}
             />

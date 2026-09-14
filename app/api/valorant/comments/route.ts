@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server';
 import { getComments, setComment } from '@/lib/matchComments';
-import { viewerFromRequest } from '@/lib/auth';
+import { viewerOrSingle } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const viewer = viewerFromRequest(req);
+  const viewer = viewerOrSingle(req);
   if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
   try {
     const comments = await getComments(viewer);
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const viewer = viewerFromRequest(req);
+  const viewer = viewerOrSingle(req);
   if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
 
   let body: { matchId?: string; text?: string };

@@ -34,7 +34,6 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
   const [tag, setTag] = useState(profile?.tag ?? '');
   const [roles, setRoles] = useState<string[]>(parseRoles(profile?.role));
   const [color, setColor] = useState(profile?.color ?? '');
-  const [visible, setVisible] = useState(profile?.visible ?? true);
   const [accounts, setAccounts] = useState<ProfileAccount[]>(profile?.accounts ?? []);
   const [prefs, setPrefs] = useState<ProfilePref[]>(profile?.prefs ?? []);
   const [rules, setRules] = useState<SessionRules | null>(profile?.rules ? cloneSessionRules(profile.rules) : null);
@@ -74,7 +73,6 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
       tag: tag.trim(),
       role: joinRoles(roles),
       color: color.trim() || undefined,
-      visible,
       accounts: accounts.filter((a) => a.name.trim() && a.tag.trim()),
       prefs: prefs.filter((p) => p.map && p.agents.length > 0),
       rules: rules === null ? null : rules,
@@ -83,20 +81,6 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
     setBusy(false);
     if (!res.ok) {
       setError(res.error ?? 'No se pudo guardar');
-      return;
-    }
-    onSaved?.(res.profiles ?? []);
-    onClose();
-  };
-
-  const remove = async () => {
-    if (!profile || busy) return;
-    if (!window.confirm(`¿Borrar el perfil ${profile.label}? Sus partidas no se borran, solo la configuración.`)) return;
-    setBusy(true);
-    const res = await actions.remove(profile.id);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error ?? 'No se pudo borrar');
       return;
     }
     onSaved?.(res.profiles ?? []);
@@ -186,11 +170,6 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
               ))}
             </div>
           </div>
-          <label className="pf-check">
-            <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
-            <span>Visible en Ranked</span>
-          </label>
-          <p className="pf-help">El perfil principal (★) es el único que se evalúa en Reglas de sesión.</p>
         </section>
 
         <section className="pf-section">
@@ -288,9 +267,6 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
           <button className="primary-red" onClick={save} disabled={busy}>
             Guardar{busy ? <span className="loader" /> : null}
           </button>
-          {profile ? (
-            <button onClick={remove} disabled={busy}>Borrar perfil</button>
-          ) : null}
           <button onClick={onClose} disabled={busy}>Cancelar</button>
         </footer>
       </div>

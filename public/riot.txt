@@ -1,0 +1,5 @@
+PENDING-RIOT-VERIFICATION-TOKEN
+
+# Al enviar la solicitud, Riot entrega el token exacto para este archivo.
+# Sustituye el contenido de public/riot.txt por ese valor y vuelve a desplegar.
+# Documentado en docs/riot/runbook-publicacion.md.

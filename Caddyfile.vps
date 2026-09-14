@@ -1,0 +1,76 @@
+# VPS: el producto PÚBLICO va en el dominio raíz (el que verá Riot) y el
+# dashboard personal se mueve a su propio hostname DuckDNS. OpenClaw se conserva.
+#
+# Variables (definidas en docker-compose.vps.yml):
+#   PUBLIC_DOMAIN   (default valoia.duckdns.org)
+#   PERSONAL_DOMAIN (default valoia-personal.duckdns.org)
+#
+# Si no quieres exponer el dashboard personal, comenta el bloque
+# {$PERSONAL_DOMAIN} y no crees ese hostname en DuckDNS.
+
+{$PUBLIC_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy valo-dash-public:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	log {
+		output file /data/access.log
+		format console
+	}
+}
+
+{$PERSONAL_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy valo-dash:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	log {
+		output file /data/access.log
+		format console
+	}
+}
+
+# OpenClaw (asistente personal): el gateway corre en el host (systemd) en
+# 127.0.0.1:18789 y se expone por este subdominio. `host.docker.internal` es
+# el host visto desde el contenedor (extra_hosts en docker-compose.vps.yml).
+asistentepersonal.duckdns.org {
+	encode zstd gzip
+
+	reverse_proxy host.docker.internal:18789 {
+		# OpenClaw exige atribucion del cliente: reescribe XFF con la IP real.
+		header_up X-Forwarded-For {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	log {
+		output file /data/access.log
+		format console
+	}
+}

@@ -52,10 +52,6 @@ export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
   const first = ranked[0];
   const last = ranked[ranked.length - 1];
   const peak = ranked.length ? ranked.reduce((a, b) => (b.tier > a.tier ? b : a)) : null;
-  const rrMissing = matchesAsc.filter((m) => m.rrDelta == null).length;
-  const rrTotal = matchesAsc.some((m) => m.rrDelta != null)
-    ? matchesAsc.reduce((a, m) => a + (m.rrDelta ?? 0), 0)
-    : null;
   const wins = matchesAsc.filter((m) => m.won && m.roundsWon !== m.roundsLost).length;
   const draws = matchesAsc.filter((m) => m.roundsWon === m.roundsLost).length;
   const losses = matchesAsc.length - wins - draws;
@@ -148,14 +144,6 @@ export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
             <b>{tierShort(peak.tier)}</b>
           </span>
         ) : null}
-        {rrTotal != null ? (
-          <span className="chart-sum-item">
-            <span className="lbl">RR</span>
-            <b className={rrTotal > 0 ? 'up' : rrTotal < 0 ? 'down' : undefined}>
-              {rrTotal > 0 ? '+' : ''}{rrTotal}{rrMissing > 0 ? '~' : ''}
-            </b>
-          </span>
-        ) : null}
         <span className="chart-sum-item">
           <span className="lbl">Récord</span>
           <b>{wins}V · {losses}D{draws ? ` · ${draws}E` : ''}</b>
@@ -179,9 +167,6 @@ export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
           <span>{selMatch.roundsWon}–{selMatch.roundsLost}</span>
           <span>{selMatch.kills}/{selMatch.deaths}/{selMatch.assists}</span>
           <span>ACS {selMatch.acs}</span>
-          <span className={selMatch.rrDelta == null ? '' : selMatch.rrDelta > 0 ? 'stat-win' : 'stat-loss'}>
-            {selMatch.rrDelta == null ? 'sin RR' : `${selMatch.rrDelta > 0 ? '+' : ''}${selMatch.rrDelta} RR`}
-          </span>
           <span>{tierName(selMatch.tier)}</span>
         </div>
       ) : null}

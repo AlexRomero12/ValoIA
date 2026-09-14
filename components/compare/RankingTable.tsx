@@ -11,13 +11,11 @@ export interface RankRow {
   label: string;
   color: string;
   tier: number;
-  elo: number | null;
-  rr: number | null;
   loading: false;
   stats: PlayerStats;
 }
 
-export type SortKey = 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct' | 'games' | 'rr' | 'rank';
+export type SortKey = 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct' | 'games' | 'rank';
 
 interface RankingTableProps {
   rows: RankRow[];
@@ -32,7 +30,6 @@ const COLUMNS: { key: SortKey; label: string; fmt: (r: RankRow) => string; bette
   { key: 'adr', label: 'ADR', fmt: (r) => String(Math.round(r.stats.adr)), better: 'high' },
   { key: 'hsPct', label: 'HS%', fmt: (r) => `${r.stats.hsPct.toFixed(1)}%`, better: 'high' },
   { key: 'games', label: 'Partidas', fmt: (r) => `${r.stats.wins}–${r.stats.losses}`, better: 'high' },
-  { key: 'rr', label: 'RR neto', fmt: (r) => (r.stats.rrTotal == null ? '—' : `${r.stats.rrTotal > 0 ? '+' : ''}${r.stats.rrTotal}${r.stats.rrMissing > 0 ? '~' : ''}`), better: 'high' },
 ];
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -44,13 +41,7 @@ const BADGE_KEYS: { key: SortKey; label: string }[] = [
   { key: 'acs', label: 'ACS' },
   { key: 'adr', label: 'ADR' },
   { key: 'hsPct', label: 'HS%' },
-  { key: 'rr', label: 'RR' },
 ];
-
-function rrText(r: RankRow): string {
-  if (r.stats.rrTotal == null) return '—';
-  return `${r.stats.rrTotal > 0 ? '+' : ''}${r.stats.rrTotal}${r.stats.rrMissing > 0 ? '~' : ''}`;
-}
 
 /** Valor grande de la tarjeta: la métrica activa (por defecto, WR). */
 function heroOf(r: RankRow, k: SortKey): { label: string; value: string; color?: string } {
@@ -60,11 +51,10 @@ function heroOf(r: RankRow, k: SortKey): { label: string; value: string; color?:
     case 'acs': return { label: 'ACS', value: String(Math.round(r.stats.acs)) };
     case 'adr': return { label: 'ADR', value: String(Math.round(r.stats.adr)) };
     case 'hsPct': return { label: 'HS', value: `${r.stats.hsPct.toFixed(1)}%` };
-    case 'rr': return { label: 'RR', value: rrText(r) };
     case 'games': return { label: 'Partidas', value: String(r.stats.games) };
     case 'rank': {
       const tier = r.tier > 0 ? tierShort(r.tier) : '—';
-      return { label: 'RANGO', value: r.rr != null ? `${tier} · ${r.rr}` : tier };
+      return { label: 'RANGO', value: tier };
     }
   }
 }
@@ -76,7 +66,6 @@ const GRID_STATS: { key: SortKey; label: string; fmt: (r: RankRow) => string }[]
   { key: 'acs', label: 'ACS', fmt: (r) => String(Math.round(r.stats.acs)) },
   { key: 'adr', label: 'ADR', fmt: (r) => String(Math.round(r.stats.adr)) },
   { key: 'hsPct', label: 'HS%', fmt: (r) => `${r.stats.hsPct.toFixed(1)}%` },
-  { key: 'rr', label: 'RR neto', fmt: (r) => rrText(r) },
 ];
 
 export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
@@ -139,7 +128,6 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                 <b className="rc-name">{r.label}</b>
                 <span className="rc-rank">
                   <TierIcon tier={r.tier} size={18} />
-                  {r.rr != null ? ` ${r.rr} RR` : ' —'}
                 </span>
               </div>
               <div className="rc-main">
@@ -178,7 +166,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
             <tr>
               <th>#</th>
               <th>Jugador</th>
-              <th>Rango · MMR</th>
+              <th>Rango</th>
               {COLUMNS.map((c) => (
                 <th
                   key={c.key}
@@ -187,7 +175,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                     onSortKey(c.key);
                     setAsc((a) => ({ ...a, [c.key]: !a[c.key] }));
                   }}
-                  title={c.key === 'rr' ? 'Ordenar por RR neto (~ = parcial: hay partidas sin dato de RR)' : `Ordenar por ${c.label}`}
+                  title={`Ordenar por ${c.label}`}
                 >
                   {sortKey === c.key ? (asc[c.key] ? '↑ ' : '↓ ') : ''}{c.label}
                 </th>
@@ -204,7 +192,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                     <b>{r.label}</b>
                   </span>
                 </td>
-                <td className="muted-cell"><TierIcon tier={r.tier} size={20} />{r.rr != null ? <span className="rr-cell rr-up"> {r.rr} RR</span> : ''}</td>
+                <td className="muted-cell"><TierIcon tier={r.tier} size={20} /></td>
                 {COLUMNS.map((c) => {
                   const isBest = bestId(rows, c.key, c.better) === r.id;
                   const val = metricValue(r, c.key);
@@ -212,7 +200,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                     <td
                       key={c.key}
                       className={`num${isBest && val != null ? ' stat-ok' : ''}${sortKey === c.key ? ' col-sorted' : ''}`}
-                      title={c.key === 'rr' && r.stats.rrMissing > 0 ? `RR de ${r.stats.games - r.stats.rrMissing}/${r.stats.games} partidas (${r.stats.rrMissing} sin dato)` : c.label}
+                      title={c.label}
                     >
                       {(r.medal ? `${MEDALS[r.medal - 1]} ` : '') + c.fmt(r)}
                     </td>
@@ -238,8 +226,7 @@ function metricValue(r: RankRow, k: SortKey): number | null {
     case 'adr': return r.stats.adr;
     case 'hsPct': return r.stats.hsPct;
     case 'games': return r.stats.games || null;
-    case 'rr': return r.stats.rrTotal ?? null;
-    case 'rank': return r.elo ?? (r.tier > 0 ? r.tier * 100 : null);
+    case 'rank': return r.tier > 0 ? r.tier * 100 : null;
   }
 }
 

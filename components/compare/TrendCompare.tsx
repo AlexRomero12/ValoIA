@@ -85,7 +85,7 @@ export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps
           .map((s) => {
             const p = s.points.find((pt) => pt.key === labels[selIdx] && pt.value != null);
             return p && p.value != null
-              ? { label: s.label, color: s.color, text: `${fmt(p.value)}${p.approx ? ' ~' : ''} (${p.games}p)` }
+              ? { label: s.label, color: s.color, text: `${fmt(p.value)} (${p.games}p)` }
               : null;
           })
           .filter((v): v is { label: string; color: string; text: string } => v !== null);
@@ -147,11 +147,11 @@ export function TrendCompare({ series, fmt, minValue, ticks }: TrendCompareProps
                     cx={xAt(p.i)}
                     cy={yAt(p.v)}
                     r={3.5}
-                    fill={p.approx ? '#0f1923' : s.color}
+                    fill={s.color}
                     stroke={s.color}
                     strokeWidth={1.3}
                   >
-                    <title>{`${s.label} · ${labelOf.get(p.key) ?? p.key}: ${fmt(p.v)} (${p.games}p)${p.approx ? ' · aprox.' : ''}`}</title>
+                    <title>{`${s.label} · ${labelOf.get(p.key) ?? p.key}: ${fmt(p.v)} (${p.games}p)`}</title>
                   </circle>
                 ) : null,
               )}

@@ -2223,6 +2223,7 @@ body { overflow-x: clip; }
   .mc-day-head { display: flex; align-items: stretch; gap: 6px; }
   .mc-day-btn {
     flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2247,10 +2248,12 @@ body { overflow-x: clip; }
   .mc-day-btn .day-meta { flex: 1; color: var(--mute); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mc-day-btn .day-rr { font-size: 11px; font-weight: 700; white-space: nowrap; }
   .mc-chevron {
+    flex: none;
     width: var(--touch);
     min-height: var(--touch);
     padding: 0;
     justify-content: center;
+    font-size: 13px;
     background: var(--steel);
     clip-path: none;
     transition: transform 0.15s ease;
@@ -2330,7 +2333,7 @@ body { overflow-x: clip; }
    ========================================================================== */
 
 @media (max-width: 720px) {
-  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-overlay { padding: 0; align-items: flex-end; z-index: 70; }
   .modal {
     width: 100%;
     max-width: 100%;
@@ -3036,6 +3039,9 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
 .stats-table tr.row-on td { background: rgba(255, 70, 85, 0.08); }
 .stats-table tr.row-on td:first-child { box-shadow: inset 2px 0 0 var(--red); }
 .stats-table td:first-child { white-space: nowrap; }
+/* Vista de mapas: agente con más victorias */
+.top-agent { display: inline-flex; align-items: center; gap: 6px; }
+.top-agent-wins { color: var(--mute); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; }
 
 @media (max-width: 720px) {
   .ranked-tabs { margin-top: 12px; }
@@ -3271,4 +3277,111 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
   .rwc-row b { color: var(--bone); font-variant-numeric: tabular-nums; }
   .rules-week-card > .f-chip { align-self: flex-start; min-height: 38px; }
   .rwc-detail { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+}
+
+/* ==========================================================================
+   DOCUMENTOS LEGALES (privacidad / términos) — lectura y scroll vertical
+   ========================================================================== */
+
+/* Desplazamiento suave y margen de ancla solo mientras hay un documento legal
+   montado (en el dashboard se mantiene el scroll instantáneo). */
+html:has(.legal-doc) { scroll-behavior: smooth; scroll-padding-top: 78px; }
+.legal-doc section,
+.legal-doc h3 { scroll-margin-top: 78px; }
+
+/* Cabecera pegajosa: marca, título del documento e idioma siempre a mano. */
+.legal-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -10px;
+  padding: 10px;
+  background: rgba(15, 25, 35, 0.9);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+}
+.legal-head-brand { text-decoration: none; color: inherit; font-size: 20px; line-height: 1; }
+.legal-head-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.legal-head .locale-switch .f-chip { min-height: 32px; padding: 4px 9px; }
+
+/* Botón "volver arriba": aparece tras hacer scroll en documentos largos. */
+.legal-to-top {
+  position: fixed;
+  right: calc(18px + var(--safe-r));
+  bottom: calc(18px + var(--safe-b));
+  z-index: 40;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: rgba(21, 34, 48, 0.94);
+  color: var(--bone);
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  backdrop-filter: blur(6px);
+}
+.legal-to-top.on { opacity: 1; transform: none; pointer-events: auto; }
+.legal-to-top:hover { border-color: var(--red); color: var(--red); }
+
+/* Tablas legales: envuelven el texto para no generar scroll horizontal. */
+.legal-table { margin-top: 6px; overflow-x: visible; }
+.legal-table table { width: 100%; table-layout: fixed; font-size: 13px; }
+.legal-table th,
+.legal-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.legal-table th { font-size: 10px; }
+.legal-table td { padding-top: 6px; padding-bottom: 6px; line-height: 1.5; }
+
+@media (max-width: 720px) {
+  .legal-to-top { bottom: calc(var(--nav-h) + var(--safe-b) + 14px); }
+
+  /* Apiladas: cada fila es una tarjeta y el swipe vertical nunca se bloquea. */
+  .legal-table { overflow: visible; }
+  .legal-table table,
+  .legal-table tbody,
+  .legal-table tr,
+  .legal-table td { display: block; width: 100%; }
+  .legal-table thead { display: none; }
+  .legal-table tr {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.015);
+    padding: 8px 10px;
+    margin-bottom: 8px;
+  }
+  .legal-table td { border: 0; padding: 2px 0; white-space: normal; }
+  .legal-table td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--faint);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 1px;
+  }
 }

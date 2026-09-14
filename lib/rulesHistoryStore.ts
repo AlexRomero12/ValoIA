@@ -5,16 +5,16 @@ import type { StoredRulesDay } from './rulesHistory';
 /**
  * Persistencia de la copia histórica de reglas (server-only, usa `node:fs`).
  *
- * El mmr-history de Henrik solo cubre las últimas ~20 competitivas: cuando un
- * día sale de esa ventana, su RR deja de ser recuperable desde la API. Aquí se
- * guarda el snapshot del día (RR real / con regla / regla+pool, violaciones,
- * cortes) en el momento en que estaba COMPLETO, para mostrarlo aunque la API
- * ya no lo devuelva.
+ * El bucket de partidas solo cubre una ventana reciente: cuando un día sale de
+ * esa ventana, su evaluación completa ya no es recuperable desde la API. Aquí
+ * se guarda el snapshot del día (récord V/D/E real / con regla / regla+pool,
+ * violaciones, cortes y tiers) en el momento en que estaba COMPLETO, para
+ * mostrarlo aunque la API ya no lo devuelva.
  *
  * Clave por perfil: `${profileId}:${YYYY-MM-DD}`. Los snapshots viejos (sin
  * prefijo, de la época sin perfiles) se asignan una vez al primer perfil.
  *
- * Durabilidad: mismo patrón que favoritas/comentarios — `data/rules-history.json`
+ * Durabilidad: mismo patrón que comentarios — `data/rules-history.json`
  * (volumen Docker `valo-data`), externo al cache, con writes atómicos.
  */
 

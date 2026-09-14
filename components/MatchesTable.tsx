@@ -128,29 +128,29 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
       <div className="table-scroll matches-desktop">
         <table className="matches">
           <colgroup>
-            <col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '13%' }} /><col style={{ width: '12%' }} />
-            <col style={{ width: '8%' }} /><col style={{ width: '10%' }} /><col style={{ width: '6%' }} /><col style={{ width: '7%' }} />
-            <col style={{ width: '6%' }} /><col style={{ width: '6%' }} /><col style={{ width: '8%' }} />
+            <col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '14%' }} /><col style={{ width: '13%' }} />
+            <col style={{ width: '9%' }} /><col style={{ width: '11%' }} /><col style={{ width: '7%' }} /><col style={{ width: '8%' }} />
+            <col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
           </colgroup>
           <thead>
             <tr>
               <th>Hora</th><th>Mapa</th><th>Agente</th><th>Resultado</th><th className="num">Marcador</th>
               <th className="num">K/D/A</th><th className="num">K/D</th><th className="num">ACS</th><th className="num">ADR</th>
-              <th className="num">HS%</th><th className="num">RR</th>
+              <th className="num">HS%</th>
             </tr>
           </thead>
           <tbody>
             {!matches.length ? (
-              <tr><td colSpan={11}><p className="empty">Juega una competitiva y aparecerá aquí.</p></td></tr>
+              <tr><td colSpan={10}><p className="empty">Juega una competitiva y aparecerá aquí.</p></td></tr>
             ) : !rows.length ? (
-              <tr><td colSpan={11}><p className="empty">Ninguna partida cumple el filtro activo.</p></td></tr>
+              <tr><td colSpan={10}><p className="empty">Ninguna partida cumple el filtro activo.</p></td></tr>
             ) : (
               pageDays.flatMap((g) => {
                 const st = dayStats(g);
                 const expanded = openDays.includes(g.key);
                 const head = (
                   <tr key={`day-${g.key}`} className="day-row">
-                    <td colSpan={11}>
+                    <td colSpan={10}>
                       <div className="day-head">
                         <button
                           type="button"
@@ -174,12 +174,6 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
                               {st.wins}V-{st.losses}D{st.draws > 0 ? `-${st.draws}E` : ''}
                             </b>
                             {' '}· WR {st.wr.toFixed(0)}% · KD {st.kd.toFixed(2)} · ACS {st.acs} · ADR {st.adr}
-                          </span>
-                          <span
-                            className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}
-                            title={st.rrMissing > 0 ? `RR de ${st.matches - st.rrMissing}/${st.matches} partidas (${st.rrMissing} sin dato)` : undefined}
-                          >
-                            {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
                           </span>
                         </button>
                       </div>
@@ -217,9 +211,6 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
                         {st.wins}V-{st.losses}D{st.draws > 0 ? `-${st.draws}E` : ''}
                       </b>{' '}
                       · WR {st.wr.toFixed(0)}% · KD {st.kd.toFixed(2)}
-                    </span>
-                    <span className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}>
-                      {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
                     </span>
                   </button>
                   <button
@@ -280,7 +271,6 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
   const fecha = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   const kd = (m.kills / Math.max(1, m.deaths)).toFixed(2);
   const okCls = (v: number, target: number) => (v >= target ? ' stat-ok' : '');
-  const rr = m.rrDelta;
   return (
     <tr className="clickable-row" onClick={onSelect} title="Ver detalle de la partida">
       <td className="date">{fecha}</td>
@@ -318,9 +308,6 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
       <td className={`num${okCls(m.acs, 220)}`}>{m.acs}</td>
       <td className={`num${okCls(m.adr, 150)}`}>{m.adr}</td>
       <td className={`num${okCls(m.hsPct, 25)}`}>{m.hsPct.toFixed(1)}</td>
-      <td className={`num rr-cell${rr == null ? '' : rr > 0 ? ' rr-up' : rr < 0 ? ' rr-down' : ''}`} title={rr != null ? `RR en rango: ${m.rr ?? '—'}` : undefined}>
-        {rr == null ? '—' : `${rr > 0 ? '+' : ''}${rr}`}
-      </td>
     </tr>
   );
 }
@@ -331,7 +318,6 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
   const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   const kd = (m.kills / Math.max(1, m.deaths)).toFixed(2);
   const draw = isDraw(m);
-  const rr = m.rrDelta;
   return (
     <button className="match-card" onClick={onSelect} title="Ver detalle de la partida">
       <span className={`mc-badge ${draw ? 'e' : m.won ? 'w' : 'l'}`}>{draw ? 'E' : m.won ? 'V' : 'D'}</span>
@@ -354,9 +340,7 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
       <span className="mc-side">
         <span className={`mc-acs${m.acs >= 220 ? ' stat-ok' : ''}`}>{m.acs} <i>ACS</i></span>
         <span className="mc-sub">ADR {m.adr} · HS {m.hsPct.toFixed(1)}%</span>
-        <span className={`mc-rr${rr == null ? '' : rr > 0 ? ' up' : rr < 0 ? ' down' : ''}`}>
-          {rr == null ? `${hora} · sin RR` : `${hora} · ${rr > 0 ? '+' : ''}${rr} RR`}
-        </span>
+        <span className="mc-rr">{hora}</span>
       </span>
     </button>
   );

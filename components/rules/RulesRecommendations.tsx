@@ -33,10 +33,6 @@ const MAIN_LOW_WR = 45;
 const BACKUP_HIGH_WR = 60;
 const MAX_SUGGESTIONS = 8;
 
-function fmtRR(v: number): string {
-  return `${v > 0 ? '+' : ''}${v}`;
-}
-
 /**
  * Recomendaciones de reglas calculadas con datos ya cargados ($0 requests):
  * violaciones recurrentes, cortes ignorados, reglas vs datos (subir/bajar
@@ -72,50 +68,49 @@ export function RulesRecommendations({
     }
 
     // 1) Violaciones recurrentes
-    const byPair = new Map<string, { agent: string; map: string; count: number; rr: number; lastTs: number }>();
+    const byPair = new Map<string, { agent: string; map: string; count: number; wins: number; losses: number; lastTs: number }>();
     for (const d of days) {
       for (const r of d.matches) {
         if (!r.violation) continue;
         const key = `${r.match.agent} @ ${r.match.map}`;
-        const item = byPair.get(key) ?? { agent: r.match.agent, map: r.match.map, count: 0, rr: 0, lastTs: 0 };
+        const item = byPair.get(key) ?? { agent: r.match.agent, map: r.match.map, count: 0, wins: 0, losses: 0, lastTs: 0 };
         item.count += 1;
-        item.rr += r.match.rrDelta ?? 0;
+        if (r.match.roundsWon === r.match.roundsLost) {
+          // empate: no suma a V ni a D
+        } else if (r.match.won) item.wins += 1;
+        else item.losses += 1;
         item.lastTs = Math.max(item.lastTs, r.match.timestamp);
         byPair.set(key, item);
       }
     }
-    const violations = [...byPair.values()].sort((a, b) => a.rr - b.rr || b.count - a.count);
+    const violations = [...byPair.values()].sort((a, b) => b.losses - a.losses || b.count - a.count);
     for (const v of violations.slice(0, 2)) {
       const when = v.lastTs
         ? new Date(v.lastTs).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
         : '';
       out.push({
         id: `viol-${v.agent}-${v.map}`,
-        tone: v.rr < 0 ? 'bad' : 'warn',
+        tone: v.losses > v.wins ? 'bad' : 'warn',
         title: `${v.agent} en ${v.map}: ${v.count} violación(es)`,
-        detail: `Balance de RR en esas partidas: ${fmtRR(v.rr)}${when ? ` · última el ${when}` : ''}. Revisa la regla del mapa o deja ese pick fuera.`,
+        detail: `Récord en esas partidas: ${v.wins}V-${v.losses}D${when ? ` · última el ${when}` : ''}. Revisa la regla del mapa o deja ese pick fuera.`,
       });
     }
 
-    // 2) Cortes ignorados: RR evitable (por totales del día, funciona con snapshots)
+    // 2) Cortes ignorados: derrotas evitables (por totales del día, funciona con snapshots)
     const cutDays = days.filter((d) => d.cutIgnored);
     if (cutDays.length > 0) {
       let evitable = 0;
-      let count = 0;
       for (const d of cutDays) {
-        if (d.realRR != null && d.planRR != null) {
-          evitable += d.realRR - d.planRR;
-          count += 1;
-        }
+        evitable += Math.max(0, d.losses - d.planLosses);
       }
       out.push({
         id: 'cuts',
         tone: 'bad',
         title: `${cutDays.length} corte(s) ignorado(s)`,
         detail:
-          count > 0
-            ? `Jugar después del corte sumó ${fmtRR(evitable)} RR. Respetar la pausa te habría ahorrado ese saldo.`
-            : 'Se jugó después del corte en al menos una sesión; no hay RR disponible para calcular el saldo.',
+          evitable > 0
+            ? `Jugar después del corte sumó ${evitable} derrota(s). Respetar la pausa te habría ahorrado ese desgaste.`
+            : 'Se jugó después del corte en al menos una sesión; revisa el récord real vs el plan del día.',
       });
     }
 

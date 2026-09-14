@@ -70,7 +70,7 @@ export function CompositionsTab({ tab, onTab }: EquipoTabProps) {
       accounts[mi].map((_, ai) => ({
         queryKey: ['team', profile.id, ai, win],
         queryFn: async () => {
-          const qs = win === 'season' ? 'season=current' : `days=${win}`;
+          const qs = `days=${win}`;
           const res = await fetch(
             `/api/valorant/summary?${qs}&limit=${WANT}&player=${encodeURIComponent(profile.id)}&account=${ai}`,
           );
@@ -210,7 +210,6 @@ export function CompositionsTab({ tab, onTab }: EquipoTabProps) {
           <label>Ventana</label>
           <select value={win} onChange={(e) => setWin(e.target.value as WindowValue)}>
             <option value="365">1 año (máximo)</option>
-            <option value="season">Temporada actual</option>
             <option value="90">90 días</option>
             <option value="30">30 días</option>
             <option value="14">14 días</option>

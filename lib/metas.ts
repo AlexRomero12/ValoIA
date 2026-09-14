@@ -23,9 +23,9 @@ export interface Kpis {
   acs: number;
   adr: number;
   hsPct: number;
-  /** Primeras sangres por partida (promedio). Solo proveedor Henrik. */
+  /** Primeras sangres por partida (promedio). */
   fb?: number;
-  /** Primeras muertes por partida (promedio). Solo proveedor Henrik. */
+  /** Primeras muertes por partida (promedio). */
   fd?: number;
 }
 

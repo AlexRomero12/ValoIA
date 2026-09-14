@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import { agentCombos, agentMatrix, type AgentCombo, type CompareFilters } from '@/lib/compare';
-import type { PlayerStats } from '@/lib/stats';
 import type { MatchRow } from '@/lib/types';
 import { wrColor } from '@/lib/metas';
 import { useAgentIcons, agentIconLookup } from '@/lib/hooks';
@@ -22,11 +21,6 @@ interface AgentCardsProps {
 
 /** Agentes visibles por jugador antes de "Ver todos". */
 const TOP_AGENTS = 4;
-
-function rrText(s: PlayerStats): string {
-  if (s.rrTotal == null) return '—';
-  return `${s.rrTotal > 0 ? '+' : ''}${s.rrTotal}${s.rrMissing > 0 ? '~' : ''}`;
-}
 
 /** Vista "Por jugador": una tarjeta por jugador con la lista de sus agentes. */
 export function AgentByPlayerCards({ players, filters, minGames }: AgentCardsProps) {
@@ -85,7 +79,7 @@ export function AgentByPlayerCards({ players, filters, minGames }: AgentCardsPro
                   <span className="ac-wr" style={{ color: wrColor(c.stats.wr) }}>{c.stats.wr.toFixed(0)}%</span>
                   <span className="ac-sub">
                     {c.stats.wins}V–{c.stats.losses}{c.stats.draws ? `–${c.stats.draws}E` : ''} · K/D{' '}
-                    {c.stats.kd.toFixed(2)} · ACS {Math.round(c.stats.acs)} · RR {rrText(c.stats)}
+                    {c.stats.kd.toFixed(2)} · ACS {Math.round(c.stats.acs)}
                   </span>
                 </div>
               );

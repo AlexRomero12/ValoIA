@@ -1,0 +1,100 @@
+# Despliegue del VPS (Oracle) con AMBOS productos en el mismo servidor:
+#
+#   valoia.duckdns.org            -> producto PÚBLICO (lo que revisará Riot)
+#   valoia-personal.duckdns.org   -> dashboard PERSONAL (antes en el dominio raíz)
+#   asistentepersonal.duckdns.org -> OpenClaw (se conserva tal cual)
+#
+# Volúmenes: reutiliza los del compose de producción (mismos nombres) para no
+# perder datos del dashboard personal; los del público son nuevos y el archivo
+# de partidas se comparte (append-only, dedupe por matchId).
+#
+# Uso en el VPS (mismo directorio del repo):
+#   docker compose -f docker-compose.vps.yml up -d --build
+#   docker compose -f docker-compose.vps.yml logs -f
+#
+# Requiere en .env: PUBLIC_AUTH_SECRET (distinto al AUTH_SECRET personal).
+# Opcional: PUBLIC_DOMAIN / PERSONAL_DOMAIN si cambian los hostnames.
+
+services:
+  valo-dash:
+    build: .
+    image: valo-dash
+    container_name: valo-dash
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      CACHE_DIR: /app/data/cache
+      ARCHIVE_DIR: /app/data/archive
+      DATA_DIR: /app/data
+      TRUST_PROXY: "1"
+      DOMAIN: ${PERSONAL_DOMAIN:-valoia-personal.duckdns.org}
+    expose:
+      - "3000"
+    volumes:
+      - valo-cache:/app/data/cache
+      - valo-archive:/app/data/archive
+      - valo-data:/app/data
+      - valo-next-cache:/app/.next/cache
+    restart: unless-stopped
+
+  valo-dash-public:
+    build: .
+    image: valo-dash-public
+    container_name: valo-dash-public
+    env_file:
+      - .env
+    environment:
+      APP_MODE: public
+      TZ: ${TZ:-America/Bogota}
+      CACHE_DIR: /app/data/cache
+      ARCHIVE_DIR: /app/data/archive
+      DATA_DIR: /app/data
+      TRUST_PROXY: "1"
+      DOMAIN: ${PUBLIC_DOMAIN:-valoia.duckdns.org}
+      AUTH_SECRET: ${PUBLIC_AUTH_SECRET:?Define PUBLIC_AUTH_SECRET en .env (distinto al personal)}
+      MOCK_RIOT_IDS: ${MOCK_RIOT_IDS:-AlexRomero12#LAN}
+      RSO_ENABLED: ${RSO_ENABLED:-0}
+    expose:
+      - "3000"
+    volumes:
+      - valo-public-cache:/app/data/cache
+      - valo-public-data:/app/data
+      # Archivo real de Alex (compartido; solo agrega partidas nuevas, dedupe)
+      - valo-archive:/app/data/archive
+      - valo-public-next-cache:/app/.next/cache
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: valo-caddy
+    depends_on:
+      - valo-dash
+      - valo-dash-public
+    # IP privada de la VM para llegar al gateway de OpenClaw en el host.
+    # Ajustar si la IP privada cambia.
+    extra_hosts:
+      - "host.docker.internal:10.0.0.191"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-valoia.duckdns.org}
+      PERSONAL_DOMAIN: ${PERSONAL_DOMAIN:-valoia-personal.duckdns.org}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.vps:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  valo-cache:
+  valo-archive:
+  valo-data:
+  valo-next-cache:
+  valo-public-cache:
+  valo-public-data:
+  valo-public-next-cache:
+  caddy-data:
+  caddy-config:

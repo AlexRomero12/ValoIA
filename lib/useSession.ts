@@ -7,6 +7,10 @@ export interface SessionInfo {
   admin: boolean;
   mustChangePassword?: boolean;
   users?: number;
+  mode?: 'single' | 'public';
+  riot?: { gameName: string; tagLine: string; mock: boolean } | null;
+  consentAt?: number | null;
+  publicProfile?: boolean;
 }
 
 /** Sesión actual: usuario + flag admin (para permisos de UI). */

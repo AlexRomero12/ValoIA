@@ -1,0 +1,40 @@
+# Demo público (rama feat/riot-dev-oficial) · puerto 4323
+#
+# Producto multi-usuario para la solicitud de production key:
+#  - APP_MODE=public (cuentas locales + vinculación Riot + consentimiento)
+#  - Datos de partidas desde el mock (VAL-MATCH-V1 no está disponible en dev key)
+#  - Volúmenes propios para no tocar la instancia personal (4322)
+#
+# Uso:
+#   docker compose -f docker-compose.public.yml up -d --build
+#   docker compose -f docker-compose.public.yml logs -f
+#   docker compose -f docker-compose.public.yml down
+
+services:
+  valo-dash-public:
+    build: .
+    image: valo-dash-public
+    container_name: valo-dash-public
+    ports:
+      - "4323:3000"
+    env_file:
+      - .env
+    environment:
+      APP_MODE: public
+      TZ: ${TZ:-America/Bogota}
+      CACHE_DIR: /app/data/cache
+      ARCHIVE_DIR: /app/data/archive
+      DATA_DIR: /app/data
+    volumes:
+      - valo-public-cache:/app/data/cache
+      - valo-public-data:/app/data
+      - valo-dash-next_valo-archive:/app/data/archive
+      - valo-public-next-cache:/app/.next/cache
+    restart: "no"
+
+volumes:
+  valo-public-cache:
+  valo-public-data:
+  valo-public-next-cache:
+  valo-dash-next_valo-archive:
+    external: true

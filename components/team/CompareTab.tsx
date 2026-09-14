@@ -40,7 +40,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
-  const [win, setWin] = useState<WinValue>('season');
+  const [win, setWin] = useState<WinValue>('30');
   const [filters, setFilters] = useState<CompareFilters>(DEFAULT_FILTERS);
   const [gran, setGran] = useState<Granularity>('auto');
   const [metric, setMetric] = useState<MetricKey>('wr');
@@ -93,7 +93,7 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
       accounts[mi].map((_, ai) => ({
         queryKey: ['compare', profile.id, ai, win, want],
         queryFn: async () => {
-          const qs = win === 'season' ? 'season=current' : `days=${win}`;
+          const qs = `days=${win}`;
           const res = await fetch(
             `/api/valorant/summary?${qs}&limit=${want}&player=${encodeURIComponent(profile.id)}&account=${ai}`,
           );
@@ -113,7 +113,7 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
     setRefreshProgress({ done: 0, total: queries.length });
     const before = queries.map((q) => {
       const w = (q.data as ValSummary | undefined)?.window;
-      return `${w?.syncedAt ?? ''}|${(w as { mmrSyncedAt?: string | null } | undefined)?.mmrSyncedAt ?? ''}`;
+      return w?.syncedAt ?? '';
     });
     try {
       await Promise.all(
@@ -133,11 +133,11 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
         const results = await Promise.all(queries.map((q) => q.refetch()));
         const synced = results.map((r) => {
           const w = (r.data as ValSummary | undefined)?.window;
-          return `${w?.syncedAt ?? ''}|${(w as { mmrSyncedAt?: string | null } | undefined)?.mmrSyncedAt ?? ''}`;
+          return w?.syncedAt ?? '';
         });
-        const okCount = synced.filter((s, i) => s === '|' || s !== before[i]).length;
+        const okCount = synced.filter((s, i) => s === '' || s !== before[i]).length;
         setRefreshProgress({ done: okCount, total: synced.length });
-        done = okCount === synced.length || synced.every((s, i) => s === '|' || s !== before[i]);
+        done = okCount === synced.length || synced.every((s, i) => s === '' || s !== before[i]);
         if (done) break;
       }
       if (!done) {
@@ -205,8 +205,6 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
             label: e.member.label,
             color: e.color,
             tier: e.data.currentTier,
-            elo: e.data.currentElo ?? null,
-            rr: e.data.currentRR ?? null,
             loading: false,
             stats,
             matchesCount: stats.games,
@@ -238,18 +236,16 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
     let spanDays: number;
     if (fromTs != null && toTs != null) {
       spanDays = Math.max(1, Math.round((toTs - fromTs + 1) / 86_400_000));
-    } else if (win !== 'season' && fromTs == null && toTs == null) {
+    } else if (fromTs == null && toTs == null) {
       spanDays = Number(win);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       end = today.getTime() + 86_400_000 - 1;
       start = today.getTime() - (spanDays - 1) * 86_400_000;
     } else {
+      spanDays = Number(win);
       start = fromTs ?? (Number.isFinite(min) ? min : null);
       end = toTs ?? (Number.isFinite(max) ? max : null);
-      if (win !== 'season') spanDays = Number(win);
-      else if (start != null && end != null) spanDays = Math.max(1, Math.round((end - start) / 86_400_000) + 1);
-      else spanDays = 30;
     }
     return { fromTs: start, toTs: end, spanDays };
   }, [entries, filteredPerPlayer, filters.from, filters.to, win]);
@@ -297,14 +293,8 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
     if (metric === 'kd') return v.toFixed(2);
     if (metric === 'wr') return `${v.toFixed(0)}%`;
     if (metric === 'rank') {
-      if (v >= 27 * 100) {
-        const rr = Math.round(v - 27 * 100);
-        return rr > 0 ? `RAD · ${rr}` : 'RAD';
-      }
       const tier = Math.floor(v / 100);
-      const rr = Math.round(v % 100);
-      const name = tierShort(tier);
-      return rr > 0 ? `${name} · ${rr}` : name;
+      return tierShort(tier);
     }
     return String(Math.round(v));
   };
@@ -312,7 +302,7 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
   // Mini-cards ("resumen" de perfiles): mismo orden y métrica que el Ranking.
   const miniValue = (e: (typeof entries)[number], i: number): number => {
     if (metric === 'rank') {
-      return e.data?.currentElo ?? (e.data?.currentTier ? e.data.currentTier * 100 : Number.NEGATIVE_INFINITY);
+      return e.data?.currentTier ? e.data.currentTier * 100 : Number.NEGATIVE_INFINITY;
     }
     const s = computeStats(filteredPerPlayer[i] ?? []);
     if (metric === 'acs') return s.acs;

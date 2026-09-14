@@ -1,19 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { sessionGate } from './lib/auth';
 import { SESSION_COOKIE } from './lib/authToken';
+import { isPublicMode } from './lib/appMode';
 
 /**
  * Puerta de acceso (proxy de Next 16, ex-middleware).
  *
- * - Sin sesión válida: páginas → `/login?next=…`; API → 401.
- * - Sesión válida: la valida contra el registry (`sid`) para poder revocarla
- *   (cerrar dispositivos, cambio de contraseña, borrar usuario).
- * - `mustChangePassword`: solo deja cambiar la contraseña y salir.
- * - Mutaciones: exige `Origin` propio cuando el navegador lo envía (CSRF).
+ * - Modo `single` (instancia personal): no hay login; solo se valida el
+ *   `Origin` en mutaciones (CSRF).
+ * - Modo `public` (producto para Riot): páginas sin sesión → `/login`;
+ *   APIs sin sesión → 401. Rutas públicas: landing, legal, login/registro y el
+ *   callback de vinculación con Riot.
  */
 
+const PUBLIC_PATHS = new Set(['/', '/login', '/terms', '/privacy', '/riot.txt']);
+const PUBLIC_APIS = new Set(['/api/auth/login', '/api/auth/register', '/api/riot/link/callback']);
 // Permitidas mientras el usuario debe cambiar su contraseña.
-const MUST_CHANGE_ALLOWED = new Set(['/api/auth/users', '/api/auth/session']);
+const MUST_CHANGE_ALLOWED = new Set(['/api/auth/users', '/api/auth/session', '/api/auth/logout']);
+const MUST_CHANGE_PAGE = '/cuenta';
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -39,27 +43,26 @@ function sameOrigin(request: NextRequest): boolean {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isApi = pathname.startsWith('/api/');
 
   if (!sameOrigin(request)) {
     return Response.json({ error: 'Origen no permitido', code: 'BAD_ORIGIN' }, { status: 403 });
   }
 
-  // Rutas de autenticación: no consultan el registry.
-  if (pathname === '/api/auth/login' || pathname === '/api/auth/logout' || pathname === '/api/auth/request-access') {
-    return NextResponse.next();
-  }
-  if (pathname === '/login') {
-    // Solo redirige si la sesión sigue VIVA en el registry; si no, muestra el
-    // login y limpia la cookie rancia (evita el bucle `/` ↔ `/login` cuando un
-    // token tiene firma válida pero su sesión fue revocada).
-    const gate = sessionGate(request);
-    if (gate) {
-      return NextResponse.redirect(new URL(gate.mustChange ? '/perfiles?cambiar=1' : '/', request.url));
+  // Instancia personal: sin login.
+  if (!isPublicMode()) return NextResponse.next();
+
+  const isApi = pathname.startsWith('/api/');
+
+  // Rutas públicas (landing, legal, login/registro, callback Riot).
+  if (PUBLIC_PATHS.has(pathname) || PUBLIC_APIS.has(pathname)) {
+    if (pathname === '/login') {
+      const gate = sessionGate(request);
+      if (gate) return NextResponse.redirect(new URL('/valorant', request.url));
+      const res = NextResponse.next();
+      if (request.cookies.has(SESSION_COOKIE)) res.cookies.delete(SESSION_COOKIE);
+      return res;
     }
-    const res = NextResponse.next();
-    if (request.cookies.has(SESSION_COOKIE)) res.cookies.delete(SESSION_COOKIE);
-    return res;
+    return NextResponse.next();
   }
 
   const gate = sessionGate(request);
@@ -72,19 +75,16 @@ export function proxy(request: NextRequest) {
     const next = `${pathname}${request.nextUrl.search}`;
     if (next && next !== '/') login.searchParams.set('next', next);
     const res = NextResponse.redirect(login);
-    // Limpia la cookie rancia para que el navegador no vuelva a rebotar.
     if (request.cookies.has(SESSION_COOKIE)) res.cookies.delete(SESSION_COOKIE);
     return res;
   }
 
-  if (gate.mustChange && pathname !== '/perfiles' && !MUST_CHANGE_ALLOWED.has(pathname)) {
-    // Mientras debe cambiar la contraseña: APIs de lectura pasan (la página
-    // /perfiles las necesita); el resto se bloquea/redirige.
+  if (gate.mustChange && pathname !== MUST_CHANGE_PAGE && !MUST_CHANGE_ALLOWED.has(pathname)) {
     if (isApi && request.method !== 'GET') {
       return Response.json({ error: 'Debes cambiar tu contraseña', code: 'MUST_CHANGE_PASSWORD' }, { status: 403 });
     }
     if (!isApi) {
-      return NextResponse.redirect(new URL('/perfiles?cambiar=1', request.url));
+      return NextResponse.redirect(new URL(`${MUST_CHANGE_PAGE}?cambiar=1`, request.url));
     }
   }
 

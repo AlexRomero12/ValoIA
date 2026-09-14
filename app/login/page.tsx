@@ -1,228 +1,127 @@
 'use client';
 
 import { Suspense, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { LocaleSwitch, useT } from '@/lib/i18n/useLocale';
 
 /** Solo rutas internas válidas (anti open-redirect: //, \, URLs absolutas). */
 function safeNext(raw: string | null): string {
-  if (!raw) return '/';
-  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return '/';
+  if (!raw) return '/valorant';
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return '/valorant';
   try {
-    const url = new URL(raw, window.location.origin);
-    if (url.origin !== window.location.origin) return '/';
-    return `${url.pathname}${url.search}${url.hash}`;
+    const url = new URL(raw, 'http://x');
+    return url.protocol === 'http:' ? url.pathname + url.search : '/valorant';
   } catch {
-    return '/';
+    return '/valorant';
   }
-}
-
-function LoginForm() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [mode, setMode] = useState<'login' | 'request'>('login');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [reqUser, setReqUser] = useState('');
-  const [reqMsg, setReqMsg] = useState('');
-  const [reqBusy, setReqBusy] = useState(false);
-  const [reqError, setReqError] = useState<string | null>(null);
-  /** Usuario enviado: si existe, mostramos el estado "pendiente de aprobación". */
-  const [reqSentFor, setReqSentFor] = useState<string | null>(null);
-
-  const submitRequest = async (e: FormEvent) => {
-    e.preventDefault();
-    if (reqBusy || !reqUser.trim()) return;
-    setReqBusy(true);
-    setReqError(null);
-    try {
-      const res = await fetch('/api/auth/request-access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: reqUser.trim(), message: reqMsg.trim() }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || 'No se pudo enviar la solicitud');
-      setReqSentFor(reqUser.trim().toLowerCase());
-      setReqUser('');
-      setReqMsg('');
-    } catch (err) {
-      setReqError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setReqBusy(false);
-    }
-  };
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (busy || !username.trim() || !password) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string; mustChangePassword?: boolean };
-      if (!res.ok || json.error) throw new Error(json.error || 'No se pudo entrar');
-      if (json.mustChangePassword) {
-        router.replace('/perfiles?cambiar=1');
-        router.refresh();
-        return;
-      }
-      router.replace(safeNext(params.get('next')));
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setBusy(false);
-    }
-  };
-
-  const backToLogin = () => {
-    setMode('login');
-    setError(null);
-    setReqError(null);
-    setReqSentFor(null);
-  };
-
-  return (
-    <div className="login-wrap">
-      <div className="panel login-card">
-        <h1 className="login-brand">
-          Valo<em>IA</em>
-        </h1>
-        <p className="login-sub">{mode === 'login' ? 'Tu panel de rendimiento Valorant' : 'Solicitar acceso'}</p>
-
-        {mode === 'login' ? (
-          <form className="login-form" onSubmit={submit}>
-            <label className="login-field">
-              <span>Usuario</span>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                spellCheck={false}
-              />
-            </label>
-
-            <label className="login-field">
-              <span>Contraseña</span>
-              <div className="login-pw">
-                <input
-                  type={showPass ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  className="pw-btn"
-                  onClick={() => setShowPass((v) => !v)}
-                  aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {showPass ? 'Ocultar' : 'Ver'}
-                </button>
-              </div>
-            </label>
-
-            <p className="login-hint">¿Olvidaste tu contraseña? Pídele al administrador que la restablezca.</p>
-
-            {error ? (
-              <>
-                <div className="banner error">{error}</div>
-                <p className="login-hint">
-                  Si aún no te aprobaron, tu solicitud sigue pendiente en Perfiles → Solicitudes.
-                </p>
-              </>
-            ) : null}
-
-            <button className="primary-red login-btn" disabled={busy || !username.trim() || !password}>
-              Entrar{busy ? <span className="loader" /> : null}
-            </button>
-            <button
-              type="button"
-              className="f-chip login-switch"
-              onClick={() => {
-                setMode('request');
-                setError(null);
-              }}
-            >
-              ¿No tienes cuenta? Solicitar acceso
-            </button>
-          </form>
-        ) : reqSentFor ? (
-          <div className="login-pending">
-            <b>Solicitud enviada</b>
-            <p>
-              El usuario <b>{reqSentFor}</b> queda pendiente de aprobación. El administrador la verá en
-              Perfiles → Solicitudes; no enviamos correos, así que te avisará por fuera de la app.
-            </p>
-            <p>
-              Cuando la apruebe, entra con la contraseña temporal que te comparta y cámbiala en tu primer acceso.
-            </p>
-            <button type="button" className="f-chip login-switch" onClick={backToLogin}>
-              Volver al login
-            </button>
-          </div>
-        ) : (
-          <form className="login-form" onSubmit={submitRequest}>
-            <ol className="login-steps">
-              <li>Envías el usuario que quieres.</li>
-              <li>El administrador aprueba la solicitud.</li>
-              <li>Te comparte una contraseña temporal; al entrar te pediremos cambiarla.</li>
-            </ol>
-
-            <label className="login-field">
-              <span>Usuario que quieres</span>
-              <input
-                value={reqUser}
-                onChange={(e) => setReqUser(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </label>
-            <p className="login-hint">2-32 caracteres: letras, números, punto, guion y guion bajo.</p>
-
-            <label className="login-field">
-              <span>Mensaje (opcional)</span>
-              <input
-                value={reqMsg}
-                onChange={(e) => setReqMsg(e.target.value)}
-                placeholder="Quién eres o para qué"
-                autoComplete="off"
-              />
-            </label>
-
-            {reqError ? <div className="banner error">{reqError}</div> : null}
-
-            <button className="primary-red login-btn" disabled={reqBusy || !reqUser.trim()}>
-              Enviar solicitud{reqBusy ? <span className="loader" /> : null}
-            </button>
-            <button type="button" className="f-chip login-switch" onClick={backToLogin}>
-              Volver al login
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="login-wrap">
-          <div className="panel login-card">
-            <p className="empty">Cargando…</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={null}>
       <LoginForm />
     </Suspense>
+  );
+}
+
+function LoginForm() {
+  const t = useT();
+  const router = useRouter();
+  const params = useSearchParams();
+  const [tab, setTab] = useState<'login' | 'register'>(params.get('tab') === 'register' ? 'register' : 'login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setError(null);
+    if (tab === 'register' && password !== password2) {
+      setError(t('auth.err.mismatch'));
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(tab === 'login' ? '/api/auth/login' : '/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        setError(json.error || (res.status === 401 ? t('auth.err.invalid') : t('auth.err.generic')));
+        return;
+      }
+      router.replace(safeNext(params.get('next')));
+      router.refresh();
+    } catch {
+      setError(t('auth.err.generic'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="wrap" style={{ maxWidth: 460, margin: '8vh auto 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <Link href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <b style={{ fontSize: 22 }}>
+            Valo<em style={{ color: '#ff4655', fontStyle: 'normal' }}>IA</em>
+          </b>
+        </Link>
+        <LocaleSwitch />
+      </div>
+
+      <div className="panel" style={{ padding: 22 }}>
+        <div className="tabs" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button className={`f-chip${tab === 'login' ? ' player-on' : ''}`} onClick={() => setTab('login')} type="button">
+            {t('auth.login')}
+          </button>
+          <button className={`f-chip${tab === 'register' ? ' player-on' : ''}`} onClick={() => setTab('register')} type="button">
+            {t('auth.register')}
+          </button>
+        </div>
+
+        <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
+          <label className="pf-field">
+            <span>{t('auth.username')}</span>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required minLength={2} maxLength={32} />
+          </label>
+          <label className="pf-field">
+            <span>{t('auth.password')}</span>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={tab === 'login' ? 'current-password' : 'new-password'} required minLength={8} maxLength={128} />
+          </label>
+          {tab === 'register' ? (
+            <label className="pf-field">
+              <span>{t('auth.password2')}</span>
+              <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} autoComplete="new-password" required minLength={8} maxLength={128} />
+            </label>
+          ) : null}
+
+          {error ? <div className="banner error">{error}</div> : null}
+
+          <button className="primary-red" type="submit" disabled={busy}>
+            {busy ? t('common.loading') : tab === 'login' ? t('auth.submitLogin') : t('auth.submitRegister')}
+          </button>
+        </form>
+
+        <p className="window-info" style={{ marginTop: 14 }}>
+          {tab === 'login' ? (
+            <button className="linklike" type="button" onClick={() => setTab('register')}>{t('auth.noAccount')}</button>
+          ) : (
+            <button className="linklike" type="button" onClick={() => setTab('login')}>{t('auth.haveAccount')}</button>
+          )}
+        </p>
+      </div>
+
+      <p className="window-info" style={{ marginTop: 14, textAlign: 'center' }}>
+        <Link href="/terms">{t('legal.terms')}</Link> · <Link href="/privacy">{t('legal.privacy')}</Link>
+      </p>
+      <p className="window-info" style={{ textAlign: 'center', opacity: 0.7 }}>{t('landing.notAffiliated')}</p>
+    </div>
   );
 }

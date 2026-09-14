@@ -1,8 +1,24 @@
-# ValoIA · Dashboard
+# ValoIA · Dashboard (rama `feat/riot-dev-oficial`)
 
-Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) con cache persistente, Docker y **perfiles configurables** (tú decides a quién ver y qué reglas aplicar).
+Rama de migración a la **API oficial de Riot**. Single-user (**AlexRomero12#lan**),
+sin login, sin Tienda y sin RR/MMR (la API oficial no los expone).
 
-> Estado actual: **v1.21.1** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado: **DEV**. Con dev key solo funcionan ACCOUNT-V1, VAL-CONTENT-V1 y
+> VAL-STATUS-V1; las partidas (VAL-MATCH-V1) se sirven del **mock** generado
+> desde el archivo real (`RIOT_MATCH_SOURCE=mock`). Al tener la key productiva
+> se cambia a `live` sin tocar código.
+
+## Modos de la app (`APP_MODE`)
+
+| Modo | Qué es | Docker local |
+|---|---|---|
+| `single` (default) | Instancia personal de AlexRomero12#LAN, sin login | `docker-compose.riot-dev.yml` → **:4322** |
+| `public` | Producto para la solicitud de Riot: cuentas locales, vinculación Riot (RSO/mock), consentimiento/opt-in y perfiles públicos | `docker-compose.public.yml` → **:4323** |
+
+El paquete de solicitud vive en [`docs/riot/`](./docs/riot/):
+`aplicacion.md` (texto EN para el portal) y `runbook-publicacion.md` (pasos para
+publicar y verificar). En `public` sin credenciales RSO la vinculación usa el
+proveedor demo (`MOCK_RIOT_IDS`); `RSO_ENABLED=1` activa el OAuth2 real.
 
 ## Estructura
 
@@ -115,45 +131,40 @@ Las llaves **viven solo en archivos `.env` locales** — están en `.gitignore` 
 cp .env.example .env
 ```
 
-### 2. `HENRIK_API_KEY` — requerida (partidas, MMR, RR)
-
-1. Únete al Discord de HenrikDev: <https://discord.gg/henrikdev>
-2. Ve a <https://api.henrikdev.xyz/dashboard/> e inicia sesión con Discord
-3. **API Keys → Create Key** → tipo *Basic* (instantánea, 30 req/min)
-4. Pega la clave (empieza con `HDEV-`) en tu `.env`:
-   ```
-   HENRIK_API_KEY=HDEV-tu-clave-aqui
-   ```
-
-### 3. `RIOT_API_KEY` — opcional (fallback básico)
+### 2. `RIOT_API_KEY` — requerida (dev key)
 
 1. Login en <https://developer.riotgames.com> con tu cuenta Riot
 2. Panel → **DEVELOPMENT KEY** → *Generate* (⚠️ expira cada 24 h)
 3. Pégala como `RIOT_API_KEY=RGAPI-...`
 
-> La API oficial de Riot **no expone RR/MMR ni match history** para keys de desarrollo — por eso Henrik es el proveedor principal.
+> En dev, `VAL-MATCH-V1` responde 403: `RIOT_MATCH_SOURCE=mock` sirve fixtures
+> con la forma exacta de producción (generados desde `data/archive` con
+> `node scripts/gen-riot-fixtures.mjs`). `VAL_NAME=AlexRomero12`,
+> `VAL_TAG=LAN` y `VAL_SHARD=latam` ya vienen configurados.
+
+### 3. Fixtures del mock (solo dev)
+
+```bash
+node scripts/gen-riot-fixtures.mjs          # regenera desde tu archivo real
+node scripts/gen-riot-fixtures.mjs Nombre TAG 12
+```
 
 ### 4. Resto de variables
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `AUTH_SECRET` | — | **Obligatorio en producción**: firma las sesiones (32+ bytes). Genera con `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
-| `AUTH_USER` / `AUTH_PASSWORD` | — / — | Usuario inicial: se crea en el primer login si no hay ningún usuario (contraseña mínimo 8) |
-| `VAL_NAME` / `VAL_TAG` | `Player` / `0000` | Riot ID de la cuenta del `.env` (la usa el proveedor Riot de fallback y el seed inicial de perfiles) |
-| `VAL_REGION` / `VAL_PLATFORM` | `na` / `pc` | Routing de Henrik (LAN comparte deployment con NA) |
-| `VAL_BACKGROUND_REFRESH` | `0` | `1` activa el cron que sincroniza los perfiles visibles cada `VAL_REFRESH_INTERVAL_MIN` min y alimenta el archivo |
+| `RIOT_API_KEY` | — | Dev key (24 h) hoy; production key al aprobar Riot |
+| `RIOT_MATCH_SOURCE` | `mock` | `mock` (fixtures) \| `live` (key productiva) |
+| `VAL_NAME` / `VAL_TAG` | `Player` / `0000` | Riot ID de la cuenta única (AlexRomero12#LAN) |
+| `VAL_CLUSTER` / `VAL_SHARD` | `americas` / `latam` | Routing oficial: cluster de cuenta y plataforma del match API |
+| `VAL_BACKGROUND_REFRESH` | `0` | `1` activa el cron que sincroniza las partidas y alimenta el archivo |
 | `VAL_REFRESH_INTERVAL_MIN` | `15` | Intervalo del cron en minutos |
-| `VAL_RULES_PUSH` | `1` | `0` apaga el aviso semanal de reglas por Web Push (requiere Web Push configurado) |
+| `VAL_RULES_PUSH` | `1` | `0` apaga el aviso semanal de reglas por Web Push |
 | `ARCHIVE_DIR` | `data/archive` | Directorio del archivo acumulativo de partidas (persistente, externo al cache) |
 | `TZ` | `UTC` | Zona horaria IANA del contenedor (afecta cortes de día de Reglas y timestamps) |
-| `DATA_DIR` | `data` | Datos persistentes de la app: perfiles, favoritas, suscripciones push, tokens RSO, notificaciones (externo al cache) |
-| `STORE_SHARD` | `na` | Shard de `pd.a.pvp.net` para el storefront (latam/br/na → `na`) |
-| `TRUST_PROXY` | `0` | `1` detrás de un proxy (Caddy/nginx): usa `X-Real-IP`/`X-Forwarded-*` para rate-limit y sesiones |
-| `SESSION_MAX_PER_USER` / `SESSION_MAX_PER_IP` | `5` / `3` | Tope de sesiones simultáneas (se revoca la más antigua) |
-| `MAX_PROFILES` / `MAX_PROFILES_ADMIN` | `10` / `20` | Tope de perfiles por usuario |
-| `REFRESH_COOLDOWN_SEC` | `10` | Cooldown servidor entre refrescos por usuario |
+| `DATA_DIR` | `data` | Datos persistentes de la app: perfil, comentarios, suscripciones push (externo al cache) |
+| `REFRESH_COOLDOWN_SEC` | `10` | Cooldown servidor entre refrescos |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | — | Web Push (`npx web-push generate-vapid-keys`) |
-| `VAL_RIOT_USER` / `VAL_RIOT_PASS` | — | Credenciales para el respaldo RSO (opcional; Riot exige hCaptcha en el login programático — la vía recomendada es pegar la cookie `ssid` desde la página Tienda) |
 
 ## Seguridad
 
@@ -183,47 +194,29 @@ Oracle Cloud Always Free (ARM) con `docker-compose.prod.yml` + Caddy
 
 | Endpoint | Descripción |
 |---|---|
-| `POST /api/auth/login` | `{username, password}` — inicia sesión (rate-limit + sesión revocable) |
-| `POST /api/auth/logout` | Cierra la sesión actual |
-| `POST /api/auth/request-access` | Solicitud pública de acceso `{username, message?}` (rate-limit por IP) |
-| `GET /api/auth/session` | Usuario, admin y `mustChangePassword` |
-| `GET /api/auth/users` | Lista de usuarios (admin: todos; usuario: el suyo) |
-| `POST /api/auth/users` | `{action: create\|password\|delete, username, password, currentPassword?, mustChange?}` — gestión de usuarios |
-| `GET /api/auth/sessions` | Sesiones activas propias (`?user=`/`?user=all`, admin) |
-| `DELETE /api/auth/sessions?id=` | Cierra una sesión (propia; admin cualquiera) |
-| `GET /api/auth/requests` | Solicitudes de acceso (admin) |
-| `POST /api/auth/requests` | `{action: approve\|reject, id, password?}` — aprobar (devuelve temporal una vez) o rechazar |
-| `GET /api/auth/log` | Actividad reciente (admin) |
-| `GET /api/valorant/summary?season=current\|days=N&player=perfilId&limit=` | Resumen ranked agregado (`limit` = profundidad 1-40, default 10) |
-| `POST /api/valorant/refresh?player=perfilId&scope=all\|matches\|mmr&limit=` | Revalidación en background del bucket/MMR/cuenta; responde `{started:true}` al instante |
-| `POST /api/valorant/backfill?player=perfilId&mode=season\|all&maxPages=&force=` | Backfill profundo del historial (fire-and-forget); el detalle de cada partida vieja queda en el archivo |
-| `GET /api/valorant/backfill?player=perfilId` | Estado del archivo por perfil/cuenta: total archivado, rango de fechas y último backfill |
-| `GET /api/valorant/profiles` | Lista de perfiles guardados (Riot ID, rol, visible, reglas de sesión) |
-| `POST /api/valorant/profiles` | `{action: upsert, profile}` / `{action: delete, id}` — CRUD de perfiles |
+| `GET /api/valorant/summary?days=N&player=perfilId&limit=` | Resumen ranked agregado (`limit` = profundidad 1-40, default 10) |
+| `POST /api/valorant/refresh?player=perfilId&scope=all\|matches&limit=` | Revalidación en background del bucket/cuenta; responde `{started:true}` |
+| `POST /api/valorant/backfill` | Ya no existe backfill profundo: la API oficial no pagina historial (responde `PROVIDER_UNSUPPORTED`) |
+| `GET /api/valorant/backfill` | Estado del archivo por cuenta: total archivado y rango de fechas |
+| `GET /api/valorant/profiles` | Perfil único (Riot ID, rol, reglas de sesión) |
+| `POST /api/valorant/profiles` | `{action: upsert, profile}` — actualiza el perfil |
 | `GET /api/valorant/match?id=&player=perfilId` | Detalle completo de una partida cacheada |
 | `GET /api/valorant/agents` | Catálogo de agentes con iconos y rol (cache 24 h) |
-| `GET /api/valorant/status?player=perfilId` | Estado de proveedor/key/cuenta |
-| `GET /api/store/status` | Tienda de hoy + bundle + favoritas (con coincidencias y estado de notificación) + estado RSO/push; `?refresh=1` fuerza revalidación |
-| `GET /api/store/catalog?q=\|weapon=` | Búsqueda en el catálogo de skins o todas las skins de un arma |
-| `GET /api/store/weapons` | Armas agrupadas por categoría con iconos y contador de skins |
-| `GET /api/store/chromas?id=` | Variantes de color (chromas) de una skin |
-| `POST /api/store/favorites` | `{action: add\|remove, offerId}` — favoritas del usuario |
-| `POST /api/store/auth` | `{action: cookie, cookies\|ssid}` (y login/2FA) — conexión RSO del usuario |
-| `GET /api/store/status` | Tienda del usuario (perfil principal, cuenta conectada, favoritas y push propios) |
-| `POST /api/push/subscribe` / `DELETE ?endpoint=` | Suscripción Web Push del usuario conectado |
-| `POST /api/push/test` | Envía una notificación de prueba a los dispositivos del usuario |
+| `GET /api/valorant/status?player=perfilId` | Estado de proveedor/key/cuenta y origen (mock/live) |
+| `POST /api/push/subscribe` / `DELETE ?endpoint=` | Suscripción Web Push |
+| `POST /api/push/test` | Envía una notificación de prueba |
 | `GET /api/valorant/tiers` | Badges oficiales por tier (iconos de rango, cache 7 días) |
-| `GET /api/valorant/rules-history` | Snapshots guardados de días evaluados por perfil (`perfilId:fecha`, con versión de reglas) |
+| `GET /api/valorant/rules-history` | Snapshots guardados de días evaluados (con versión de reglas) |
 | `POST /api/valorant/rules-history` | `{days:[...]}` — guarda/actualiza snapshots de días completos |
-| `GET /api/valorant/comments` | Notas por partida del usuario (el admin ve todas) |
-| `POST /api/valorant/comments` | `{matchId, text}` — guarda o borra (texto vacío) la nota de una partida (queda con autor) |
+| `GET /api/valorant/comments` | Notas por partida |
+| `POST /api/valorant/comments` | `{matchId, text}` — guarda o borra (texto vacío) la nota |
 
 ## Notas
 
-- Los perfiles viven en `data/profiles.json` (volumen `valo-data`); borrar un perfil no borra sus partidas archivadas
-- El RR/MMR se obtiene de `mmr-history`; la API oficial de Riot no lo expone
+- El perfil vive en `data/profiles.json` (volumen `valo-data`), single-user
+- **Sin RR/MMR**: la API oficial no lo expone; las reglas y el progreso usan récord V/D/E, K/D y tier
 - Las partidas cacheadas son inmutables: reabrir un detalle cuesta $0$ requests
-- El backfill de historial completo es **una vez por jugador**: con key Basic tarda ~1.8 s por página (40 páginas ≈ 2 min). Partidas anteriores a cuando Henrik indexó la cuenta no existen en ninguna API externa — nadie fuera de Riot puede recuperarlas
-- Las partidas nuevas se archivan solas en cada sync (cron o refresh): el archivo crece sin costo extra de requests
-- El archivo vive en `data/archive/` — borrar el cache (`.cache/` o el volumen `valo-cache`) NO lo afecta; solo se pierde si borras esa carpeta o su volumen (`valo-archive`)
-- **Tienda RSO por usuario**: cada uno conecta la cabecera `cookie` de `auth.riotgames.com` (o solo `ssid`) en la página Tienda (`data/rso/<usuario>.json`); los tokens duran ~1 h y se renuevan solos. Las favoritas (`data/favorites.<usuario>.json`) y las suscripciones push son privadas; al borrar un usuario se limpian sus datos
+- `VAL-MATCH-V1` requiere key productiva; en dev se sirve del **mock** (fixtures generados desde tu archivo real con `scripts/gen-riot-fixtures.mjs`)
+- Al llegar la key productiva: `RIOT_MATCH_SOURCE=live` y validar paridad mock↔live por `matchId`
+- Las partidas nuevas se archivan solas en cada sync (cron o refresh)
+- El archivo vive en `data/archive/` — borrar el cache (`.cache/`) NO lo afecta

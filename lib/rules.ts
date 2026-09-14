@@ -13,6 +13,9 @@ import { poolRuleFor, type SessionRules } from './profileTypes';
  *
  * Pool: cada partida se clasifica como main / backup / fuera / prohibido según
  * las reglas del perfil (`SessionRules`); fuera y prohibido son violación.
+ *
+ * Sin RR: la API oficial no lo expone. El progreso se mide con récord V/D/E y
+ * tier (que sí viene en cada partida).
  */
 
 /** Clasificación de un pick contra las reglas del perfil. */
@@ -67,34 +70,39 @@ export interface DayEvaluation {
   dayStart: number;
   /** Partidas en orden cronológico. */
   matches: EvaluatedMatch[];
-  /** RR neto real del día (suma de los rrDelta disponibles; null si ninguno tenía dato). */
-  realRR: number | null;
-  /** RR si se hubiera respetado la regla de parada (sin partidas posteriores al corte). */
-  planRR: number | null;
-  /** RR con regla + pool estricto (sin violaciones). */
-  planPoolRR: number | null;
-  /** true si TODOS los rrDelta del día estaban disponibles. */
-  rrCoverage: boolean;
-  /** Cuántos rrDelta faltaban en el día (sumas parciales). */
-  rrMissing: number;
+  /** Récord real del día (todas las partidas). */
+  wins: number;
+  losses: number;
+  draws: number;
+  /** Récord si se hubiera respetado la regla de parada (sin partidas posteriores al corte). */
+  planWins: number;
+  planLosses: number;
+  planDraws: number;
+  /** Récord con regla + pool estricto (sin violaciones). */
+  poolWins: number;
+  poolLosses: number;
+  poolDraws: number;
+  /** Récord de las partidas que violaron el pool. */
+  violationWins: number;
+  violationLosses: number;
+  violationDraws: number;
+  /** Tier al inicio del día (primera partida). */
+  startTier: number;
+  /** Tier al final del día (última partida). */
+  endTier: number;
+  /** Tier al respetar la regla de parada (última partida permitida). */
+  planTier: number;
+  /** Tier con regla + pool estricto. */
+  poolTier: number;
   violationCount: number;
   /** Partidas con agente prohibido (agente o rol vetado). */
   bannedCount: number;
-  /**
-   * Balance neto de las violaciones (puede ser positivo: una victoria fuera
-   * de pool suma). Para el "costo" real ver violationLoss.
-   */
-  violationCost: number | null;
-  /** RR perdido en violaciones (solo deltas negativos, ≤ 0). */
-  violationLoss: number | null;
-  /** RR ganado en violaciones (solo deltas positivos, ≥ 0). */
-  violationGain: number | null;
   /** Hora local del corte (p. ej. "14:11") o null si no se activó la regla. */
   cutAt: string | null;
   /** true si hubo corte y aun así se siguió jugando. */
   cutIgnored: boolean;
   sessions: number;
-  /** true si los RR vienen de la copia histórica guardada (la API ya no los da). */
+  /** true si el día viene de la copia histórica guardada. */
   stored?: boolean;
   /** Nº de partidas según la copia histórica (para semanas sin datos en vivo). */
   storedMatches?: number;
@@ -119,20 +127,21 @@ function hourLocal(ts: number): string {
   return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
 }
 
-function sumRR(rows: EvaluatedMatch[], filter: (r: EvaluatedMatch) => boolean): { sum: number | null; coverage: boolean; missing: number } {
-  let sum = 0;
-  let present = 0;
-  let missing = 0;
+interface Record3 {
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+function recordOf(rows: EvaluatedMatch[], filter: (r: EvaluatedMatch) => boolean): Record3 {
+  const out: Record3 = { wins: 0, losses: 0, draws: 0 };
   for (const r of rows) {
     if (!filter(r)) continue;
-    if (r.match.rrDelta == null) {
-      missing += 1;
-      continue;
-    }
-    sum += r.match.rrDelta;
-    present += 1;
+    if (isDraw(r.match)) out.draws += 1;
+    else if (r.match.won) out.wins += 1;
+    else out.losses += 1;
   }
-  return { sum: present ? sum : null, coverage: missing === 0, missing };
+  return out;
 }
 
 /** Evalúa las competitivas de un día (entrada ya filtrada a competitive + completadas). */
@@ -178,36 +187,24 @@ export function evaluateDay(matches: MatchRow[], rules?: SessionRules): DayEvalu
     });
   }
 
-  const real = sumRR(rows, () => true);
-  const plan = sumRR(rows, (r) => !r.afterCut);
-  const planPool = sumRR(rows, (r) => !r.afterCut && !r.violation);
-
-  const violations = rows.filter((r) => r.violation);
-  const splitRR = (pred: (d: number) => boolean): number | null => {
-    let sum = 0;
-    let present = 0;
-    for (const r of violations) {
-      const d = r.match.rrDelta;
-      if (d == null || !pred(d)) continue;
-      sum += d;
-      present += 1;
-    }
-    return present ? sum : null;
-  };
-  const violationCost = splitRR(() => true);
-  // Costo = solo lo perdido (≤ 0): una victoria fuera de pool (+15) no es un
-  // costo y antes se pintaba en rojo como si lo fuera. El neto queda en
-  // violationCost y lo ganado en violationGain.
-  const violationLoss = splitRR((d) => d < 0);
-  const violationGain = splitRR((d) => d > 0);
+  const real = recordOf(rows, () => true);
+  const plan = recordOf(rows, (r) => !r.afterCut);
+  const pool = recordOf(rows, (r) => !r.afterCut && !r.violation);
+  const violations = recordOf(rows, (r) => r.violation);
 
   const cutIdx = rows.findIndex((r) => r.cutPoint);
+  const lastAllowed = cutIdx >= 0 ? rows.slice(0, cutIdx + 1) : rows;
+  const planTier = lastAllowed.length ? lastAllowed[lastAllowed.length - 1].match.tier : 0;
+  const poolRows = lastAllowed.filter((r) => !r.violation);
+  const poolTier = poolRows.length ? poolRows[poolRows.length - 1].match.tier : 0;
 
   // Impacto (FB/FD): solo cuenta partidas con detalle de kill feed.
   const impactRows = rows.filter((r) => r.match.firstBloods != null && r.match.firstDeaths != null);
   const fbTotal = impactRows.length ? impactRows.reduce((a, r) => a + (r.match.firstBloods ?? 0), 0) : null;
   const fdTotal = impactRows.length ? impactRows.reduce((a, r) => a + (r.match.firstDeaths ?? 0), 0) : null;
   const fdHighCount = impactRows.filter((r) => (r.match.firstDeaths ?? 0) >= 3).length;
+
+  const violationRows = rows.filter((r) => r.violation);
 
   return {
     key,
@@ -217,16 +214,24 @@ export function evaluateDay(matches: MatchRow[], rules?: SessionRules): DayEvalu
     fdHighCount,
     dayStart,
     matches: rows,
-    realRR: real.sum,
-    planRR: plan.sum,
-    planPoolRR: planPool.sum,
-    rrCoverage: real.coverage,
-    rrMissing: real.missing,
-    violationCount: violations.length,
+    wins: real.wins,
+    losses: real.losses,
+    draws: real.draws,
+    planWins: plan.wins,
+    planLosses: plan.losses,
+    planDraws: plan.draws,
+    poolWins: pool.wins,
+    poolLosses: pool.losses,
+    poolDraws: pool.draws,
+    violationWins: violations.wins,
+    violationLosses: violations.losses,
+    violationDraws: violations.draws,
+    startTier: rows.length ? rows[0].match.tier : 0,
+    endTier: rows.length ? rows[rows.length - 1].match.tier : 0,
+    planTier,
+    poolTier,
+    violationCount: violationRows.length,
     bannedCount: rows.filter((r) => r.pickClass === 'banned').length,
-    violationCost,
-    violationLoss,
-    violationGain,
     cutAt: cutIdx >= 0 ? hourLocal(sorted[cutIdx].timestamp) : null,
     cutIgnored: cutIdx >= 0 && rows.some((r) => r.afterCut),
     sessions: session + 1,
@@ -247,18 +252,23 @@ export interface RulesWeek {
   label: string;
   days: DayEvaluation[];
   matches: number;
-  realRR: number | null;
-  planRR: number | null;
-  planPoolRR: number | null;
+  wins: number;
+  losses: number;
+  draws: number;
+  planWins: number;
+  planLosses: number;
+  planDraws: number;
+  poolWins: number;
+  poolLosses: number;
+  poolDraws: number;
+  violationWins: number;
+  violationLosses: number;
   violationCount: number;
   bannedCount: number;
-  violationCost: number | null;
-  violationLoss: number | null;
-  violationGain: number | null;
   cutsTotal: number;
   cutsIgnored: number;
-  /** true si algún día de la semana tenía rrDelta faltantes (sumas parciales). */
-  rrPartial: boolean;
+  /** Último tier conocido de la semana (0 si no hay datos). */
+  endTier: number;
 }
 
 /** Agrega días en semanas (lun-dom). Los días deben venir en orden cronológico. */
@@ -273,26 +283,30 @@ export function groupEvaluationWeeks(days: DayEvaluation[]): RulesWeek[] {
   }
   return [...byWeek.entries()]
     .map(([key, list]) => {
-      const sum = (pick: (d: DayEvaluation) => number | null): number | null => {
-        const vals = list.map(pick).filter((v): v is number => v != null);
-        return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
-      };
+      const sum = (pick: (d: DayEvaluation) => number): number => list.reduce((a, d) => a + pick(d), 0);
+      const ordered = [...list].sort((a, b) => a.dayStart - b.dayStart);
+      const lastWithTier = [...ordered].reverse().find((d) => d.endTier > 0);
       return {
         key,
         label: key.slice(2).replace(/-/g, ' · '),
-        days: [...list].sort((a, b) => a.dayStart - b.dayStart),
+        days: ordered,
         matches: list.reduce((a, d) => a + (d.matches.length || (d.storedMatches ?? 0)), 0),
-        realRR: sum((d) => d.realRR),
-        planRR: sum((d) => d.planRR),
-        planPoolRR: sum((d) => d.planPoolRR),
-        violationCount: list.reduce((a, d) => a + d.violationCount, 0),
-        bannedCount: list.reduce((a, d) => a + d.bannedCount, 0),
-        violationCost: sum((d) => d.violationCost),
-        violationLoss: sum((d) => d.violationLoss),
-        violationGain: sum((d) => d.violationGain),
+        wins: sum((d) => d.wins),
+        losses: sum((d) => d.losses),
+        draws: sum((d) => d.draws),
+        planWins: sum((d) => d.planWins),
+        planLosses: sum((d) => d.planLosses),
+        planDraws: sum((d) => d.planDraws),
+        poolWins: sum((d) => d.poolWins),
+        poolLosses: sum((d) => d.poolLosses),
+        poolDraws: sum((d) => d.poolDraws),
+        violationWins: sum((d) => d.violationWins),
+        violationLosses: sum((d) => d.violationLosses),
+        violationCount: sum((d) => d.violationCount),
+        bannedCount: sum((d) => d.bannedCount),
         cutsTotal: list.filter((d) => d.cutAt != null).length,
         cutsIgnored: list.filter((d) => d.cutIgnored).length,
-        rrPartial: list.some((d) => !d.rrCoverage),
+        endTier: lastWithTier?.endTier ?? 0,
       };
     })
     .sort((a, b) => (a.key < b.key ? -1 : 1));

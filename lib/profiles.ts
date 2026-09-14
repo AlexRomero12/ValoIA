@@ -2,7 +2,8 @@ import { readData, writeDataSync } from './persist';
 import { env } from './env';
 import type { PoolRule, SessionRules, Profile, ProfileAccount } from './profileTypes';
 import { clampPoolRule, slugifyId } from './profileTypes';
-import { adminUsername } from './auth';
+import { adminUsername, getUser } from './auth';
+import { isPublicMode } from './appMode';
 
 /**
  * Store de perfiles (server-only, usa `node:fs`).
@@ -66,6 +67,9 @@ export function listProfiles(): Profile[] {
   const current = readFile();
   const defaultOwner = adminUsername() ?? 'admin';
   if (current.length === 0) {
+    // En modo público no se siembra el perfil del `.env`: cada usuario crea el
+    // suyo al vincular su cuenta de Riot.
+    if (isPublicMode()) return [];
     const seeded = seedProfiles().map((p) => ({ ...p, owner: defaultOwner }));
     writeFile(seeded);
     return seeded;
@@ -97,12 +101,34 @@ export interface ProfileViewer {
 }
 
 export function canAccessProfile(profile: Profile, viewer: ProfileViewer): boolean {
+  if (!isPublicMode()) return true;
   return profile.owner === viewer.username;
 }
 
-/** Perfiles del usuario (solo propios). */
+/** Perfil visible para lectura en comparativas: dueño con opt-in público. */
+export function canViewProfile(profile: Profile): boolean {
+  if (!profile.owner) return false;
+  const owner = getUser(profile.owner);
+  return Boolean(owner?.riot && owner.publicProfile === true && owner.consentAt != null);
+}
+
+/** Perfiles del usuario (single: todos; público: solo propios). */
 export function listProfilesFor(viewer: ProfileViewer): Profile[] {
+  if (!isPublicMode()) return listProfiles();
   return listProfiles().filter((p) => p.owner === viewer.username);
+}
+
+/** Perfiles de otros usuarios con opt-in público (solo el principal de cada uno). */
+export function listPublicProfilesFor(viewer: ProfileViewer): Profile[] {
+  if (!isPublicMode()) return [];
+  return listProfiles().filter((p) => p.owner && p.owner !== viewer.username && p.primary && canViewProfile(p));
+}
+
+/** Perfiles accesibles para lectura: propios + públicos de terceros con opt-in. */
+export function listViewableProfilesFor(viewer: ProfileViewer): Profile[] {
+  const own = listProfilesFor(viewer);
+  const seen = new Set(own.map((p) => p.id));
+  return [...own, ...listPublicProfilesFor(viewer).filter((p) => !seen.has(p.id))];
 }
 
 export function listVisibleProfilesFor(viewer: ProfileViewer): Profile[] {
@@ -111,6 +137,7 @@ export function listVisibleProfilesFor(viewer: ProfileViewer): Profile[] {
 
 /** Filtra una lista en memoria segÃºn el visor (para respuestas tras mutar). */
 export function scopeProfiles(profiles: Profile[], viewer: ProfileViewer): Profile[] {
+  if (!isPublicMode()) return profiles;
   return profiles.filter((p) => p.owner === viewer.username);
 }
 
@@ -131,23 +158,40 @@ export function getStorePrimaryProfile(): Profile | undefined {
   return getPrimaryProfile(adminUsername());
 }
 
-/** Motivo de acceso a un id: para mapear 400/403 en las rutas. */
+/** Motivo de acceso de LECTURA a un id: para mapear 400/403 en las rutas. */
 export function profileAccess(id: string | null | undefined, viewer: ProfileViewer): 'ok' | 'notfound' | 'forbidden' {
   if (!id) return 'ok';
   const profile = listProfiles().find((p) => p.id === id);
   if (!profile) return 'notfound';
-  return canAccessProfile(profile, viewer) ? 'ok' : 'forbidden';
+  if (!isPublicMode() || canAccessProfile(profile, viewer)) return 'ok';
+  return canViewProfile(profile) ? 'ok' : 'forbidden';
+}
+
+/** Motivo de acceso de ESCRITURA (refresh/backfill): solo el dueño. */
+export function profileWriteAccess(id: string | null | undefined, viewer: ProfileViewer): 'ok' | 'notfound' | 'forbidden' {
+  if (!id) return 'ok';
+  const profile = listProfiles().find((p) => p.id === id);
+  if (!profile) return 'notfound';
+  return isPublicMode() && !canAccessProfile(profile, viewer) ? 'forbidden' : 'ok';
 }
 
 /** Resuelve por id dentro de los perfiles propios; sin id devuelve el primero propio. */
 export function getProfile(id?: string | null, viewer?: ProfileViewer): Profile | undefined {
   const profiles = listProfiles();
-  const list = viewer ? profiles.filter((p) => p.owner === viewer.username) : profiles;
+  if (!isPublicMode() || !viewer) {
+    if (id) {
+      const found = profiles.find((p) => p.id === id);
+      if (found) return found;
+    }
+    return profiles[0];
+  }
+  const list = profiles.filter((p) => canAccessProfile(p, viewer) || canViewProfile(p));
+  const own = list.filter((p) => canAccessProfile(p, viewer));
   if (id) {
     const found = list.find((p) => p.id === id);
     if (found) return found;
   }
-  return list[0];
+  return own[0] ?? list[0];
 }
 
 /** Igual que getProfile pero falla con NO_PROFILES si el usuario no tiene ninguno. */
@@ -159,8 +203,8 @@ export function requireProfile(id?: string | null, viewer?: ProfileViewer): Prof
 
 export function isValidProfile(id?: string | null, viewer?: ProfileViewer): boolean {
   if (!id) return true;
-  if (!viewer) return listProfiles().some((p) => p.id === id);
-  return listProfiles().some((p) => p.id === id && canAccessProfile(p, viewer));
+  if (!isPublicMode() || !viewer) return listProfiles().some((p) => p.id === id);
+  return listProfiles().some((p) => p.id === id && (canAccessProfile(p, viewer) || canViewProfile(p)));
 }
 
 function cleanAccounts(accounts: unknown): ProfileAccount[] | undefined {
@@ -254,6 +298,7 @@ function profileLimit(owner: string): number {
  * - `primary` se desmarca solo entre los perfiles del MISMO dueño.
  */
 export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer): Profile[] {
+  if (!isPublicMode()) return upsertSingle(input);
   const profiles = listProfiles();
   // Compat: clientes con caché vieja aún mandan el campo `audit` en el payload.
   const rulesInput = input.rules !== undefined ? input.rules : (input as { audit?: SessionRules | null }).audit;
@@ -273,7 +318,10 @@ export function upsertProfile(input: UpsertProfileInput, viewer: ProfileViewer):
   }
 
   const label = String(input.label ?? '').trim() || existing?.label || name;
-  const id = existing?.id ?? slugifyId(label, new Set(profiles.map((p) => p.id)));
+  // El id pedido (p. ej. el username al vincular Riot) manda para perfiles
+  // nuevos; si no, se deriva de la etiqueta.
+  const wantedId = input.id ? slugifyId(input.id, new Set(profiles.map((p) => p.id))) : null;
+  const id = existing?.id ?? wantedId ?? slugifyId(label, new Set(profiles.map((p) => p.id)));
   // Array explícito (aunque venga vacío) = lista completa que manda el cliente:
   // permite borrar todas las cuentas/preferencias. `undefined` = no tocar.
   const accounts = Array.isArray(input.accounts) ? (cleanAccounts(input.accounts) ?? []) : existing?.accounts;
@@ -312,7 +360,55 @@ export function deleteProfile(id: string, viewer: ProfileViewer): Profile[] {
   if (!target) return profiles;
   if (!canAccessProfile(target, viewer)) throw forbidden();
   const next = profiles.filter((p) => p.id !== id);
-  if (next.length === 0) throw new Error('No puedes borrar el Ãºltimo perfil');
+  if (next.length === 0) throw new Error('No puedes borrar el último perfil');
   writeFile(next);
   return next;
+}
+
+// ---------- Modo single (instancia personal) ----------
+
+/**
+ * Modo `single`: existe un único perfil (AlexRomero12#LAN). El upsert actualiza
+ * ese perfil sin tocar más registros; las cuentas/reglas se conservan si no se
+ * envían.
+ */
+function upsertSingle(input: UpsertProfileInput): Profile[] {
+  const profiles = listProfiles();
+  const rulesInput = input.rules !== undefined ? input.rules : (input as { audit?: SessionRules | null }).audit;
+  const name = String(input.name ?? '').trim();
+  const tag = String(input.tag ?? '').trim();
+  if (!name || !tag) throw new Error('El perfil necesita Riot ID (nombre#tag)');
+  const base = profiles[0];
+  const label = String(input.label ?? '').trim() || base?.label || name;
+  const id = base?.id ?? slugifyId(label, new Set(profiles.map((p) => p.id)));
+  const accounts = Array.isArray(input.accounts) ? (cleanAccounts(input.accounts) ?? []) : base?.accounts;
+  const prefs = Array.isArray(input.prefs) ? (cleanPrefs(input.prefs) ?? []) : base?.prefs;
+  const next: Profile = {
+    id,
+    label,
+    name,
+    tag,
+    owner: base?.owner,
+    role: String(input.role ?? base?.role ?? '').trim() || undefined,
+    color: String(input.color ?? base?.color ?? '').trim() || undefined,
+    visible: true,
+    primary: true,
+    accounts,
+    prefs,
+    rules:
+      rulesInput === null
+        ? undefined
+        : cleanProfileRules(rulesInput, base?.rules?.rulesVersion ?? 0) ?? base?.rules,
+  };
+  writeFile([next]);
+  return [next];
+}
+
+/** Borra todos los perfiles de un dueño (baja de cuenta en modo público). */
+export function deleteProfilesFor(username: string): number {
+  const profiles = listProfiles();
+  const next = profiles.filter((p) => p.owner !== username);
+  if (next.length === profiles.length) return 0;
+  writeFile(next);
+  return profiles.length - next.length;
 }

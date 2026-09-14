@@ -61,11 +61,8 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
             </h3>
             <span className="md-sub">
               {new Date(match.timestamp).toLocaleString('es')} · {match.roundsWon}–{match.roundsLost} · <TierIcon tier={match.tier} size={20} /> ·{' '}
-              {detail ? `${detail.meta.durationMin} min${detail.meta.seasonShort ? ` · ${detail.meta.seasonShort}` : ''}` : ''}
+              {detail ? `${detail.meta.durationMin} min` : ''}
             </span>
-          </div>
-          <div className={`md-rr ${rrCls(match.rrDelta)}`}>
-            {match.rrDelta != null ? `${match.rrDelta > 0 ? '+' : ''}${match.rrDelta} RR` : '—'}
           </div>
         </header>
 
@@ -191,11 +188,6 @@ function Scoreboard({ title, players }: { title: string; players: DetailPlayer[]
       </div>
     </section>
   );
-}
-
-function rrCls(v: number | null | undefined): string {
-  if (v == null || v === 0) return '';
-  return v > 0 ? 'up' : 'down';
 }
 
 const RESULT_ICONS: Record<string, string> = {

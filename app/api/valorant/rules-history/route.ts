@@ -1,16 +1,16 @@
 import { NextRequest } from 'next/server';
 import { getRulesHistory, upsertRulesDays } from '@/lib/rulesHistoryStore';
 import type { StoredRulesDay } from '@/lib/rulesHistory';
-import { listProfilesFor } from '@/lib/profiles';
-import { viewerFromRequest } from '@/lib/auth';
+import { listViewableProfilesFor } from '@/lib/profiles';
+import { viewerOrSingle } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-/** Solo los snapshots de perfiles permitidos al usuario. */
+/** Solo los snapshots de perfiles visibles para el visor. */
 function allowedPrefixes(req: NextRequest): Set<string> | null {
-  const viewer = viewerFromRequest(req);
+  const viewer = viewerOrSingle(req);
   if (!viewer) return null;
-  return new Set(listProfilesFor(viewer).map((p) => p.id));
+  return new Set(listViewableProfilesFor(viewer).map((p) => p.id));
 }
 
 export async function GET(req: NextRequest) {

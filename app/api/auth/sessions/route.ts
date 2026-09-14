@@ -1,37 +1,31 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin, sessionFromRequest } from '@/lib/auth';
 import { listSessions, revokeSession } from '@/lib/sessions';
+import { clientIp } from '@/lib/clientIp';
+import { logAuth } from '@/lib/authLog';
+import { isPublicMode } from '@/lib/appMode';
 
 export const dynamic = 'force-dynamic';
 
-/** Sesiones activas del usuario (el admin puede ver las de `?user=`). */
+/** GET: sesiones propias (?user=all solo admin). */
 export async function GET(req: NextRequest) {
-  const session = sessionFromRequest(req);
-  if (!session) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
-  const admin = isAdmin(session.u);
-  const requested = req.nextUrl.searchParams.get('user')?.toLowerCase();
-  const all = admin && requested === 'all';
-  const user = admin && requested && !all ? requested : session.u;
-  const sessions = (all ? listSessions() : listSessions(user)).map((s) => ({
-    id: s.id,
-    user: s.user,
-    ip: s.ip,
-    ua: s.ua,
-    createdAt: s.createdAt,
-    lastSeenAt: s.lastSeenAt,
-    current: s.id === session.sid,
-  }));
-  return Response.json({ sessions, self: session.u, admin, scope: all ? 'all' : user }, { headers: { 'Cache-Control': 'no-store' } });
+  const session = isPublicMode() ? sessionFromRequest(req) : null;
+  if (isPublicMode() && !session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  const requester = session?.u ?? 'invitado';
+  const wantAll = req.nextUrl.searchParams.get('user') === 'all';
+  const records = wantAll && isAdmin(requester) ? listSessions() : listSessions(requester);
+  return NextResponse.json({ sessions: records });
 }
 
-/** Cierra una sesión por id (la propia; el admin, cualquiera). */
+/** DELETE ?id=: cierra una sesión (propia; admin cualquiera). */
 export async function DELETE(req: NextRequest) {
-  const session = sessionFromRequest(req);
-  if (!session) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
+  const session = isPublicMode() ? sessionFromRequest(req) : null;
+  if (isPublicMode() && !session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  const requester = session?.u ?? 'invitado';
   const id = req.nextUrl.searchParams.get('id');
-  if (!id) return Response.json({ error: 'Falta id' }, { status: 400 });
-  const admin = isAdmin(session.u);
-  const ok = revokeSession(id, admin ? undefined : session.u);
-  if (!ok) return Response.json({ error: 'Sesión no encontrada' }, { status: 404 });
-  return Response.json({ ok: true });
+  if (!id) return NextResponse.json({ error: 'Falta id' }, { status: 400 });
+  const ok = revokeSession(id, isAdmin(requester) ? undefined : requester);
+  if (!ok) return NextResponse.json({ error: 'Sesión no encontrada' }, { status: 404 });
+  logAuth('sessions_revoke', { user: requester, ip: clientIp(req), detail: id });
+  return NextResponse.json({ ok: true });
 }

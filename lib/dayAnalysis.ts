@@ -64,9 +64,6 @@ export interface DayStats {
   acs: number;
   adr: number;
   hsPct: number;
-  rrTotal: number | null;
-  /** Partidas del día sin dato de RR (rrTotal parcial si > 0). */
-  rrMissing: number;
   minutes: number;
   /** Partidas del día, más recientes primero */
   rows: MatchRow[];
@@ -123,8 +120,6 @@ export function dayStats(group: DayGroup): DayStats {
     acs: s.acs,
     adr: s.adr,
     hsPct: s.hsPct,
-    rrTotal: s.rrTotal,
-    rrMissing: s.rrMissing,
     minutes,
     rows: group.matches,
     byAgent: subStats(group.matches, (m) => m.agent, (m) => m.agentIcon),

@@ -18,7 +18,7 @@ interface FiltersBarProps {
   onMetric: (m: MetricKey) => void;
 }
 
-export type WindowValue = 'season' | '7' | '14' | '30' | '90' | '365';
+export type WindowValue = '7' | '14' | '30' | '90' | '365';
 
 const METRICS: { key: MetricKey; label: string }[] = [
   { key: 'wr', label: 'WR%' },
@@ -44,7 +44,6 @@ export function FiltersBar(p: FiltersBarProps) {
       <div className="ctl-group ctl-periodo">
         <label>Periodo</label>
         <select value={p.win} onChange={(e) => p.onWin(e.target.value as WindowValue)}>
-          <option value="season">Temporada actual</option>
           <option value="7">7 días</option>
           <option value="14">14 días</option>
           <option value="30">30 días</option>

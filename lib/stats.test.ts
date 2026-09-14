@@ -28,7 +28,6 @@ const WIN_FALLBACK = match({
   acs: 200,
   adr: 150,
   hsPct: 25,
-  rrDelta: 12,
   firstBloods: 3,
   firstDeaths: 2,
 });
@@ -48,7 +47,6 @@ const LOSS_RAW = match({
   damageDealt: 2500,
   headshots: 40,
   shots: 100,
-  rrDelta: -10,
   firstBloods: 1,
   firstDeaths: 4,
 });
@@ -64,7 +62,6 @@ const DRAW = match({
   acs: 150,
   adr: 120,
   hsPct: 30,
-  rrDelta: null,
   firstBloods: 2,
   firstDeaths: 2,
 });
@@ -90,12 +87,6 @@ describe('computeStats', () => {
     expect(s.kd).toBeCloseTo(45 / 46, 6);
   });
 
-  it('suma RR y marca las partidas sin dato', () => {
-    const s = computeStats([WIN_FALLBACK, LOSS_RAW, DRAW]);
-    expect(s.rrTotal).toBe(2);
-    expect(s.rrMissing).toBe(1);
-  });
-
   it('promedia FB/FD por partida (0 si falta el dato)', () => {
     const s = computeStats([WIN_FALLBACK, LOSS_RAW, DRAW]);
     expect(s.fb).toBeCloseTo(2, 6);
@@ -112,15 +103,9 @@ describe('computeStats', () => {
 
   it('sin partidas devuelve ceros y sin impacto', () => {
     const s = computeStats([]);
-    expect(s).toMatchObject({ games: 0, wins: 0, losses: 0, draws: 0, wr: 0, kd: 0, acs: 0, adr: 0, hsPct: 0, rrTotal: null, rrMissing: 0 });
+    expect(s).toMatchObject({ games: 0, wins: 0, losses: 0, draws: 0, wr: 0, kd: 0, acs: 0, adr: 0, hsPct: 0 });
     expect(s.fb).toBeUndefined();
     expect(s.fd).toBeUndefined();
-  });
-
-  it('rrTotal es null cuando ninguna partida trae RR', () => {
-    const s = computeStats([match({}), match({})]);
-    expect(s.rrTotal).toBeNull();
-    expect(s.rrMissing).toBe(2);
   });
 });
 
@@ -134,7 +119,7 @@ describe('groupMatches', () => {
 });
 
 describe('toStatBlock', () => {
-  it('renombra games a matches y omite rr/impacto', () => {
+  it('renombra games a matches y omite el impacto', () => {
     const s = computeStats([WIN_FALLBACK, LOSS_RAW, DRAW]);
     expect(toStatBlock(s)).toEqual({
       matches: 3,

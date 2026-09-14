@@ -1,0 +1,41 @@
+# Rama feat/riot-dev-oficial · despliegue LOCAL en paralelo al compose principal.
+#
+# - Puerto 4322 (el compose principal de main usa 4321): no pisa la app en curso.
+# - Volúmenes propios de datos/caché para no tocar profiles.json del main.
+# - El archivo acumulativo se comparte (externo, append-only con dedupe): así la
+#   rama ve el histórico real de AlexRomero12#LAN.
+#
+# Uso:
+#   docker compose -f docker-compose.riot-dev.yml up -d --build
+#   docker compose -f docker-compose.riot-dev.yml logs -f
+#   docker compose -f docker-compose.riot-dev.yml down
+
+services:
+  valo-dash-riot-dev:
+    build: .
+    image: valo-dash-riot-dev
+    container_name: valo-dash-riot-dev
+    ports:
+      - "4322:3000"
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      CACHE_DIR: /app/data/cache
+      ARCHIVE_DIR: /app/data/archive
+      DATA_DIR: /app/data
+    volumes:
+      - valo-riot-cache:/app/data/cache
+      - valo-riot-data:/app/data
+      # Archivo real de AlexRomero12#LAN del volumen del main (solo lectura de
+      # partidas ya archivadas; el sync solo agrega novedades con dedupe).
+      - valo-dash-next_valo-archive:/app/data/archive
+      - valo-riot-next-cache:/app/.next/cache
+    restart: "no"
+
+volumes:
+  valo-riot-cache:
+  valo-riot-data:
+  valo-riot-next-cache:
+  valo-dash-next_valo-archive:
+    external: true

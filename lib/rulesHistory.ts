@@ -7,7 +7,10 @@ import type { DayEvaluation } from './rules';
  *
  * Clave del snapshot: `${profileId}:${YYYY-MM-DD}` — cada perfil tiene su
  * historial independiente. Snapshots viejos sin prefijo se asignan al primer
- * perfil del dueño.
+ * perfil.
+ *
+ * Sin RR: la rama Riot guarda récord V/D/E y tiers. Los snapshots previos con
+ * RR quedan inertes (sus campos ya no existen en el modelo).
  */
 
 export interface StoredRulesDay {
@@ -19,17 +22,25 @@ export interface StoredRulesDay {
   label: string;
   dayStart: number;
   matches: number;
-  realRR: number | null;
-  planRR: number | null;
-  planPoolRR: number | null;
-  rrCoverage: boolean;
-  rrMissing: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  planWins: number;
+  planLosses: number;
+  planDraws: number;
+  poolWins: number;
+  poolLosses: number;
+  poolDraws: number;
+  violationWins: number;
+  violationLosses: number;
+  violationDraws: number;
   violationCount: number;
   /** Partidas con agente/rol prohibido (se conserva en snapshots nuevos) */
   bannedCount?: number;
-  violationCost: number | null;
-  violationLoss: number | null;
-  violationGain: number | null;
+  startTier?: number;
+  endTier?: number;
+  planTier?: number;
+  poolTier?: number;
   cutAt: string | null;
   cutIgnored: boolean;
   sessions: number;
@@ -56,16 +67,24 @@ export function toStoredRulesDay(d: DayEvaluation, profileId: string, rulesVersi
     label: d.label,
     dayStart: d.dayStart,
     matches: d.matches.length,
-    realRR: d.realRR,
-    planRR: d.planRR,
-    planPoolRR: d.planPoolRR,
-    rrCoverage: d.rrCoverage,
-    rrMissing: d.rrMissing,
+    wins: d.wins,
+    losses: d.losses,
+    draws: d.draws,
+    planWins: d.planWins,
+    planLosses: d.planLosses,
+    planDraws: d.planDraws,
+    poolWins: d.poolWins,
+    poolLosses: d.poolLosses,
+    poolDraws: d.poolDraws,
+    violationWins: d.violationWins,
+    violationLosses: d.violationLosses,
+    violationDraws: d.violationDraws,
     violationCount: d.violationCount,
     bannedCount: d.bannedCount,
-    violationCost: d.violationCost,
-    violationLoss: d.violationLoss,
-    violationGain: d.violationGain,
+    startTier: d.startTier,
+    endTier: d.endTier,
+    planTier: d.planTier,
+    poolTier: d.poolTier,
     cutAt: d.cutAt,
     cutIgnored: d.cutIgnored,
     sessions: d.sessions,
@@ -80,18 +99,24 @@ export function storedToRulesDay(s: StoredRulesDay): DayEvaluation {
     label: s.label,
     dayStart: s.dayStart,
     matches: [],
-    realRR: s.realRR,
-    planRR: s.planRR,
-    planPoolRR: s.planPoolRR,
-    rrCoverage: s.rrCoverage,
-    rrMissing: s.rrMissing,
+    wins: s.wins ?? 0,
+    losses: s.losses ?? 0,
+    draws: s.draws ?? 0,
+    planWins: s.planWins ?? 0,
+    planLosses: s.planLosses ?? 0,
+    planDraws: s.planDraws ?? 0,
+    poolWins: s.poolWins ?? 0,
+    poolLosses: s.poolLosses ?? 0,
+    poolDraws: s.poolDraws ?? 0,
+    violationWins: s.violationWins ?? 0,
+    violationLosses: s.violationLosses ?? 0,
+    violationDraws: s.violationDraws ?? 0,
     violationCount: s.violationCount,
     bannedCount: s.bannedCount ?? 0,
-    violationCost: s.violationCost,
-    // Migración de snapshots viejos (sin split): el neto se asigna al lado
-    // de su signo para no inventar un desglose que no se guardó.
-    violationLoss: s.violationLoss ?? (s.violationCost != null && s.violationCost < 0 ? s.violationCost : null),
-    violationGain: s.violationGain ?? (s.violationCost != null && s.violationCost > 0 ? s.violationCost : null),
+    startTier: s.startTier ?? 0,
+    endTier: s.endTier ?? 0,
+    planTier: s.planTier ?? 0,
+    poolTier: s.poolTier ?? 0,
     cutAt: s.cutAt,
     cutIgnored: s.cutIgnored,
     sessions: s.sessions,
@@ -108,13 +133,17 @@ export function sameRulesDay(a: StoredRulesDay, b: StoredRulesDay): boolean {
     a.rulesVersion === b.rulesVersion &&
     a.matches === b.matches &&
     a.bannedCount === b.bannedCount &&
-    a.realRR === b.realRR &&
-    a.planRR === b.planRR &&
-    a.planPoolRR === b.planPoolRR &&
+    a.wins === b.wins &&
+    a.losses === b.losses &&
+    a.draws === b.draws &&
+    a.planWins === b.planWins &&
+    a.planLosses === b.planLosses &&
+    a.poolWins === b.poolWins &&
+    a.poolLosses === b.poolLosses &&
+    a.violationWins === b.violationWins &&
+    a.violationLosses === b.violationLosses &&
     a.violationCount === b.violationCount &&
-    a.violationCost === b.violationCost &&
-    a.violationLoss === b.violationLoss &&
-    a.violationGain === b.violationGain &&
+    a.endTier === b.endTier &&
     a.cutAt === b.cutAt &&
     a.cutIgnored === b.cutIgnored &&
     a.sessions === b.sessions

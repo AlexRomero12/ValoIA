@@ -127,26 +127,18 @@ export interface BucketPoint {
   label: string;
   value: number | null;
   games: number;
-  /** Punto aproximado (tier sin respaldo del mmr-history): se dibuja hueco. */
-  approx?: boolean;
 }
 
-// ---------- Rango (tier + RR) como métrica ----------
+// ---------- Rango (tier) como métrica ----------
 
 /**
- * Puntos de rango de una partida: tier * 100 + RR dentro del tier
- * (P3 = 1700-1799, D1 = 1800-1899, D2 = 1900-1999…). Continuo entre tiers:
- * subir de P3 100 RR = caer en D1 0 RR. null si no hay tier (Unrated).
- *
- * Sin clamp superior a propósito: el RR real puede pasar de 100
- * (derank protection, refunds) y Radiant juega a cientos de RR
- * (tier 27 + RR real, p. ej. 2700+350). Clampearlo aplanaba esos casos
- * y confundía los bordes de tier (P3·100 == D1·0).
+ * Puntos de rango de una partida: tier * 100 (P3 = 1700, D1 = 1800, D2 = 1900…).
+ * Continuo entre tiers y sin RR (la API oficial no lo expone). null si no hay
+ * tier (Unrated).
  */
 export function rankPointsOf(m: MatchRow): number | null {
   if (typeof m.tier !== 'number' || m.tier <= 0) return null;
-  const rr = typeof m.rr === 'number' && Number.isFinite(m.rr) ? m.rr : 0;
-  return m.tier * 100 + Math.max(0, rr);
+  return m.tier * 100;
 }
 
 /** Piso del eje Y de la métrica de rango: Platinum 3 (no mostrar rangos más bajos). */
@@ -192,7 +184,7 @@ export function buildTimeline(
       .sort((a, b) => a.timestamp - b.timestamp)
       .map((m, i) => {
         const { key, label } = keyFor(m.timestamp, gran);
-        return { key: `${key}#${m.timestamp}-${i}`, label, value: rankPointsOf(m), games: 1, approx: m.tierApprox ?? false };
+        return { key: `${key}#${m.timestamp}-${i}`, label, value: rankPointsOf(m), games: 1 };
       });
   }
   const accs = new Map<string, BucketAcc>();
@@ -256,8 +248,7 @@ export function unionOf(msLists: MatchRow[][], pick: (m: MatchRow) => string): s
  * Mezcla los summaries de las cuentas de un jugador (multi-cuenta):
  *  - Partidas unidas y deduplicadas por matchId (si dos cuentas jugaron el mismo
  *    game el mismo partido no se cuenta doble).
- *  - Rango (tier/elo) de la cuenta que esté mejor clasificada, sin reescalar el
- *    elo de una cuenta contra otra (cada una conserva su propio número).
+ *  - Rango (tier) de la cuenta que esté mejor clasificada.
  */
 export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): ValSummary | undefined {
   const ok = summaries.filter((s): s is ValSummary => s != null);
@@ -279,7 +270,7 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
 
   let best = ok[0];
   for (const s of ok.slice(1)) {
-    if ((s.currentElo ?? -1) > (best.currentElo ?? -1)) best = s;
+    if ((s.currentTier ?? -1) > (best.currentTier ?? -1)) best = s;
   }
 
   const st = computeStats(matches);
@@ -287,10 +278,6 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
   const archivedMatches = ok.reduce((a, s) => a + (s.window?.archivedMatches ?? 0), 0);
   const syncedAt = ok.reduce<string | null>(
     (a, s) => ((s.window?.syncedAt ?? '') > (a ?? '') ? (s.window.syncedAt ?? null) : a),
-    null,
-  );
-  const mmrSyncedAt = ok.reduce<string | null>(
-    (a, s) => ((s.window?.mmrSyncedAt ?? '') > (a ?? '') ? s.window.mmrSyncedAt ?? null : a),
     null,
   );
   const truncated = ok.some((s) => s.window?.truncated === true);
@@ -322,12 +309,7 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
       fetchedMatches,
       consideredMatches: matches.length,
       archivedMatches,
-      seasonShort: ok[0].window?.seasonShort ?? null,
-      rrTotal: st.rrTotal,
-      rrMissing: st.rrMissing,
-      eloTotal: null,
       syncedAt,
-      mmrSyncedAt,
       truncated,
     },
     kpis: {
@@ -346,8 +328,6 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
     prev,
     currentTier: best.currentTier,
     startTier: best.startTier,
-    currentElo: best.currentElo,
-    currentRR: best.currentRR,
     byAgent,
     byMap,
     matches,

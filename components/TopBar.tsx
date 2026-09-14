@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { UserMenu } from '@/components/auth/UserMenu';
 import { MobileNav } from '@/components/MobileNav';
+import { LocaleSwitch, useT } from '@/lib/i18n/useLocale';
 import { useCooldown } from '@/lib/useCooldown';
 
 
@@ -17,13 +18,14 @@ interface TopBarProps {
   disabled?: boolean;
   /** Motivo a mostrar cuando `disabled` lo apaga por algo que no es cooldown. */
   disabledReason?: string;
-  activePage: 'ranked' | 'equipo' | 'tienda' | 'reglas' | 'perfiles';
+  activePage: 'ranked' | 'equipo' | 'reglas' | 'perfiles';
 }
 
 const REFRESH_COOLDOWN_S = 60;
 
 export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, loading, disabled, disabledReason, activePage }: TopBarProps) {
   const emColor = accent === 'red' ? '#ff4655' : '#35b6ff';
+  const t = useT();
   // Anti-spam global: cada actualización bloquea el botón 1 minuto.
   const cd = useCooldown(REFRESH_COOLDOWN_S);
   const locked = cd.locked || loading || disabled;
@@ -57,26 +59,26 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
         {chip}
         <div className="spacer" />
         {updated ? <span className="updated">{updated}</span> : null}
+        <LocaleSwitch />
         <UserMenu />
         <button
           className={accent === 'red' ? 'primary-red' : 'primary-blue'}
           onClick={handleRefresh}
           disabled={locked}
           title={refreshTitle}
-          aria-label="Actualizar"
+          aria-label={t('nav.refresh')}
         >
           {cd.locked ? <span className="btn-cd">{cd.left}</span> : <RefreshIcon />}
-          <span className="btn-label">Actualizar</span>
+          <span className="btn-label">{t('nav.refresh')}</span>
           {loading ? <span className="loader" /> : null}
         </button>
       </div>
 
       <nav className="nav" style={{ ['--accent-nav' as string]: emColor }}>
-        <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''}>Ranked</Link>
-        <Link href="/team" className={activePage === 'equipo' ? 'active' : ''}>Equipo</Link>
-        <Link href="/reglas" className={activePage === 'reglas' ? 'active' : ''}>Reglas</Link>
-        <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>
-        <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''}>Perfiles</Link>
+        <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''}>{t('nav.ranked')}</Link>
+        <Link href="/team" className={activePage === 'equipo' ? 'active' : ''}>{t('nav.team')}</Link>
+        <Link href="/reglas" className={activePage === 'reglas' ? 'active' : ''}>{t('nav.rules')}</Link>
+        <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''}>{t('nav.profile')}</Link>
       </nav>
 
       <MobileNav activePage={activePage} />

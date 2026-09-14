@@ -1,17 +1,15 @@
 import { listVisibleProfiles } from './profiles';
 import { refreshPlayer } from './refresh';
-import { BUCKET_LIMIT } from './henrik';
+import { BUCKET_LIMIT } from './riot/matches';
 
 /**
- * Sincroniza el bucket + MMR de los perfiles VISIBLES (los que aparecen en
- * Ranked/Reglas), secuencialmente para respetar el throttle global de
- * Henrik (~18 req/min). El sync incremental hace que un ciclo típico sea
- * 1 request por perfil.
+ * Sincroniza el bucket de partidas del perfil único para que abrir el
+ * dashboard cueste menos requests. El sync incremental es barato cuando no hay
+ * novedades (solo lee el matchlist).
  */
 export async function warmAllPlayers(want: number = BUCKET_LIMIT): Promise<void> {
   for (const member of listVisibleProfiles()) {
     try {
-      await refreshPlayer(member.id, 'mmr', want);
       await refreshPlayer(member.id, 'matches', want);
     } catch {
       // El siguiente ciclo lo reintenta; el dashboard igual se sirve del disco.

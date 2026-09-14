@@ -91,6 +91,10 @@ export interface Profile {
   prefs?: ProfilePref[];
   /** Reglas de sesión; ausente = defaults globales sin pool. */
   rules?: SessionRules;
+  /** Perfil de otro usuario con opt-in público (solo lectura en comparativas). */
+  publicRead?: boolean;
+  /** Etiqueta del dueño cuando el perfil es público (para la UI). */
+  ownerName?: string;
 }
 
 /** Lista de cuentas (principal + alternativas) de un perfil. */

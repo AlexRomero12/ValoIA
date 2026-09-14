@@ -16,11 +16,11 @@ export function RulesIntro({ hasRules }: { hasRules: boolean }) {
             la hora exacta en que debiste cerrar.
           </li>
           <li>
-            <b>Disciplina de pool:</b> marca cada ranked con agente fuera de tu pool (o prohibido) y suma el RR que
-            costó.
+            <b>Disciplina de pool:</b> marca cada ranked con agente fuera de tu pool (o prohibido) y muestra el
+            récord de esas partidas.
           </li>
           <li>
-            <b>RR evitable:</b> compara tu RR real con el que habrías tenido si cerrabas la sesión en el corte.
+            <b>Derrotas evitables:</b> compara tu récord real con el que habrías tenido si cerrabas la sesión en el corte.
           </li>
           <li>
             <b>Impacto y metas:</b> FB/FD, conversión de kills y las metas semanales que definas.

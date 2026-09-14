@@ -25,8 +25,8 @@ function isoDayLocal(ts: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function fmtRR(v: number | null): string {
-  return v == null ? '—' : `${v > 0 ? '+' : ''}${v}`;
+function recordText(wins: number, losses: number, draws = 0): string {
+  return `${wins}V-${losses}D${draws ? `-${draws}E` : ''}`;
 }
 
 /** Impacto ponderado (FB/FD por partida) de un conjunto de días con detalle de kill feed. */
@@ -55,26 +55,13 @@ function renderWeekImpact(w: RulesWeek): ReactNode {
 }
 
 /**
- * Unión de un día calculado en vivo con su snapshot guardado:
- * si el live quedó parcial (la API ya no da el RR de partidas viejas) pero la
- * copia histórica estaba completa, usamos la copia.
+ * Unión de un día calculado en vivo con su snapshot guardado.
+ * Sin RR, la evaluación en vivo de un día con partidas ya es completa: solo se
+ * usa el snapshot si el día llegó sin detalle (no debería ocurrir aquí).
  */
 function enrichWithHistory(d: DayEvaluation, saved?: StoredRulesDay): DayEvaluation {
-  if (!saved || d.rrCoverage) return d;
-  if (!saved.rrCoverage) return d;
-  return {
-    ...d,
-    realRR: saved.realRR,
-    planRR: saved.planRR,
-    planPoolRR: saved.planPoolRR,
-    rrCoverage: true,
-    rrMissing: 0,
-    violationCost: saved.violationCost,
-    violationLoss: saved.violationLoss ?? (saved.violationCost != null && saved.violationCost < 0 ? saved.violationCost : null),
-    violationGain: saved.violationGain ?? (saved.violationCost != null && saved.violationCost > 0 ? saved.violationCost : null),
-    stored: true,
-    storedMatches: saved.matches,
-  };
+  if (d.matches.length > 0 || !saved) return d;
+  return storedToRulesDay(saved);
 }
 
 export default function ReglasPage() {
@@ -120,7 +107,7 @@ export default function ReglasPage() {
   });
   useEffectComments(historyQ.data?.days, setHistory);
 
-  const { allDays, currentDays, pastWeeks, weekTotals, weekImpact, weekPartial, weekRange } = useMemo(() => {
+  const { allDays, currentDays, pastWeeks, weekTotals, weekImpact, weekRange } = useMemo(() => {
     const matches: MatchRow[] = [...(data?.matches ?? [])].sort((a, b) => a.timestamp - b.timestamp);
     const days = new Map<string, MatchRow[]>();
     for (const m of matches) {
@@ -153,10 +140,7 @@ export default function ReglasPage() {
       else past.push(d);
     }
 
-    const sum = (pick: (d: DayEvaluation) => number | null): number | null => {
-      const vals = current.map(pick).filter((v): v is number => v != null);
-      return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
-    };
+    const sum = (pick: (d: DayEvaluation) => number): number => current.reduce((a, d) => a + pick(d), 0);
 
     return {
       allDays: evaluated,
@@ -165,18 +149,19 @@ export default function ReglasPage() {
       weekImpact: impactOfDays(current),
       weekTotals: {
         matches: current.reduce((a, d) => a + d.matches.length, 0),
-        realRR: sum((d) => d.realRR),
-        planRR: sum((d) => d.planRR),
-        planPoolRR: sum((d) => d.planPoolRR),
-        violationCost: sum((d) => d.violationCost),
-        violationLoss: sum((d) => d.violationLoss),
-        violationGain: sum((d) => d.violationGain),
+        wins: sum((d) => d.wins),
+        losses: sum((d) => d.losses),
+        draws: sum((d) => d.draws),
+        planWins: sum((d) => d.planWins),
+        planLosses: sum((d) => d.planLosses),
+        poolWins: sum((d) => d.poolWins),
+        poolLosses: sum((d) => d.poolLosses),
+        violationLosses: sum((d) => d.violationLosses),
         violationCount: current.reduce((a, d) => a + d.violationCount, 0),
         bannedCount: current.reduce((a, d) => a + d.bannedCount, 0),
         cutsIgnored: current.filter((d) => d.cutIgnored).length,
         cutsTotal: current.filter((d) => d.cutAt != null).length,
       },
-      weekPartial: current.some((d) => !d.rrCoverage),
       weekRange: `${new Date(mondayTs).toLocaleDateString('es', { day: 'numeric', month: 'short' })} — ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'short' })}`,
     };
   }, [data, mondayTs, history, rules, pid]);
@@ -234,7 +219,7 @@ export default function ReglasPage() {
   useEffect(() => {
     if (saving.current || !pid) return;
     const pending = allDays
-      .filter((d) => d.rrCoverage && d.matches.length > 0)
+      .filter((d) => d.matches.length > 0)
       .map((d) => toStoredRulesDay(d, pid, rules?.rulesVersion))
       .filter((s) => !history[s.key] || !sameRulesDay(history[s.key], s));
     if (!pending.length) return;
@@ -306,7 +291,7 @@ export default function ReglasPage() {
         subtitle={['Cortes, pausas', 'y pool']}
         chip={
           <span className="chip-red">
-            {loadingProfiles || coldLoad ? 'cargando…' : `${wt.matches} competitivas · ${fmtRR(wt.realRR)} RR (semana)`}
+            {loadingProfiles || coldLoad ? 'cargando…' : `${wt.matches} competitivas · ${recordText(wt.wins, wt.losses)} (semana)`}
           </span>
         }
         updated={data ? `actualizado ${new Date(data.generatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null}
@@ -320,7 +305,7 @@ export default function ReglasPage() {
       <LoadingOverlay
         open={coldLoad}
         title={`Analizando a ${profile?.label ?? ''}`}
-        message="Partidas y RR de los últimos 30 días (puede tardar en la primera carga)"
+        message="Partidas de los últimos 30 días (puede tardar en la primera carga)"
         blocking
       />
 
@@ -352,18 +337,18 @@ export default function ReglasPage() {
             <div className="rules-hero-main">
               <span className="rules-hero-eyebrow">Semana {weekRange}</span>
               <div className="rules-hero-line">
-                <span className={`rules-hero-num ${(wt.realRR ?? 0) < 0 ? 'loss' : 'win'}`}>{fmtRR(wt.realRR)}</span>
-                <span className="rules-hero-unit">RR</span>
+                <span className={`rules-hero-num ${wt.losses > wt.wins ? 'loss' : 'win'}`}>{recordText(wt.wins, wt.losses, wt.draws)}</span>
+                <span className="rules-hero-unit">semana</span>
               </div>
             </div>
             <div className="rules-hero-deltas">
               <div className="rules-hero-delta">
                 <span className="rules-hero-delta-lbl">Con regla</span>
-                <span className="rules-hero-delta-val">{fmtRR(wt.planRR)}</span>
+                <span className="rules-hero-delta-val">{recordText(wt.planWins, wt.planLosses)}</span>
               </div>
               <div className="rules-hero-delta">
                 <span className="rules-hero-delta-lbl">Regla + pool</span>
-                <span className="rules-hero-delta-val">{fmtRR(wt.planPoolRR)}</span>
+                <span className="rules-hero-delta-val">{recordText(wt.poolWins, wt.poolLosses)}</span>
               </div>
             </div>
             <div className="rules-hero-faltas">
@@ -374,7 +359,7 @@ export default function ReglasPage() {
                 {wt.cutsTotal ? `${wt.cutsIgnored}/${wt.cutsTotal} cortes ignorados` : 'sin cortes'}
               </span>
               <span className={`rules-falta${wt.violationCount ? ' bad' : ''}`}>
-                {wt.violationCount ? `${wt.violationCount} fuera de pool · ${fmtRR(wt.violationLoss)} RR` : 'pool limpio'}
+                {wt.violationCount ? `${wt.violationCount} fuera de pool · ${wt.violationLosses} D` : 'pool limpio'}
               </span>
               {wt.bannedCount ? <span className="rules-falta bad">{wt.bannedCount} prohibidos</span> : null}
               {weekImpact ? (
@@ -385,7 +370,6 @@ export default function ReglasPage() {
                   Impacto FB {weekImpact.fb.toFixed(1)} · FD {weekImpact.fd.toFixed(1)}
                 </span>
               ) : null}
-              {weekPartial ? <span className="rules-falta warn">RR parcial</span> : null}
             </div>
           </div>
 
@@ -427,14 +411,13 @@ export default function ReglasPage() {
             <div className="panel" style={{ marginTop: 20 }}>
               <h2>Semanas anteriores · resumen</h2>
               <p className="rules-cover-note">
-                Basado en las últimas {LIMIT} competitivas de la API + snapshots guardados de días completos
-                (la API solo conserva el RR de las ~20 partidas más recientes).
+                Basado en las últimas {LIMIT} competitivas de la API + snapshots guardados de días completos.
               </p>
               <div className="table-scroll desktop-only">
                 <table className="score-table rules-table">
                   <thead>
                     <tr>
-                      <th>Semana</th><th className="num">Partidas</th><th className="num">FB/FD</th><th className="num">RR real</th>
+                      <th>Semana</th><th className="num">Partidas</th><th className="num">FB/FD</th><th className="num">Récord real</th>
                       <th className="num">Con regla</th><th className="num">Regla + pool</th>
                       <th className="num">Fuera de pool</th><th className="num">Cortes</th><th />
                     </tr>
@@ -445,19 +428,17 @@ export default function ReglasPage() {
                         <tr>
                           <td>
                             {w.label}
-                            {w.rrPartial ? (
-                              <span className="rules-warn" title="Algún día sin RR completo ni snapshot"> · parcial</span>
-                            ) : w.days.every((d) => d.stored) ? (
-                              <span className="rules-warn" title="RR recuperado del snapshot guardado"> · guardado</span>
+                            {w.days.every((d) => d.stored) ? (
+                              <span className="rules-warn" title="Evaluación recuperada del snapshot guardado"> · guardado</span>
                             ) : null}
                           </td>
                           <td className="num">{w.matches}</td>
                           <td className="num">{renderWeekImpact(w)}</td>
-                          <td className={`num ${(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}`}>{fmtRR(w.realRR)}</td>
-                          <td className="num">{fmtRR(w.planRR)}</td>
-                          <td className="num">{fmtRR(w.planPoolRR)}</td>
+                          <td className={`num ${w.losses > w.wins ? 'stat-loss' : 'stat-win'}`}>{recordText(w.wins, w.losses, w.draws)}</td>
+                          <td className="num">{recordText(w.planWins, w.planLosses, w.planDraws)}</td>
+                          <td className="num">{recordText(w.poolWins, w.poolLosses, w.poolDraws)}</td>
                           <td className="num">
-                            {w.violationCount ? `${w.violationCount}${w.bannedCount ? ` (${w.bannedCount} proh.)` : ''} · ${fmtRR(w.violationLoss)}` : '—'}
+                            {w.violationCount ? `${w.violationCount}${w.bannedCount ? ` (${w.bannedCount} proh.)` : ''} · ${w.violationLosses} D` : '—'}
                           </td>
                           <td className="num">
                             {w.cutsTotal ? `${w.cutsIgnored}/${w.cutsTotal} ignorados` : '—'}
@@ -489,9 +470,7 @@ export default function ReglasPage() {
                   <div key={w.key} className="rules-week-card">
                     <div className="rwc-head">
                       <b>{w.label}</b>
-                      {w.rrPartial ? (
-                        <span className="rules-warn">· parcial</span>
-                      ) : w.days.every((d) => d.stored) ? (
+                      {w.days.every((d) => d.stored) ? (
                         <span className="rules-warn">· guardado</span>
                       ) : null}
                     </div>
@@ -502,18 +481,18 @@ export default function ReglasPage() {
                       <b>{renderWeekImpact(w)}</b>
                     </div>
                     <div className="rwc-row">
-                      <span>RR real</span>
-                      <b className={(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}>{fmtRR(w.realRR)}</b>
+                      <span>Récord real</span>
+                      <b className={w.losses > w.wins ? 'stat-loss' : 'stat-win'}>{recordText(w.wins, w.losses, w.draws)}</b>
                       <span>Con regla</span>
-                      <b>{fmtRR(w.planRR)}</b>
+                      <b>{recordText(w.planWins, w.planLosses, w.planDraws)}</b>
                     </div>
                     <div className="rwc-row">
                       <span>Regla+pool</span>
-                      <b>{fmtRR(w.planPoolRR)}</b>
+                      <b>{recordText(w.poolWins, w.poolLosses, w.poolDraws)}</b>
                       <span>Fuera de pool</span>
                       <b>
                         {w.violationCount
-                          ? `${w.violationCount}${w.bannedCount ? ` (${w.bannedCount} proh.)` : ''} · ${fmtRR(w.violationLoss)}`
+                          ? `${w.violationCount}${w.bannedCount ? ` (${w.bannedCount} proh.)` : ''} · ${w.violationLosses} D`
                           : '—'}
                       </b>
                     </div>

@@ -1,17 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { env } from './env';
-import { fetchMatchesPage, henrikMatchId, henrikMatchTimestamp, HENRIK_CONFIG, PAGE_SIZE, type HenrikMatch } from './henrik';
+import { matchIdOf, matchTimestamp, type MatchRecord } from './providers/types';
 
 /**
  * Archivo acumulativo de partidas por jugador (modelo tracker.gg).
  *
- * El bucket de partidas (`henrik:matches:v2`) es una ventana fresca de las
+ * El bucket de partidas (`riot:matches:v1`) es una ventana fresca de las
  * últimas 40: cuando el jugador juega más, las viejas salen de la API y con
- * ellas se perderían KPIs de temporada, WR por agente/mapa, etc. Este módulo
- * es la contraparte persistente: TODA partida competitiva descargada se guarda
- * para siempre (una partida = un archivo JSON) junto con un índice compacto
- * por jugador.
+ * ellas se perderían KPIs de ventanas largas, WR por agente/mapa, etc. Este
+ * módulo es la contraparte persistente: TODA partida competitiva descargada se
+ * guarda para siempre (una partida = un archivo JSON) junto con un índice
+ * compacto por jugador.
  *
  * IMPORTANTE — durabilidad: este store es EXTERNO al cache L1/L2 (lib/cache.ts).
  * Vive en su propio directorio (`data/archive/`, configurable con ARCHIVE_DIR)
@@ -21,18 +21,13 @@ import { fetchMatchesPage, henrikMatchId, henrikMatchTimestamp, HENRIK_CONFIG, P
  *
  * Flujo de llenado:
  *  - Incremental ($0 requests): cada sync del bucket archiva las partidas
- *    nuevas que trae (página 0 y páginas profundas). Lo hace syncMatchesBucket.
- *  - Backfill profundo (una vez): `backfillArchive` pagina más allá del bucket
- *    hasta el fondo del historial o el borde de la temporada actual.
+ *    nuevas que trae (página 0 y páginas profundas). Lo hace riot/matches.
  *
  * Layout en disco:
  *  data/archive/
  *    {name}_{tag}/index.json         -> ArchiveIndex
- *    {name}_{tag}/{matchId}.json     -> HenrikMatch (payload completo)
+ *    {name}_{tag}/{matchId}.json     -> MatchRecord (payload completo)
  */
-
-const BACKFILL_DEFAULT_PAGES = 40; // ~400 partidas competitivas por pasada
-const BACKFILL_MAX_PAGES = 150; // techo duro por ejecución (~25 min con throttle)
 
 export type BackfillMode = 'season' | 'all';
 export type BackfillStop = 'empty' | 'partial' | 'maxPages' | 'seasonBoundary' | 'error' | 'skipped';
@@ -59,31 +54,6 @@ export interface ArchiveStats {
 export interface MergeResult {
   added: number;
   total: number;
-}
-
-export interface BackfillOptions {
-  /** 'season' (default) = hasta cubrir la temporada actual; 'all' = hasta el fondo */
-  mode?: BackfillMode;
-  /** páginas de 10 partidas; default 40, tope 150 */
-  maxPages?: number;
-  /** re-ejecutar aunque ya exista un backfill cubierto */
-  force?: boolean;
-}
-
-export interface BackfillResult {
-  name: string;
-  tag: string;
-  pages: number;
-  /** partidas descargadas (incluye duplicados ya archivados) */
-  fetched: number;
-  /** partidas realmente nuevas en el archivo */
-  added: number;
-  total: number;
-  oldestAt: number | null;
-  newestAt: number | null;
-  stoppedBy: BackfillStop;
-  error?: string;
-  durationMs: number;
 }
 
 // ---------- Store en disco (externo al cache) ----------
@@ -155,7 +125,7 @@ function matchFileFor(key: string, matchId: string): string {
 
 // Capa caliente en memoria (sin TTL: el archivo es eterno; se recalienta desde disco)
 const memIndex = new Map<string, ArchiveIndex>();
-const memMatches = new Map<string, HenrikMatch>();
+const memMatches = new Map<string, MatchRecord>();
 
 function matchMemKey(key: string, matchId: string): string {
   return `${key}:${matchId}`;
@@ -173,12 +143,12 @@ function rebuildIndex(key: string): ArchiveIndex {
     }
     for (const f of files) {
       if (!f.endsWith('.json') || f === 'index.json') continue;
-      const m = readJson<HenrikMatch>(path.join(ARCHIVE_DIR, key, f));
-      const id = m ? henrikMatchId(m) : '';
+      const m = readJson<MatchRecord>(path.join(ARCHIVE_DIR, key, f));
+      const id = m ? matchIdOf(m) : '';
       if (!m || !id) continue;
       memMatches.set(matchMemKey(key, id), m);
       idx.ids.push(id);
-      const t = henrikMatchTimestamp(m);
+      const t = matchTimestamp(m);
       if (t) {
         idx.oldestAt = idx.oldestAt == null ? t : Math.min(idx.oldestAt, t);
         idx.newestAt = idx.newestAt == null ? t : Math.max(idx.newestAt, t);
@@ -211,11 +181,11 @@ export function getArchiveStats(nameArg: string, tagArg: string): ArchiveStats {
   return { total: idx.total, oldestAt: idx.oldestAt, newestAt: idx.newestAt, updatedAt: idx.updatedAt || null, backfill: idx.backfill };
 }
 
-function loadMatch(key: string, matchId: string): HenrikMatch | null {
+function loadMatch(key: string, matchId: string): MatchRecord | null {
   const memKey = matchMemKey(key, matchId);
   const hit = memMatches.get(memKey);
   if (hit) return hit;
-  const disk = readJson<HenrikMatch>(matchFileFor(key, matchId));
+  const disk = readJson<MatchRecord>(matchFileFor(key, matchId));
   if (disk?.metadata?.match_id) {
     memMatches.set(memKey, disk);
     return disk;
@@ -228,7 +198,7 @@ function loadMatch(key: string, matchId: string): HenrikMatch | null {
  * Las partidas incompletas se ignoran: el sync las traerá de nuevo cuando
  * estén terminadas y entonces sí se archivan (evita copias stale eternas).
  */
-export function mergeIntoArchive(nameArg: string, tagArg: string, incoming: HenrikMatch[]): MergeResult {
+export function mergeIntoArchive(nameArg: string, tagArg: string, incoming: MatchRecord[]): MergeResult {
   if (!incoming.length) return { added: 0, total: readArchiveIndex(nameArg, tagArg).total };
 
   const key = playerKey(nameArg, tagArg);
@@ -240,7 +210,7 @@ export function mergeIntoArchive(nameArg: string, tagArg: string, incoming: Henr
   const addedIds: string[] = [];
 
   for (const m of incoming) {
-    const id = henrikMatchId(m);
+    const id = matchIdOf(m);
     if (!id || seen.has(id)) continue;
     if (m.metadata?.is_completed === false) continue;
     seen.add(id);
@@ -248,7 +218,7 @@ export function mergeIntoArchive(nameArg: string, tagArg: string, incoming: Henr
     memMatches.set(matchMemKey(key, id), m);
     writeJson(matchFileFor(key, id), m);
     added += 1;
-    const t = henrikMatchTimestamp(m);
+    const t = matchTimestamp(m);
     if (t) {
       oldestAt = oldestAt == null ? t : Math.min(oldestAt, t);
       newestAt = newestAt == null ? t : Math.max(newestAt, t);
@@ -268,122 +238,20 @@ export function mergeIntoArchive(nameArg: string, tagArg: string, incoming: Henr
 }
 
 /** Todas las partidas archivadas de un jugador, más recientes primero. */
-export function getArchiveMatches(nameArg: string, tagArg: string): HenrikMatch[] {
+export function getArchiveMatches(nameArg: string, tagArg: string): MatchRecord[] {
   const key = playerKey(nameArg, tagArg);
   const idx = readArchiveIndex(nameArg, tagArg);
-  const out: HenrikMatch[] = [];
+  const out: MatchRecord[] = [];
   for (const id of idx.ids) {
     const m = loadMatch(key, id);
     if (m) out.push(m);
   }
-  return out.sort((a, b) => henrikMatchTimestamp(b) - henrikMatchTimestamp(a));
+  return out.sort((a, b) => matchTimestamp(b) - matchTimestamp(a));
 }
 
 /** Lectura de una partida archivada (memoria, luego disco). */
-export function getArchiveMatchById(nameArg: string, tagArg: string, matchId: string): HenrikMatch | null {
+export function getArchiveMatchById(nameArg: string, tagArg: string, matchId: string): MatchRecord | null {
   if (!matchId) return null;
   return loadMatch(playerKey(nameArg, tagArg), matchId);
 }
 
-/**
- * Backfill profundo: pagina el historial competitivo más allá del bucket
- * (hasta BACKFILL_MAX_PAGES) archivando todo lo que encuentre. El progreso
- * persiste página a página, así que un corte por rate limit no pierde trabajo.
- *
- * Costo con key Basic (throttle propio ~24 req/min): ~1.8 s por página.
- * Una segunda ejecución con la misma profundidad se salta si la anterior
- * terminó bien (salvo force=true).
- */
-export async function backfillArchive(nameArg: string, tagArg: string, opts: BackfillOptions = {}): Promise<BackfillResult> {
-  const startedAt = Date.now();
-  const mode: BackfillMode = opts.mode === 'all' ? 'all' : 'season';
-  const maxPages = Math.max(1, Math.min(Math.floor(opts.maxPages ?? BACKFILL_DEFAULT_PAGES), BACKFILL_MAX_PAGES));
-
-  const idx0 = readArchiveIndex(nameArg, tagArg);
-  const prev = idx0.backfill;
-  // Solo se considera cubierto si la pasada anterior terminó por haber llegado
-  // al fondo o al borde de temporada. Un 'maxPages' (techo, temporada sin
-  // cubrir) o 'error' NUNCA se marcan como completos: repetir con el mismo
-  // maxPages devolvía 'skipped' y el archivo jamás avanzaba.
-  const covered = prev != null && prev.mode === mode && prev.pages >= maxPages &&
-    (prev.stoppedBy === 'seasonBoundary' || prev.stoppedBy === 'partial' || prev.stoppedBy === 'skipped');
-  if (!opts.force && covered) {
-    return {
-      name: nameArg,
-      tag: tagArg,
-      pages: prev.pages,
-      fetched: 0,
-      added: 0,
-      total: idx0.total,
-      oldestAt: idx0.oldestAt,
-      newestAt: idx0.newestAt,
-      stoppedBy: 'skipped',
-      durationMs: Date.now() - startedAt,
-    };
-  }
-
-  const name = encodeURIComponent(nameArg);
-  const tag = encodeURIComponent(tagArg);
-  const affinity = HENRIK_CONFIG.region();
-  const platform = HENRIK_CONFIG.platform();
-  let currentSeason: string | null | undefined = undefined; // undefined = aún sin dato
-  let pages = 0;
-  let fetched = 0;
-  let added = 0;
-  let oldestAt = idx0.oldestAt;
-  let newestAt = idx0.newestAt;
-  let stoppedBy: BackfillStop = 'maxPages';
-  let errorMsg: string | undefined;
-
-  for (let p = 0; p < maxPages; p++) {
-    let batch: HenrikMatch[];
-    try {
-      batch = await fetchMatchesPage(affinity, platform, name, tag, 'competitive', p * PAGE_SIZE, PAGE_SIZE);
-    } catch (err) {
-      stoppedBy = 'error';
-      errorMsg = err instanceof Error ? err.message : String(err);
-      break;
-    }
-    pages += 1;
-    fetched += batch.length;
-    added += mergeIntoArchive(nameArg, tagArg, batch).added;
-    for (const m of batch) {
-      const t = henrikMatchTimestamp(m);
-      if (t) {
-        oldestAt = oldestAt == null ? t : Math.min(oldestAt, t);
-        newestAt = newestAt == null ? t : Math.max(newestAt, t);
-      }
-    }
-    // Menos de lo pedido => no hay más historial en la API.
-    if (batch.length < PAGE_SIZE) {
-      stoppedBy = 'partial';
-      break;
-    }
-    if (currentSeason === undefined) currentSeason = batch[0]?.metadata?.season?.short ?? null;
-    // Una página completa fuera de la temporada actual => la temporada quedó cubierta.
-    if (mode === 'season' && currentSeason && batch.every((m) => (m.metadata?.season?.short ?? null) !== currentSeason)) {
-      stoppedBy = 'seasonBoundary';
-      break;
-    }
-  }
-
-  const idx = readArchiveIndex(nameArg, tagArg);
-  idx.backfill = { at: Date.now(), mode, pages, added, stoppedBy };
-  idx.updatedAt = Date.now();
-  memIndex.set(playerKey(nameArg, tagArg), idx);
-  writeJson(indexFileFor(playerKey(nameArg, tagArg)), idx);
-
-  return {
-    name: nameArg,
-    tag: tagArg,
-    pages,
-    fetched,
-    added,
-    total: idx.total,
-    oldestAt,
-    newestAt,
-    stoppedBy,
-    error: errorMsg,
-    durationMs: Date.now() - startedAt,
-  };
-}

@@ -1,26 +1,45 @@
 import { NextRequest } from 'next/server';
-import { deleteProfile, listProfilesFor, scopeProfiles, upsertProfile, type UpsertProfileInput } from '@/lib/profiles';
-import { viewerFromRequest } from '@/lib/auth';
+import {
+  listProfilesFor,
+  listPublicProfilesFor,
+  scopeProfiles,
+  upsertProfile,
+  type UpsertProfileInput,
+} from '@/lib/profiles';
+import { getUser } from '@/lib/auth';
+import { viewerOrSingle } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Perfiles propios. Con `?viewable=1` se añaden los perfiles públicos de otros
+ * usuarios (opt-in vigente) marcados como solo lectura: así Ranked/Equipo
+ * pueden comparar sin exponer datos de quien no consintió.
+ */
 export async function GET(req: NextRequest) {
-  const viewer = viewerFromRequest(req);
+  const viewer = viewerOrSingle(req);
   if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
   try {
-    return Response.json({ profiles: listProfilesFor(viewer) }, { headers: { 'Cache-Control': 'no-store' } });
+    const own = listProfilesFor(viewer);
+    if (req.nextUrl.searchParams.get('viewable') !== '1') {
+      return Response.json({ profiles: own }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+    const seen = new Set(own.map((p) => p.id));
+    const others = listPublicProfilesFor(viewer)
+      .filter((p) => !seen.has(p.id))
+      .map((p) => ({ ...p, publicRead: true, ownerName: getUser(p.owner ?? '')?.username ?? p.owner, rules: undefined }));
+    return Response.json({ profiles: [...own, ...others] }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }
 
 /**
- * Acciones:
- *  - { action: 'upsert', profile }  crea (sin id) o actualiza (con id, solo del dueño)
- *  - { action: 'delete', id }       borra (solo del dueño)
+ * Acción única: { action: 'upsert', profile } guarda el perfil del usuario.
+ * El Riot ID solo se cambia vinculando la cuenta de Riot (RSO/mock).
  */
 export async function POST(req: NextRequest) {
-  const viewer = viewerFromRequest(req);
+  const viewer = viewerOrSingle(req);
   if (!viewer) return Response.json({ error: 'No autenticado', code: 'UNAUTHORIZED' }, { status: 401 });
 
   let body: { action?: string; profile?: UpsertProfileInput; id?: string };
@@ -38,6 +57,7 @@ export async function POST(req: NextRequest) {
     }
     if (body.action === 'delete') {
       if (!body.id) return Response.json({ error: 'Falta id' }, { status: 400 });
+      const { deleteProfile } = await import('@/lib/profiles');
       const profiles = deleteProfile(body.id, viewer);
       return Response.json({ ok: true, profiles: scopeProfiles(profiles, viewer) });
     }

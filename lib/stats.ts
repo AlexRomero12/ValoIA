@@ -1,11 +1,11 @@
 /**
  * Agregación de stats de partidas (pura e isomorfa: cliente y servidor).
  *
- * Única fuente de verdad para WR/K/D/ACS/ADR/HS% y RR, alimentada tanto por
- * `MatchRow` (cliente) como por `MatchSummary` (servidor Henrik/Riot). Los
- * totales crudos (`score`, `damageDealt`, `headshots`, `shots`) se usan cuando
- * existen; si no, se reconstruyen desde los valores redondeados por partida
- * ponderando por rondas para no meter ±0.5 por partida.
+ * Única fuente de verdad para WR/K/D/ACS/ADR/HS%, alimentada tanto por
+ * `MatchRow` (cliente) como por `MatchSummary` (servidor). Los totales crudos
+ * (`score`, `damageDealt`, `headshots`, `shots`) se usan cuando existen; si no,
+ * se reconstruyen desde los valores redondeados por partida ponderando por
+ * rondas para no meter ±0.5 por partida.
  */
 
 /** Campos mínimos para agregar; `MatchRow` y `MatchSummary` la cumplen. */
@@ -23,7 +23,6 @@ export interface StatMatch {
   damageDealt?: number;
   headshots?: number;
   shots?: number;
-  rrDelta?: number | null;
   firstBloods?: number | null;
   firstDeaths?: number | null;
 }
@@ -38,12 +37,9 @@ export interface PlayerStats {
   acs: number;
   adr: number;
   hsPct: number;
-  rrTotal: number | null;
-  /** Partidas sin dato de RR (la API solo devuelve ~20 recientes): rrTotal es parcial si > 0. */
-  rrMissing: number;
-  /** Primeras sangres por partida (promedio; solo proveedor Henrik). */
+  /** Primeras sangres por partida (promedio). */
   fb?: number;
-  /** Primeras muertes por partida (promedio; solo proveedor Henrik). */
+  /** Primeras muertes por partida (promedio). */
   fd?: number;
 }
 
@@ -70,9 +66,6 @@ export function computeStats(ms: readonly StatMatch[]): PlayerStats {
   let hsRaw = 0;
   let shotsRaw = 0;
   let rounds = 0;
-  let rr = 0;
-  let hasRr = false;
-  let rrMissing = 0;
   let fb = 0;
   let fd = 0;
 
@@ -89,12 +82,6 @@ export function computeStats(ms: readonly StatMatch[]): PlayerStats {
     hsRaw += m.headshots ?? 0;
     shotsRaw += m.shots ?? 0;
     rounds += rds;
-    if (m.rrDelta != null) {
-      rr += m.rrDelta;
-      hasRr = true;
-    } else {
-      rrMissing += 1;
-    }
     fb += m.firstBloods ?? 0;
     fd += m.firstDeaths ?? 0;
   }
@@ -111,17 +98,15 @@ export function computeStats(ms: readonly StatMatch[]): PlayerStats {
     // ACS/ADR se redondean a entero: así se muestran en todo el dash.
     acs: rounds ? Math.round(scoreW / rounds) : 0,
     adr: rounds ? Math.round(dmgW / rounds) : 0,
-    // HS% por conteo directo cuando hay crudos; si no (proveedor Riot),
-    // promedio ponderado del HS% por partida.
+    // HS% por conteo directo cuando hay crudos; si no, promedio ponderado del
+    // HS% por partida.
     hsPct: shotsRaw ? (hsRaw / shotsRaw) * 100 : rounds ? hsW / rounds : 0,
-    rrTotal: hasRr ? rr : null,
-    rrMissing,
     fb: games ? fb / games : undefined,
     fd: games ? fd / games : undefined,
   };
 }
 
-/** Adapta las stats al bloque del payload (`games` → `matches`, sin rr/impacto). */
+/** Adapta las stats al bloque del payload (`games` → `matches`). */
 export function toStatBlock(s: PlayerStats): StatBlock {
   return {
     matches: s.games,

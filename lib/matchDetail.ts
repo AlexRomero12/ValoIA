@@ -1,10 +1,10 @@
-import { getContent } from './valorant';
-import { findCachedValues, cacheSet } from './cache';
+import { cacheSet, findCachedValues } from './cache';
 import { getArchiveMatchById } from './archive';
-import { getHenrikAccount } from './henrik';
-import { listProfiles, listProfilesFor, type ProfileViewer } from './profiles';
+import { getContent } from './riot/content';
+import { getCachedMatches } from './riot/matches';
+import { listViewableProfilesFor, type ProfileViewer } from './profiles';
 import { memberAccounts } from './profileTypes';
-import type { HenrikMatch } from './henrik';
+import { findMePlayer, matchRoundsPlayed, matchTimestamp, type MatchRecord } from './providers/types';
 
 export interface DetailPlayer {
   name: string;
@@ -42,13 +42,11 @@ export interface MatchDetail {
     mapIcon: string | null;
     date: string;
     durationMin: number;
-    seasonShort: string;
     myAgent: string;
     myAgentIcon: string | null;
     won: boolean;
     roundsWon: number;
     roundsLost: number;
-    rrDelta: number | null;
   };
   players: DetailPlayer[];
   rounds: RoundCell[];
@@ -63,68 +61,58 @@ export interface MatchDetail {
 
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Detalle de una partida desde el archivo acumulativo o el bucket cacheado
+ * ($0 requests). El visor decide qué perfiles son accesibles (propios o
+ * públicos con opt-in).
+ */
 export async function getMatchDetail(matchId: string, playerId?: string | null, viewer?: ProfileViewer): Promise<MatchDetail> {
-  const candidates = viewer ? listProfilesFor(viewer) : listProfiles();
+  const candidates = viewer ? listViewableProfilesFor(viewer) : [];
   if (candidates.length === 0) {
-    throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NOT_CACHED' });
+    throw Object.assign(new Error('No hay perfil configurado'), { code: 'NOT_CACHED' });
   }
   const preferred = candidates.find((m) => m.id === playerId) ?? candidates[0];
-  // v3: los DTO guardan URLs de iconos; la clave nueva evita servir detalles
-  // cacheados 7 días con los iconos de agente pesados (~555 KB).
-  const cacheKey = `val:detail:v3:${preferred.id}:${matchId}`;
-  const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
+  // v4: detalle de la rama Riot (sin RR, sin temporada).
+  const cacheKey = `val:detail:v4:${preferred.id}:${matchId}`;
+  const cachedDto = findCachedValues<MatchDetail>(cacheKey)[0];
   if (cachedDto) return cachedDto;
 
-  const orderedMembers = [
-    preferred,
-    ...candidates.filter((m) => m.id !== preferred.id),
-  ];
-
-  let match: HenrikMatch | undefined;
-  let ownerPuuid = '';
-  outer: for (const member of orderedMembers) {
-    // Un perfil multi-cuenta: la partida puede ser de cualquiera de sus cuentas.
-    for (const acct of memberAccounts(member)) {
-      const acc = await getHenrikAccount(acct.name, acct.tag).catch(() => null);
-      if (!acc?.puuid) continue;
-      // 1) Archivo acumulativo: cubre partidas fuera del bucket de 40 ($0 requests)
-      const archived = getArchiveMatchById(acct.name, acct.tag, matchId);
-      if (archived) {
-        match = archived;
-        ownerPuuid = acc.puuid;
-        break outer;
-      }
-      // 2) Buckets cacheados (ventana fresca)
-      const found = findCachedValues<HenrikMatch[]>(`henrik:matches:${acc.puuid}`)
-        .flat()
-        .find((m) => m.metadata?.match_id === matchId);
-      if (found) {
-        match = found;
-        ownerPuuid = acc.puuid;
-        break outer;
-      }
+  let match: MatchRecord | undefined;
+  let meAccount: { name: string; tag: string } | undefined;
+  outer: for (const acct of memberAccounts(preferred)) {
+    // 1) Archivo acumulativo: cubre partidas fuera del bucket de 40 ($0 requests)
+    const archived = getArchiveMatchById(acct.name, acct.tag, matchId);
+    if (archived) {
+      match = archived;
+      meAccount = acct;
+      break outer;
+    }
+    // 2) Bucket cacheado (ventana fresca)
+    const found = getCachedMatches(acct.name, acct.tag).find((m) => m.metadata?.match_id === matchId);
+    if (found) {
+      match = found;
+      meAccount = acct;
+      break outer;
     }
   }
   if (!match) {
     throw Object.assign(
-      new Error(
-        'Partida fuera del cache — amplía la ventana o pulsa Actualizar para recargarla. Para partidas muy antiguas, lanza un backfill del historial (POST /api/valorant/backfill).',
-      ),
+      new Error('Partida fuera del cache — pulsa Actualizar para recargarla desde el bucket sincronizado.'),
       { code: 'NOT_CACHED' },
     );
   }
-  const account = { puuid: ownerPuuid, name: '', tag: '' };
+
   const dicts = await getContent();
   const agentIconByName = new Map(Object.values(dicts.agents).map((e) => [e.name.toLowerCase(), e.icon]));
   const mapIconByName = new Map(Object.values(dicts.maps).map((e) => [e.name.toLowerCase(), e.icon]));
 
-  const me = (match.players ?? []).find((p) => p.puuid === account.puuid);
+  const me = findMePlayer(match, undefined, meAccount?.name, meAccount?.tag);
   const myTeamId = me?.team_id ?? null;
   const myTeam = (match.teams ?? []).find((t) => t.team_id != null && t.team_id === myTeamId) ?? (match.teams ?? [])[0];
 
   const players: DetailPlayer[] = (match.players ?? []).map((p) => {
     const st = p.stats ?? {};
-    const rounds = Math.max(1, henrikRounds(match));
+    const rounds = Math.max(1, matchRoundsPlayed(match));
     const shots = (st.headshots ?? 0) + (st.bodyshots ?? 0) + (st.legshots ?? 0);
     return {
       name: p.name ?? '?',
@@ -133,7 +121,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
       agentIcon: agentIconByName.get((p.agent?.name ?? '').toLowerCase()) ?? null,
       tier: p.tier?.id ?? 0,
       teamId: p.team_id ?? null,
-      isMe: p.puuid === account.puuid,
+      isMe: p.puuid === me?.puuid || (!!me && p.name === me.name && p.tag === me.tag),
       kills: s2(st.kills),
       deaths: s2(st.deaths),
       assists: s2(st.assists),
@@ -148,6 +136,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
   });
   players.sort((a, b) => b.acs - a.acs);
 
+  const myPuuid = me?.puuid;
   let fb = 0;
   let fd = 0;
   const seenRounds = new Set<number>();
@@ -156,10 +145,10 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     const r = k.round ?? -1;
     if (!seenRounds.has(r)) {
       seenRounds.add(r);
-      if (k.killer?.puuid === account.puuid) fb++;
-      if (k.victim?.puuid === account.puuid) fd++;
+      if (k.killer?.puuid === myPuuid) fb++;
+      if (k.victim?.puuid === myPuuid) fd++;
     }
-    if (k.victim?.puuid === account.puuid && k.killer?.name) {
+    if (k.victim?.puuid === myPuuid && k.killer?.name) {
       const prev = killerCount.get(k.killer.name);
       killerCount.set(k.killer.name, {
         times: (prev?.times ?? 0) + 1,
@@ -188,15 +177,13 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     meta: {
       map: match.metadata?.map?.name ?? '?',
       mapIcon: mapIconByName.get((match.metadata?.map?.name ?? '').toLowerCase()) ?? null,
-      date: new Date(henrikMatchTs(match)).toISOString(),
+      date: new Date(matchTimestamp(match)).toISOString(),
       durationMin: Math.round((match.metadata?.game_length_in_ms ?? 0) / 60000),
-      seasonShort: match.metadata?.season?.short ?? '',
       myAgent: me?.agent?.name ?? '?',
       myAgentIcon: agentIconByName.get((me?.agent?.name ?? '').toLowerCase()) ?? null,
       won: Boolean(myTeam?.won),
       roundsWon: myTeam?.rounds?.won ?? 0,
       roundsLost: myTeam?.rounds?.lost ?? 0,
-      rrDelta: null,
     },
     players,
     rounds,
@@ -213,20 +200,4 @@ function s2(v: unknown): number {
 
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
-}
-
-function henrikRounds(m: HenrikMatch): number {
-  const teams = m.teams ?? [];
-  let maxTeam = 0;
-  for (const t of teams) maxTeam = Math.max(maxTeam, (t.rounds?.won ?? 0) + (t.rounds?.lost ?? 0));
-  return Math.max(1, maxTeam);
-}
-
-function henrikMatchTs(m: HenrikMatch): number {
-  const iso = m.metadata?.started_at;
-  if (iso) {
-    const t = Date.parse(iso);
-    if (Number.isFinite(t)) return t;
-  }
-  return Date.now();
 }

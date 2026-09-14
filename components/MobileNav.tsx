@@ -1,33 +1,33 @@
-import Link from 'next/link';
+'use client';
 
-export type NavPage = 'ranked' | 'equipo' | 'tienda' | 'reglas' | 'perfiles';
+import Link from 'next/link';
+import { useT } from '@/lib/i18n/useLocale';
+
+export type NavPage = 'ranked' | 'equipo' | 'reglas' | 'perfiles';
 
 /**
- * Barra HUD inferior para móvil (≤720px): 5 tabs con el activo marcado por el
+ * Barra HUD inferior para móvil (≤720px): 4 tabs con el activo marcado por el
  * notch angular de la identidad ValoIA.
  */
 export function MobileNav({ activePage }: { activePage: NavPage }) {
+  const t = useT();
   return (
     <nav className="mobile-nav" aria-label="Secciones">
       <Link href="/valorant" className={activePage === 'ranked' ? 'active' : ''} aria-current={activePage === 'ranked' ? 'page' : undefined}>
         <CrosshairIcon />
-        <span>Ranked</span>
+        <span>{t('nav.ranked')}</span>
       </Link>
       <Link href="/team" className={activePage === 'equipo' ? 'active' : ''} aria-current={activePage === 'equipo' ? 'page' : undefined}>
         <TeamIcon />
-        <span>Equipo</span>
+        <span>{t('nav.team')}</span>
       </Link>
       <Link href="/reglas" className={activePage === 'reglas' ? 'active' : ''} aria-current={activePage === 'reglas' ? 'page' : undefined}>
         <ShieldIcon />
-        <span>Reglas</span>
-      </Link>
-      <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''} aria-current={activePage === 'tienda' ? 'page' : undefined}>
-        <BagIcon />
-        <span>Tienda</span>
+        <span>{t('nav.rules')}</span>
       </Link>
       <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''} aria-current={activePage === 'perfiles' ? 'page' : undefined}>
         <UserIcon />
-        <span>Perfiles</span>
+        <span>{t('nav.profile')}</span>
       </Link>
     </nav>
   );
@@ -62,15 +62,6 @@ function TeamIcon() {
       <path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19" />
       <circle cx="17" cy="10" r="2.4" />
       <path d="M15.8 14.6c2.4.2 4 1.6 4.7 4.4" />
-    </svg>
-  );
-}
-
-function BagIcon() {
-  return (
-    <svg {...svgProps()}>
-      <path d="M5 8h14l-1 12H6L5 8Z" />
-      <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
     </svg>
   );
 }

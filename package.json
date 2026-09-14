@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gen:fixtures": "node scripts/gen-riot-fixtures.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.3",

@@ -31,7 +31,6 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
     };
   }, []);
 
-  const rrCls = day.rrTotal != null && day.rrTotal < 0 ? 'down' : 'up';
   const streak = streakInfo(day.rows);
   const shown = filter ? day.rows.filter((m) => (filter.kind === 'agent' ? m.agent : m.map) === filter.value) : day.rows;
   const toggleMini = (kind: 'agent' | 'map', value: string) =>
@@ -54,12 +53,6 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
               {day.matches} competitivas · {Math.floor(day.minutes / 60)}h {day.minutes % 60}m jugadas
               {streak ? ` · racha ${streak}` : ''}
             </span>
-          </div>
-          <div
-            className={`md-rr ${rrCls}`}
-            title={day.rrMissing > 0 ? `RR de ${day.matches - day.rrMissing}/${day.matches} partidas (${day.rrMissing} sin dato)` : undefined}
-          >
-            {day.rrTotal != null ? `${day.rrTotal > 0 ? '+' : ''}${day.rrTotal}${day.rrMissing > 0 ? '~' : ''} RR` : '—'}
           </div>
         </header>
 
@@ -154,7 +147,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
               <thead>
                 <tr>
                   <th>Hora</th><th>Mapa</th><th>Agente</th><th>Resultado</th><th className="num">Marcador</th>
-                  <th className="num">K/D/A</th><th className="num">ACS</th><th className="num">RR</th>
+                  <th className="num">K/D/A</th><th className="num">ACS</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,9 +164,6 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                     <td className="num">{m.roundsWon}–{m.roundsLost}</td>
                     <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
                     <td className="num">{m.acs}</td>
-                    <td className={`num ${m.rrDelta == null ? '' : m.rrDelta > 0 ? 'stat-win' : 'stat-loss'}`}>
-                      {m.rrDelta == null ? '—' : `${m.rrDelta > 0 ? '+' : ''}${m.rrDelta}`}
-                    </td>
                   </tr>
                 ))}
               </tbody>
