@@ -15,6 +15,12 @@ export interface StatsRow {
   hsPct: number;
 }
 
+export interface TopAgent {
+  agent: string;
+  icon: string | null;
+  wins: number;
+}
+
 type SortKey = 'matches' | 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct';
 
 const COLS: { key: SortKey; label: string }[] = [
@@ -38,6 +44,8 @@ interface StatsTableProps {
   /** Filas seleccionadas para el filtro del historial (multi). */
   active: string[];
   onPick: (name: string) => void;
+  /** Solo vista de mapas: agente con más victorias en cada mapa. */
+  topAgents?: Map<string, TopAgent>;
   /** Cuántas partidas quedan con la selección actual (para el botón de ver). */
   filteredCount: number;
   /** Vuelve al historial del Resumen con la selección aplicada. */
@@ -45,7 +53,7 @@ interface StatsTableProps {
 }
 
 /** Tabla completa y ordenable de Agentes/Mapas; click en fila alterna el filtro. */
-export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, onPick, filteredCount, onViewHistory }: StatsTableProps) {
+export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, onPick, topAgents, filteredCount, onViewHistory }: StatsTableProps) {
   const [sort, setSort] = useState<SortKey>('matches');
   const [asc, setAsc] = useState(false);
 
@@ -80,6 +88,7 @@ export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, o
             <thead>
               <tr>
                 <th>{firstCol}</th>
+                {topAgents ? <th className="num">Agente top</th> : null}
                 <th className="num">Récord</th>
                 {COLS.map((c) => (
                   <th
@@ -98,6 +107,7 @@ export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, o
                 const draws = r.draws ?? 0;
                 const losses = r.matches - r.wins - draws;
                 const icon = icons.get(r.name);
+                const top = topAgents?.get(r.name);
                 return (
                   <tr
                     key={r.name}
@@ -111,6 +121,18 @@ export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, o
                         {esc(r.name)}
                       </span>
                     </td>
+                    {topAgents ? (
+                      <td className="num">
+                        {top ? (
+                          <span className="top-agent" title={`${top.agent} · ${top.wins}V en este mapa`}>
+                            {top.icon ? <img className="agent-icon" src={top.icon} alt={top.agent} loading="lazy" /> : null}
+                            <span className="top-agent-wins">{top.wins}V</span>
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    ) : null}
                     <td className="num">
                       {r.wins}V–{losses}D{draws > 0 ? `–${draws}E` : ''}
                     </td>

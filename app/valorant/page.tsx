@@ -13,7 +13,7 @@ import { TierChart } from '@/components/TierChart';
 import { MatchesTable } from '@/components/MatchesTable';
 import { FormStrip } from '@/components/FormStrip';
 import { RankedTabs, isRankedTab, type RankedTab } from '@/components/ranked/RankedTabs';
-import { StatsTable } from '@/components/ranked/StatsTable';
+import { StatsTable, type TopAgent } from '@/components/ranked/StatsTable';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useProfiles, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { useCooldown } from '@/lib/useCooldown';
@@ -174,6 +174,37 @@ function RankedPage() {
   const mapIcons = new Map<string, string | null>((data?.matches ?? []).map((m) => [m.map, m.mapIcon ?? null]));
   const agentRows = (data?.byAgent ?? []).map((a) => ({ ...a, name: a.agent }));
   const mapRows = (data?.byMap ?? []).map((m) => ({ ...m, name: m.map }));
+
+  // Agente con más victorias por mapa (desempate: más partidas y luego nombre).
+  const topAgentsByMap = useMemo(() => {
+    const acc = new Map<string, Map<string, { wins: number; games: number; icon: string | null }>>();
+    for (const m of data?.matches ?? []) {
+      if (!m.map || !m.agent) continue;
+      const byAgent = acc.get(m.map) ?? new Map();
+      const cur = byAgent.get(m.agent) ?? { wins: 0, games: 0, icon: m.agentIcon ?? null };
+      cur.games += 1;
+      if (m.won) cur.wins += 1;
+      if (!cur.icon && m.agentIcon) cur.icon = m.agentIcon;
+      byAgent.set(m.agent, cur);
+      acc.set(m.map, byAgent);
+    }
+    const out = new Map<string, TopAgent>();
+    for (const [map, byAgent] of acc) {
+      let best: { agent: string; wins: number; games: number; icon: string | null } | null = null;
+      for (const [agent, s] of byAgent) {
+        if (
+          !best ||
+          s.wins > best.wins ||
+          (s.wins === best.wins && s.games > best.games) ||
+          (s.wins === best.wins && s.games === best.games && agent < best.agent)
+        ) {
+          best = { agent, wins: s.wins, games: s.games, icon: s.icon };
+        }
+      }
+      if (best && best.wins > 0) out.set(map, { agent: best.agent, icon: best.icon, wins: best.wins });
+    }
+    return out;
+  }, [data]);
 
   // Filtros multi: OR dentro del mismo tipo, AND entre tipos.
   const toggleFilter = (kind: 'map' | 'agent', value: string) => {
@@ -383,6 +414,7 @@ function RankedPage() {
               rows={mapRows}
               icons={mapIcons}
               kind="map-icon"
+              topAgents={topAgentsByMap}
               active={fMaps}
               onPick={(name) => toggleFilter('map', name)}
               filteredCount={filteredMatches.length}
