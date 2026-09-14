@@ -2318,10 +2318,11 @@ body { overflow-x: clip; }
 }
 
 @media (max-width: 480px) {
-  .kpi { min-height: 92px; padding: 10px 11px 11px; }
-  .kpi .value { font-size: 22px; }
-  .kpi .label { font-size: 9px; letter-spacing: 0.08em; }
-  .kpi .target { font-size: 9.5px; }
+  .kpi { min-height: 74px; padding: 7px 9px 9px; }
+  .kpi .value { font-size: 18px; margin-top: 3px; }
+  .kpi .label { font-size: 8.5px; letter-spacing: 0.08em; }
+  .kpi .target { font-size: 8.5px; margin-top: 2px; }
+  .kpi-delta { font-size: 10px; margin-top: 1px; }
   .match-card { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; }
   .mc-badge { width: 24px; height: 24px; font-size: 11px; }
   .mc-sub { display: none; }
