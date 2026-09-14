@@ -29,6 +29,10 @@ services:
     container_name: valo-caddy
     depends_on:
       - valo-dash
+    # Permite a Caddy llegar al gateway de OpenClaw en el host (18789).
+    # IP privada de la VM (docker0 puede estar DOWN; host-gateway no sirve).
+    extra_hosts:
+      - "host.docker.internal:10.0.0.191"
     environment:
       DOMAIN: ${DOMAIN}
     ports:

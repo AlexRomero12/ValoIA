@@ -25,3 +25,26 @@
 		format console
 	}
 }
+
+# OpenClaw (asistente personal): el gateway corre en el host (systemd) en
+# 127.0.0.1:18789 y se expone por este subdominio. `host.docker.internal` es
+# el host visto desde el contenedor (extra_hosts en docker-compose.prod.yml).
+asistentepersonal.duckdns.org {
+	encode zstd gzip
+
+	reverse_proxy host.docker.internal:18789 {
+		# OpenClaw exige atribucion del cliente: reescribe XFF con la IP real.
+		header_up X-Forwarded-For {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	log {
+		output file /data/access.log
+		format console
+	}
+}
