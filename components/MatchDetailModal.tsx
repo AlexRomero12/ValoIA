@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useMatchDetail } from '@/lib/hooks';
 import { TierIcon } from '@/components/TierIcon';
+import { LossBadge } from './LossBadge';
 import type { MatchRow } from '@/lib/types';
 import type { DetailPlayer } from '@/lib/matchDetail';
 
@@ -58,6 +59,7 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
               <span className={`res-badge ${isDraw ? 'e' : match.won ? 'w' : 'l'}`}>
                 {isDraw ? 'Empate' : match.won ? 'Victoria' : 'Derrota'}
               </span>
+              <LossBadge m={match} />
             </h3>
             <span className="md-sub">
               {new Date(match.timestamp).toLocaleString('es')} · {match.roundsWon}–{match.roundsLost} · <TierIcon tier={match.tier} size={20} /> ·{' '}

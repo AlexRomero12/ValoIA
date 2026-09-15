@@ -12,9 +12,11 @@ import {
   henrikRoundsPlayed,
   BUCKET_LIMIT,
   type HenrikMatch,
+  type HenrikMatchPlayer,
 } from './henrik';
 import { requireProfile, type ProfileViewer } from './profiles';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats, type StatBlock } from './stats';
+import { UNWINNABLE_LIMITS } from './unwinnable';
 
 export const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
@@ -322,6 +324,10 @@ export interface MatchSummary {
   mapIcon?: string | null;
   /** Rol del agente, cuando el catálogo de contenido lo tiene */
   agentRole?: string | null;
+  /** ACS promedio de los compañeros de equipo (etiquetado de derrotas). */
+  mateAcs?: number | null;
+  /** Compañeros muy malos (≤155 ACS y ≤0.8 KD): etiquetado de derrotas. */
+  mateBadCount?: number | null;
 }
 
 export type ValKpisBlock = StatBlock & { losses: number; fb?: number; fd?: number };
@@ -396,6 +402,31 @@ function henrikFirsts(m: HenrikMatch, puuid: string): { firstBloods: number; fir
     if (k.victim?.puuid === puuid) firstDeaths += 1;
   }
   return { firstBloods, firstDeaths };
+}
+
+/**
+ * Agregados de los compañeros de equipo (ACS medio y cuántos rindieron muy
+ * mal, según UNWINNABLE_LIMITS) para el etiquetado de derrotas.
+ */
+function henrikMateAggregates(m: HenrikMatch, me: HenrikMatchPlayer): { mateAcs: number | null; mateBadCount: number | null } {
+  const teamId = me.team_id;
+  if (!teamId) return { mateAcs: null, mateBadCount: null };
+  const mates = (m.players ?? []).filter((p) => p.team_id === teamId && p.puuid !== me.puuid);
+  // Un 5v5 completo tiene 4 compañeros; con menos el agregado no es representativo.
+  if (mates.length < 3) return { mateAcs: null, mateBadCount: null };
+  const rds = henrikRoundsPlayed(m);
+  let score = 0;
+  let bad = 0;
+  for (const p of mates) {
+    const st = p.stats;
+    const acs = Math.round((st?.score ?? 0) / rds);
+    const kills = st?.kills ?? 0;
+    const deaths = st?.deaths ?? 0;
+    const kd = deaths ? kills / deaths : kills;
+    score += st?.score ?? 0;
+    if (acs <= UNWINNABLE_LIMITS.badMateAcs && kd <= UNWINNABLE_LIMITS.badMateKd) bad += 1;
+  }
+  return { mateAcs: Math.round(score / mates.length / rds), mateBadCount: bad };
 }
 
 /** Stats agregadas de partidas Henrik sin construir MatchSummary (ventana anterior). */
@@ -556,6 +587,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
 
     // Impacto: primeras sangres / primeras muertes (mismo criterio que el arsenal).
     const { firstBloods, firstDeaths } = henrikFirsts(m, account.puuid);
+    const mates = henrikMateAggregates(m, me);
 
     summaries.push({
       matchId: m.metadata?.match_id ?? '',
@@ -590,6 +622,8 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       agentIcon: agentIconByName.get(agent.toLowerCase()) ?? null,
       mapIcon: mapIconByName.get(map.toLowerCase()) ?? null,
       agentRole: agentRoleByName.get(agent.toLowerCase()) ?? null,
+      mateAcs: mates.mateAcs,
+      mateBadCount: mates.mateBadCount,
     });
   }
 
@@ -698,6 +732,27 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
 
 // ---------- Proveedor Riot oficial ----------
 
+/** Agregados de los compañeros para el proveedor Riot (mismo criterio que Henrik). */
+function riotMateAggregates(match: ValMatch, me: ValPlayer, rounds: number): { mateAcs: number | null; mateBadCount: number | null } {
+  const teamId = me.teamId;
+  if (!teamId) return { mateAcs: null, mateBadCount: null };
+  const mates = match.players.filter((p) => p.teamId === teamId && p.puuid !== me.puuid);
+  if (mates.length < 3) return { mateAcs: null, mateBadCount: null };
+  const rds = Math.max(1, rounds);
+  let score = 0;
+  let bad = 0;
+  for (const p of mates) {
+    const st = p.stats;
+    const acs = Math.round((st?.score ?? 0) / rds);
+    const kills = st?.kills ?? 0;
+    const deaths = st?.deaths ?? 0;
+    const kd = deaths ? kills / deaths : kills;
+    score += st?.score ?? 0;
+    if (acs <= UNWINNABLE_LIMITS.badMateAcs && kd <= UNWINNABLE_LIMITS.badMateKd) bad += 1;
+  }
+  return { mateAcs: Math.round(score / mates.length / rds), mateBadCount: bad };
+}
+
 export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
   const profile = requireProfile(opts.playerId, opts.viewer);
   // El proveedor Riot oficial solo conoce la cuenta del .env (VAL_NAME/VAL_TAG).
@@ -771,6 +826,7 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
     const shots = hs + body + leg;
     const rounds = s.roundsPlayed ?? 1;
     const lengthMin = Math.round((match.matchInfo.gameLengthMillis ?? 0) / 60000);
+    const mates = riotMateAggregates(match, me, rounds);
 
     summaries.push({
       matchId: entry.matchId,
@@ -798,6 +854,8 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
       agentIcon,
       mapIcon,
       agentRole: agentEntry?.role ?? null,
+      mateAcs: mates.mateAcs,
+      mateBadCount: mates.mateBadCount,
     });
   }
 

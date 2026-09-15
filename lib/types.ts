@@ -72,6 +72,10 @@ export interface MatchRow {
   mapIcon?: string | null;
   /** Rol del agente (Duelist/Initiator/Controller/Sentinel) */
   agentRole?: string | null;
+  /** ACS promedio de los compañeros de equipo (detalle de la partida). */
+  mateAcs?: number | null;
+  /** Compañeros muy malos (≤155 ACS y ≤0.8 KD): etiquetado de derrotas. */
+  mateBadCount?: number | null;
   /** Cuenta que jugó la partida (solo al combinar varias cuentas de un perfil). */
   accountName?: string;
   accountTag?: string;

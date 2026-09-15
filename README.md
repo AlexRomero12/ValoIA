@@ -2,7 +2,7 @@
 
 Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) con cache persistente, Docker y **perfiles configurables** (tú decides a quién ver y qué reglas aplicar).
 
-> Estado actual: **v1.21.1** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado actual: **v1.22.0** — ver [CHANGELOG.md](./CHANGELOG.md)
 
 ## Estructura
 
@@ -43,6 +43,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Trend de rango** (últimas 20 partidas, con nota «de N»): resumen del período (rango inicial → actual, pico, RR neto y récord), leyenda V/D/E y detalle de cada partida al pasar o tocar el punto (fecha, mapa, agente, marcador, K/D/A, ACS, ±RR y rango)
 - **Partidas recientes**: agrupadas por día (el día más reciente expandido al entrar; el resto, colapsado), con WR%, V-D-E, K/D, ACS, ADR y ±RR en el resumen de cada día; click en el día abre el análisis completo con mejores/peores partidas, por agente y por mapa
 - **Columnas por partida**: íconos de agente/mapa, K/D, ACS, ADR, HS%, ±RR con tooltip de MMR; stats en verde al cumplir meta
+- **Iconos de derrota**: ☠ **Injugable** (2+ compañeros muy flojos: ≤155 ACS y ≤0.8 KD cada uno, y tu ACS ≥ la media) y ⚠ **Mi culpa** (quedaste bajo la media del equipo con K/D < 0.8), con leyenda desplegable en «Partidas recientes» (`? iconos`) y tooltip del porqué; detección automática, no altera stats
 - **Filtros multi en el historial**: agrega varios agentes/mapas desde la barra de «Partidas recientes» (selects con conteo, chips para quitar, Limpiar y contador `N de M partidas · D días`); también se filtran desde los iconos de cada fila, los paneles de WR y las tablas de Agentes/Mapas («Ver partidas»); con filtro activo el historial se despliega completo
 - **Detalle de partida** (click en fila): scoreboard completo de los 10 jugadores con economía, timeline ronda por ronda con motivo (⚔ eliminación · 💥 detonación · ✂ defusa · ⏱ tiempo), duelos de apertura y quién te eliminó
 - Filtro por **temporada** o ventanas de 7/14/30/90 días

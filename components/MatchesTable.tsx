@@ -3,9 +3,11 @@
 import { useMemo, useState } from 'react';
 import { esc } from '@/lib/metas';
 import { groupByDay, dayStats } from '@/lib/dayAnalysis';
+import { UNWINNABLE_LIMITS } from '@/lib/unwinnable';
 import type { MatchRow } from '@/lib/types';
 import { MatchDetailModal } from './MatchDetailModal';
 import { DayDetailModal } from './DayDetailModal';
+import { LossBadge } from './LossBadge';
 
 const DAYS_PER_PAGE = 5;
 
@@ -27,6 +29,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
   const [selected, setSelected] = useState<MatchRow | null>(null);
   const [analysisDay, setAnalysisDay] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [legendOpen, setLegendOpen] = useState(false);
 
   const rows = matches.filter(
     (m) => (!fMaps.length || fMaps.includes(m.map)) && (!fAgents.length || fAgents.includes(m.agent)),
@@ -69,7 +72,33 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
 
   return (
     <div className="panel">
-      <h2>Partidas recientes</h2>
+      <h2>
+        Partidas recientes
+        <button
+          type="button"
+          className={`legend-toggle${legendOpen ? ' on' : ''}`}
+          aria-expanded={legendOpen}
+          title="Qué significan los iconos de las derrotas"
+          onClick={() => setLegendOpen((v) => !v)}
+        >
+          ? iconos
+        </button>
+      </h2>
+
+      {legendOpen ? (
+        <div className="loss-legend">
+          <span>
+            <span className="res-badge unw" aria-hidden>☠</span> <b>Injugable</b>: derrota con{' '}
+            {UNWINNABLE_LIMITS.badMates}+ compañeros muy flojos (≤{UNWINNABLE_LIMITS.badMateAcs} ACS y ≤
+            {UNWINNABLE_LIMITS.badMateKd} KD) y tú no fuiste el problema — cargar 3v5 es inviable.
+          </span>
+          <span>
+            <span className="res-badge mine" aria-hidden>⚠</span> <b>Mi culpa</b>: derrota donde quedaste bajo
+            la media de tus compañeros y con K/D &lt; {UNWINNABLE_LIMITS.myFaultKd}.
+          </span>
+          <span className="loss-legend-note">Detección automática; no cambia tus estadísticas.</span>
+        </div>
+      ) : null}
 
       <div className="history-filters">
         <span className="hf-label">Filtros</span>
@@ -311,6 +340,7 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
         <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>
           {isDraw(m) ? 'Empate' : m.won ? 'Victoria' : 'Derrota'}
         </span>
+        <LossBadge m={m} />
       </td>
       <td className="num score">{m.roundsWon}–{m.roundsLost}</td>
       <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
@@ -349,6 +379,7 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
           {m.kills}/{m.deaths}/{m.assists}
           <span className="mc-dot">·</span>
           KD <b className={parseFloat(kd) >= 1.05 ? 'stat-ok' : ''}>{kd}</b>
+          <LossBadge m={m} />
         </span>
       </span>
       <span className="mc-side">

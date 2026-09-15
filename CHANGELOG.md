@@ -2,6 +2,15 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.22.0] — 2026-09-15
+
+Etiquetado automático de derrotas en Ranked (solo presentación, no toca stats).
+
+### Added
+- **Iconos de derrota en el historial**: junto al badge de resultado aparecen dos marcas automáticas — **☠ Injugable** (derrota con 2+ compañeros muy flojos: ≤155 ACS y ≤0.8 KD cada uno, y tu ACS ≥ la media del equipo — cargar 3v5 es inviable) y **⚠ Mi culpa** (derrota donde quedaste bajo la media de tus compañeros con K/D < 0.8). Se ven en el historial (escritorio y móvil), el detalle de partida y el análisis del día, con tooltip de los números que las dispararon
+- **Leyenda desplegable** (`? iconos`) en «Partidas recientes» que explica cada icono y sus umbrales, con la aclaración de que no cambia estadísticas
+- Motor puro en `lib/unwinnable.ts` (`UNWINNABLE_LIMITS`, `lossTag`, con tests): el servidor calcula `mateAcs` y `mateBadCount` por partida desde el detalle ya cacheado ($0 requests extra) y los expone en `MatchRow`/`MatchSummary`
+
 ## [1.21.1] — 2026-09-13
 
 ### Changed

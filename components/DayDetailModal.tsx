@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { DayStats } from '@/lib/dayAnalysis';
 import { esc } from '@/lib/metas';
 import type { MatchRow } from '@/lib/types';
+import { LossBadge } from './LossBadge';
 
 interface DayDetailModalProps {
   day: DayStats;
@@ -167,6 +168,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                       <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>
                         {isDraw(m) ? 'Empate' : m.won ? 'Victoria' : 'Derrota'}
                       </span>
+                      <LossBadge m={m} />
                     </td>
                     <td className="num">{m.roundsWon}–{m.roundsLost}</td>
                     <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
@@ -201,6 +203,7 @@ function MatchLine({ m }: { m: MatchRow }) {
       <b>{esc(m.map)}</b> con {esc(m.agent)} — {m.roundsWon}–{m.roundsLost},{' '}
       {m.kills}/{m.deaths}/{m.assists}, ACS {m.acs}
       <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>{isDraw(m) ? 'E' : m.won ? 'V' : 'D'}</span>
+      <LossBadge m={m} />
     </div>
   );
 }

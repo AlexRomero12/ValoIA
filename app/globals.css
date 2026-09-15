@@ -415,6 +415,43 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .res-badge.l { color: var(--loss); background: rgba(255, 92, 105, 0.1); }
 .res-badge.e { color: var(--gold); background: rgba(232, 201, 122, 0.12); }
 .res-badge.pool { color: var(--loss); background: rgba(255, 70, 85, 0.14); min-width: 20px; margin-left: 4px; }
+/* Iconos automáticos de derrota (☠ injugable / ⚠ mi culpa): microscópicos, junto a "Derrota". */
+.res-badge.unw,
+.res-badge.mine { font-size: 11px; letter-spacing: 0; line-height: 1.1; min-width: 18px; padding: 1px 5px; margin-left: 5px; white-space: nowrap; vertical-align: middle; }
+.res-badge.unw { color: var(--faint); background: rgba(167, 183, 197, 0.1); }
+.res-badge.mine { color: var(--gold); background: rgba(232, 201, 122, 0.12); }
+
+/* Leyenda de los iconos de derrota (toggle junto al título del historial). */
+.legend-toggle {
+  margin-left: auto;
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--faint);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.legend-toggle:hover,
+.legend-toggle.on { color: var(--bone); border-color: var(--line-strong); }
+.loss-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line-strong);
+  background: rgba(167, 183, 197, 0.04);
+  font-size: 12px;
+  color: var(--mute);
+}
+.loss-legend b { color: var(--bone); font-weight: 600; }
+.loss-legend .res-badge { margin-left: 0; }
+.loss-legend-note { color: var(--faint); font-size: 11px; }
 
 /* ---------- Reglas de sesión ---------- */
 .rules-day { margin-bottom: 22px; }
