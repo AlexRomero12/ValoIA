@@ -2,7 +2,7 @@
 
 Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) con cache persistente, Docker y **perfiles configurables** (tú decides a quién ver y qué reglas aplicar).
 
-> Estado actual: **v1.23.0** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado actual: **v1.23.1** — ver [CHANGELOG.md](./CHANGELOG.md)
 
 ## Estructura
 
@@ -40,7 +40,7 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Forma reciente y deltas**: últimas 5 partidas (V/D/E) con racha actual, y cada KPI con su variación contra la ventana anterior de igual duración (mín. 3 partidas)
 - Winrate por agente y por mapa con íconos oficiales (click filtra las partidas); el panel de **agente muestra los 6 más jugados** con **Ver más/Ver menos** (el resto queda a un toque, sin estirar el layout)
 - **Arsenal · Uso de armas** por perfil: kills por arma con barra de uso, K/D por arma y "con qué te matan" — calculado desde el kill feed del archivo acumulativo ($0 requests), con íconos y categorías de valorant-api.com
-- **Aperturas · FB/FD por ronda** (`?tab=aperturas`): recap Global/ATK/DEF con FD y FB por 100 rondas, WR con FD (cuánto cuesta morir primero), WR sin FD y conversión de primeras sangres; tablas por mapa y agente con FD/FB **promedio por partida jugada en cada bando**, WR con/sin FD y aviso de muestras bajas; **Revisión VOD** de la partida más reciente a la más vieja (FB sin convertir/FD, señal 2+ o 3+) que abre el timeline de rondas del detalle. Bando por ronda inferido de las plantas + mitades/OT ($0 requests)
+- **Aperturas · FB/FD por ronda** (`?tab=aperturas`): recap Global/ATK/DEF con FD y FB por 100 rondas, WR con FD (cuánto cuesta morir primero), WR sin FD y conversión de primeras sangres; tablas por mapa y agente con FD/FB **promedio por partida jugada en cada bando**, WR con/sin FD y aviso de muestras bajas; **Revisión VOD** de la partida más reciente a la más vieja (FB sin convertir/FD, señal 2+ o 3+, **20 por página**) que abre el timeline de rondas del detalle. Bando por ronda inferido de las plantas + mitades/OT ($0 requests)
 - **Trend de rango** (últimas 20 partidas, con nota «de N»): resumen del período (rango inicial → actual, pico, RR neto y récord), leyenda V/D/E y detalle de cada partida al pasar o tocar el punto (fecha, mapa, agente, marcador, K/D/A, ACS, ±RR y rango)
 - **Partidas recientes**: agrupadas por día (el día más reciente expandido al entrar; el resto, colapsado), con WR%, V-D-E, K/D, ACS, ADR y ±RR en el resumen de cada día; click en el día abre el análisis completo con mejores/peores partidas, por agente y por mapa
 - **Columnas por partida**: íconos de agente/mapa, K/D, ACS, ADR, HS%, ±RR con tooltip de MMR; stats en verde al cumplir meta

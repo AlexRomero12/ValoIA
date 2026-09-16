@@ -2,6 +2,14 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.23.1] — 2026-09-16
+
+### Changed
+- **Revisión de aperturas (VOD)**: paginación de **20 partidas por página** con botones Anteriores/Siguientes, contador (`Mostrando X–Y de N · página P/T`) y vuelta suave al inicio de la lista al cambiar de página; se mantiene el orden de la más reciente a la más vieja y el filtro de señal
+
+### Fixed
+- **Evolución comparada · métrica RANGO**: los puntos de una partida jugada por dos o más jugadores ahora caen en la **misma columna** (la clave del punto usaba el índice de la partida dentro de cada jugador y duplicaba la columna; ahora usa el `matchId`, estable entre series). Con `lib/compare.test.ts` cubriendo el caso
+
 ## [1.23.0] — 2026-09-16
 
 Aperturas por ronda: FB/FD con bando inferido, conversión de primeras sangres y revisión VOD.

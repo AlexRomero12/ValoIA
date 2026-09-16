@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { MatchDetailModal } from '@/components/MatchDetailModal';
 import { esc, wrColor } from '@/lib/metas';
 import type { AperturaBucket, AperturaGrupo, MatchRow, ValAperturas } from '@/lib/types';
@@ -12,6 +12,8 @@ const LOW_SAMPLE_ROUNDS = 40;
 /** Señal para la lista de revisión: 2+ FB sin convertir o 3+ FD en la partida. */
 const VOD_SIGNAL_FB_LOST = 2;
 const VOD_SIGNAL_FD = 3;
+/** Partidas por página en la revisión VOD. */
+const VOD_PAGE = 20;
 
 interface AperturasPanelProps {
   aperturas?: ValAperturas;
@@ -49,6 +51,8 @@ function bucketTitle(label: string, b: AperturaBucket): string {
 export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelProps) {
   const [selected, setSelected] = useState<MatchRow | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [page, setPage] = useState(1);
+  const vodRef = useRef<HTMLDivElement | null>(null);
 
   const agentIcons = useMemo(() => new Map(matches.map((m) => [m.agent, m.agentIcon ?? null])), [matches]);
   const mapIcons = useMemo(() => new Map(matches.map((m) => [m.map, m.mapIcon ?? null])), [matches]);
@@ -66,6 +70,17 @@ export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelP
     [vod],
   );
   const vodShown = showAll ? vod : vodSignal.length ? vodSignal : vod;
+  // Paginación (20 por página): la página se acota al total vigente por si
+  // cambia la ventana/perfil y la página actual queda fuera de rango.
+  const vodPages = Math.max(1, Math.ceil(vodShown.length / VOD_PAGE));
+  const vodPage = Math.min(page, vodPages);
+  const vodRows = vodShown.slice((vodPage - 1) * VOD_PAGE, vodPage * VOD_PAGE);
+  const vodFrom = vodShown.length ? (vodPage - 1) * VOD_PAGE + 1 : 0;
+  const vodTo = Math.min(vodShown.length, vodPage * VOD_PAGE);
+  const goVodPage = (n: number) => {
+    setPage(Math.min(Math.max(1, n), vodPages));
+    requestAnimationFrame(() => vodRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
 
   if (!aperturas) {
     return (
@@ -232,12 +247,20 @@ export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelP
       <div className="panel">
         <h2>Revisión de aperturas (VOD)</h2>
         <p className="wr-hint">
-          De la partida más reciente a la más vieja. Por defecto solo se listan las de señal (2+ FB sin convertir o
-          3+ FD); el botón muestra todas. Una FD no es error por sí sola (entrada planificada o con trade): revisa
-          quién podía tradearte y si había info antes de peekear. Toca una fila para ver el timeline de rondas.
+          De la partida más reciente a la más vieja, 20 por página. Por defecto solo se listan las de señal (2+ FB
+          sin convertir o 3+ FD); el botón muestra todas. Una FD no es error por sí sola (entrada planificada o con
+          trade): revisa quién podía tradearte y si había info antes de peekear. Toca una fila para ver el timeline
+          de rondas.
         </p>
         <div className="filter-bar" style={{ justifyContent: 'flex-start', marginBottom: 8 }}>
-          <button className="f-chip" onClick={() => setShowAll((v) => !v)} disabled={!vod.length}>
+          <button
+            className="f-chip"
+            onClick={() => {
+              setShowAll((v) => !v);
+              setPage(1);
+            }}
+            disabled={!vod.length}
+          >
             {showAll ? 'Ver solo señal' : `Ver todas (${vod.length})`}
           </button>
           <span className="window-info">
@@ -247,7 +270,7 @@ export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelP
         {!vodShown.length ? (
           <p className="empty">Sin partidas para revisar en esta ventana.</p>
         ) : (
-          <div className="table-scroll">
+          <div className="table-scroll" ref={vodRef}>
             <table className="score-table ap-table ap-vod">
               <thead>
                 <tr>
@@ -260,7 +283,7 @@ export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelP
                 </tr>
               </thead>
               <tbody>
-                {vodShown.map((p) => {
+                {vodRows.map((p) => {
                   const row = matchesById.get(p.matchId);
                   const draw = row ? row.roundsWon === row.roundsLost : false;
                   const res = draw ? 'E' : p.won ? 'V' : 'D';
@@ -294,6 +317,23 @@ export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelP
             </table>
           </div>
         )}
+        {vodShown.length > VOD_PAGE ? (
+          <div className="filter-bar" style={{ justifyContent: 'center', marginTop: 10 }}>
+            <button className="f-chip" onClick={() => goVodPage(vodPage - 1)} disabled={vodPage <= 1} title="20 más recientes">
+              ‹ Anteriores
+            </button>
+            <span className="window-info">
+              Mostrando {vodFrom}–{vodTo} de {vodShown.length} · página {vodPage}/{vodPages}
+            </span>
+            <button className="f-chip" onClick={() => goVodPage(vodPage + 1)} disabled={vodPage >= vodPages} title="20 más antiguas">
+              Siguientes ›
+            </button>
+          </div>
+        ) : vodShown.length ? (
+          <p className="window-info" style={{ marginTop: 8 }}>
+            {vodShown.length} partida(s) en la lista.
+          </p>
+        ) : null}
       </div>
 
       {selected ? <MatchDetailModal match={selected} playerId={playerId} onClose={() => setSelected(null)} /> : null}

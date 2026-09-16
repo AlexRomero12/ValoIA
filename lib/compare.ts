@@ -190,9 +190,12 @@ export function buildTimeline(
   if (metric === 'rank') {
     return [...ms]
       .sort((a, b) => a.timestamp - b.timestamp)
-      .map((m, i) => {
+      .map((m) => {
         const { key, label } = keyFor(m.timestamp, gran);
-        return { key: `${key}#${m.timestamp}-${i}`, label, value: rankPointsOf(m), games: 1, approx: m.tierApprox ?? false };
+        // Clave estable por partida (matchId): la misma partida comparte columna
+        // entre jugadores. Antes el índice del jugador iba en la clave, así que
+        // dos personas que jugaron juntas quedaban en columnas distintas.
+        return { key: `${key}#${m.timestamp}-${m.matchId}`, label, value: rankPointsOf(m), games: 1, approx: m.tierApprox ?? false };
       });
   }
   const accs = new Map<string, BucketAcc>();
