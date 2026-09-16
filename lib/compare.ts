@@ -1,4 +1,4 @@
-import type { ArsenalRow, MatchRow, ValArsenal, ValKpis, ValSummary } from './types';
+import type { AperturaBucket, AperturaGrupo, AperturaPartida, ArsenalRow, MatchRow, ValAperturas, ValArsenal, ValKpis, ValSummary } from './types';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 
 export interface CompareFilters {
@@ -352,6 +352,83 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
     byMap,
     matches,
     arsenal,
+    aperturas: mergeAperturas(ok.map((s) => s.aperturas).filter((a): a is ValAperturas => a != null)),
+  };
+}
+
+/** Copia de un bucket (para no mutar los summaries de origen al combinar cuentas). */
+function cloneBucket(b: AperturaBucket): AperturaBucket {
+  return { ...b };
+}
+
+function sumBucket(target: AperturaBucket, source: AperturaBucket): void {
+  target.rounds += source.rounds;
+  target.fd += source.fd;
+  target.fdWon += source.fdWon;
+  target.noFd += source.noFd;
+  target.noFdWon += source.noFdWon;
+  target.fb += source.fb;
+  target.fbWon += source.fbWon;
+  target.fbLost += source.fbLost;
+}
+
+/** Grupos (mapa/agente) de varias cuentas: suma por nombre y ordena por rondas. */
+function mergeAperturaGrupos(list: AperturaGrupo[][]): AperturaGrupo[] {
+  const byName = new Map<string, AperturaGrupo>();
+  for (const grupos of list) {
+    for (const g of grupos) {
+      const prev = byName.get(g.name);
+      if (!prev) {
+        byName.set(g.name, {
+          name: g.name,
+          total: cloneBucket(g.total),
+          atk: cloneBucket(g.atk),
+          def: cloneBucket(g.def),
+          atkMatches: g.atkMatches,
+          defMatches: g.defMatches,
+        });
+        continue;
+      }
+      sumBucket(prev.total, g.total);
+      sumBucket(prev.atk, g.atk);
+      sumBucket(prev.def, g.def);
+      prev.atkMatches += g.atkMatches;
+      prev.defMatches += g.defMatches;
+    }
+  }
+  return [...byName.values()].sort((a, b) => b.total.rounds - a.total.rounds || a.name.localeCompare(b.name));
+}
+
+/** Aperturas combinadas de varias cuentas (dedupe de partidas por matchId). */
+export function mergeAperturas(list: ValAperturas[]): ValAperturas | undefined {
+  if (list.length === 0) return undefined;
+  if (list.length === 1) return list[0];
+  const total: AperturaBucket = { rounds: 0, fd: 0, fdWon: 0, noFd: 0, noFdWon: 0, fb: 0, fbWon: 0, fbLost: 0 };
+  const atk: AperturaBucket = { ...total };
+  const def: AperturaBucket = { ...total };
+  let sinLado = 0;
+  const seen = new Set<string>();
+  const matches: AperturaPartida[] = [];
+  for (const a of list) {
+    sumBucket(total, a.total);
+    sumBucket(atk, a.atk);
+    sumBucket(def, a.def);
+    sinLado += a.sinLado;
+    for (const p of a.matches) {
+      if (p.matchId && seen.has(p.matchId)) continue;
+      if (p.matchId) seen.add(p.matchId);
+      matches.push(p);
+    }
+  }
+  matches.sort((a, b) => (a.date < b.date ? 1 : -1));
+  return {
+    total,
+    atk,
+    def,
+    sinLado,
+    byMap: mergeAperturaGrupos(list.map((a) => a.byMap)),
+    byAgent: mergeAperturaGrupos(list.map((a) => a.byAgent)),
+    matches,
   };
 }
 

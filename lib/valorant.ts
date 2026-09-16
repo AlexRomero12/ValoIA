@@ -15,8 +15,10 @@ import {
   type HenrikMatchPlayer,
 } from './henrik';
 import { requireProfile, type ProfileViewer } from './profiles';
+import { computeAperturas } from './aperturas';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats, type StatBlock } from './stats';
 import { UNWINNABLE_LIMITS } from './unwinnable';
+import type { ValAperturas } from './types';
 
 export const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
@@ -348,6 +350,8 @@ export interface ValSummary {
   matches: MatchSummary[];
   /** Solo proveedor Henrik: uso de armas derivado del kill feed de las partidas en ventana */
   arsenal?: ValArsenal;
+  /** Solo proveedor Henrik: FB/FD por ronda con bando inferido de las plantas */
+  aperturas?: ValAperturas;
 }
 
 export interface AggregateOptions {
@@ -671,8 +675,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   }
   const totalFeedKills = [...killsBy.values()].reduce((a, b) => a + b, 0);
   const totalFirstBloods = [...fbBy.values()].reduce((a, b) => a + b, 0);
-  const arsenal: ValArsenal = {
-    rows: [...new Set([...killsBy.keys(), ...deathsBy.keys()])]
+  const arsenal: ValArsenal = {    rows: [...new Set([...killsBy.keys(), ...deathsBy.keys()])]
       .filter((w) => (killsBy.get(w) ?? 0) > 0)
       .map((weapon) => {
         const kills = killsBy.get(weapon) ?? 0;
@@ -692,6 +695,9 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     totalKills: totalFeedKills,
     totalFirstBloods,
   };
+
+  // ---------- Aperturas por ronda (FB/FD y conversión por bando) ----------
+  const aperturas = computeAperturas(inWindow, account.puuid);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -727,6 +733,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       .sort((a, b) => b.matches - a.matches),
     matches: summaries,
     arsenal,
+    aperturas,
   };
 }
 

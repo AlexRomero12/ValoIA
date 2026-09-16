@@ -3315,3 +3315,10 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
   .rules-week-card > .f-chip { align-self: flex-start; min-height: 38px; }
   .rwc-detail { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
 }
+
+/* --- Aperturas (Ranked): FB/FD por ronda y revisión VOD --- */
+.ap-table tbody tr.clickable-row { cursor: pointer; }
+.ap-table tbody tr.clickable-row:hover td { background: rgba(255, 70, 85, 0.06); }
+.ap-bad { color: var(--loss); font-weight: 700; }
+.ap-vod td { white-space: nowrap; }
+

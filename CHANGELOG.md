@@ -2,6 +2,20 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.23.0] — 2026-09-16
+
+Aperturas por ronda: FB/FD con bando inferido, conversión de primeras sangres y revisión VOD.
+
+### Added
+- **Tab «Aperturas» en Ranked** (`?tab=aperturas`): recap Global/ATK/DEF con FD y FB por 100 rondas, **WR con FD** (cuánto cuesta morir primero), WR sin FD y **conversión** (% de tus FB que terminaron en ronda ganada); tablas por mapa y agente con **FD/FB promedio por partida jugada en cada bando** (ATK/DEF), WR con FD/sin FD y aviso de muestra baja (<40 rondas); por agente solo se listan 30+ rondas
+- **Revisión de aperturas (VOD)**: lista de la partida **más reciente a la más vieja** con FB sin convertir y FD por partida (señal: 2+ FB sin convertir o 3+ FD, con botón para ver todas); click en una fila abre el timeline de rondas del detalle
+- Motor `lib/aperturas.ts` ($0 requests): **bando por ronda** inferido de las plantas + mitades 0-11/12-23 y alternancia en OT; cuenta FB/FD y conversión por ronda y agrega por bando, mapa y agente, con denominadores de partidas por bando para los promedios
+- Tipos nuevos: `HenrikKill.time_in_round_in_ms` y `plant.player.team`; `aperturas` en el resumen (solo proveedor Henrik) y merge multi-cuenta en `lib/compare.ts`
+
+### Notes
+- `lib/aperturas.test.ts` (10 tests): bandos con mitad invertida y OT, rondas sin bando, conversión, agregados por mapa/agente y merge multi-cuenta
+- Validado contra datos reales: FD y conversión coinciden con `estadisticas_aperturas.md` (93p · FD 13.7% · conversión 67.9% · ATK 15.4% / DEF 11.8%)
+
 ## [1.22.0] — 2026-09-15
 
 Etiquetado automático de derrotas en Ranked (solo presentación, no toca stats).

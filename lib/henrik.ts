@@ -196,13 +196,15 @@ export interface HenrikKill {
   assistants?: { name?: string; puuid?: string }[];
   weapon?: { id?: string | null; name?: string | null; type?: string | null };
   round?: number;
+  /** ms dentro de la ronda (v4): permite elegir la primera kill real del round. */
+  time_in_round_in_ms?: number;
 }
 
 export interface HenrikMatchRound {
   id?: number;
   result?: string;
   winning_team?: string | null;
-  plant?: { site?: string; player?: { name?: string; puuid?: string } } | null;
+  plant?: { site?: string; player?: { name?: string; puuid?: string; team?: string } } | null;
   defuse?: { player?: { name?: string; puuid?: string } } | null;
 }
 

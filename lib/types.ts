@@ -99,6 +99,67 @@ export interface ValArsenal {
   totalFirstBloods: number;
 }
 
+/** Conteos de aperturas de un conjunto de rondas (global, por bando o por grupo). */
+export interface AperturaBucket {
+  /** Rondas contadas (con bando conocido o no: se separa en `sinLado` global). */
+  rounds: number;
+  /** Rondas donde morí primero (FD). */
+  fd: number;
+  /** De las FD: rondas que ganó mi equipo. */
+  fdWon: number;
+  /** Rondas sin FD. */
+  noFd: number;
+  /** De las rondas sin FD: ganadas. */
+  noFdWon: number;
+  /** Rondas donde abrí con la primera sangre (FB). */
+  fb: number;
+  /** De las FB: rondas ganadas (conversión). */
+  fbWon: number;
+  /** De las FB: rondas perdidas (FB sin convertir). */
+  fbLost: number;
+}
+
+/** Aperturas de un grupo (mapa o agente), separadas por bando. */
+export interface AperturaGrupo {
+  name: string;
+  total: AperturaBucket;
+  atk: AperturaBucket;
+  def: AperturaBucket;
+  /** Partidas del grupo con al menos una ronda de ataque (denominador de FD/part. ATK). */
+  atkMatches: number;
+  /** Partidas del grupo con al menos una ronda de defensa (denominador de FD/part. DEF). */
+  defMatches: number;
+}
+
+/** Fila de partida para la revisión de aperturas (VOD). */
+export interface AperturaPartida {
+  matchId: string;
+  date: string;
+  map: string;
+  agent: string;
+  won: boolean;
+  rounds: number;
+  fd: number;
+  fb: number;
+  /** Rondas con tu primera sangre que se perdieron. */
+  fbLost: number;
+  /** Rondas del partido donde no se pudo inferir el bando. */
+  sideUnknown: number;
+}
+
+/** Detalle por ronda de FB/FD (solo proveedor Henrik). */
+export interface ValAperturas {
+  total: AperturaBucket;
+  atk: AperturaBucket;
+  def: AperturaBucket;
+  /** Rondas con bando indeterminado (sin plantas que lo revelen). */
+  sinLado: number;
+  byMap: AperturaGrupo[];
+  byAgent: AperturaGrupo[];
+  /** Más reciente primero. */
+  matches: AperturaPartida[];
+}
+
 export interface ValSummary {
   generatedAt: string;
   account: ValAccount;
@@ -134,6 +195,8 @@ export interface ValSummary {
   matches: MatchRow[];
   /** Solo proveedor Henrik: uso de armas derivado del kill feed */
   arsenal?: ValArsenal;
+  /** Solo proveedor Henrik: FB/FD por ronda con bando inferido (plantas) */
+  aperturas?: ValAperturas;
 }
 
 export interface AgentIconInfo {

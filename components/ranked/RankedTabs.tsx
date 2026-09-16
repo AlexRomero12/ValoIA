@@ -1,12 +1,13 @@
 'use client';
 
-export type RankedTab = 'resumen' | 'agentes' | 'mapas' | 'arsenal';
+export type RankedTab = 'resumen' | 'agentes' | 'mapas' | 'arsenal' | 'aperturas';
 
 const TABS: { key: RankedTab; label: string }[] = [
   { key: 'resumen', label: 'Resumen' },
   { key: 'agentes', label: 'Agentes' },
   { key: 'mapas', label: 'Mapas' },
   { key: 'arsenal', label: 'Arsenal' },
+  { key: 'aperturas', label: 'Aperturas' },
 ];
 
 export function isRankedTab(value: string | null): value is RankedTab {
