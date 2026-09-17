@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { DayStats } from '@/lib/dayAnalysis';
 import { esc } from '@/lib/metas';
 import type { MatchRow } from '@/lib/types';
+import { AgentIcon } from './AgentIcon';
 import { LossBadge } from './LossBadge';
 
 interface DayDetailModalProps {
@@ -114,6 +115,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
               }))}
               active={filter?.kind === 'agent' ? filter.value : null}
               onToggle={(v) => toggleMini('agent', v)}
+              iconOnly={day.byAgent.every((a) => a.icon)}
             />
           </section>
         )}
@@ -163,7 +165,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                   <tr key={m.matchId}>
                     <td>{new Date(m.timestamp).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</td>
                     <td>{esc(m.map)}</td>
-                    <td>{esc(m.agent)}</td>
+                    <td className="agent"><AgentIcon name={m.agent} icon={m.agentIcon} /></td>
                     <td>
                       <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>
                         {isDraw(m) ? 'Empate' : m.won ? 'Victoria' : 'Derrota'}
@@ -200,8 +202,11 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: 'win
 function MatchLine({ m }: { m: MatchRow }) {
   return (
     <div className="dd-matchline">
-      <b>{esc(m.map)}</b> con {esc(m.agent)} — {m.roundsWon}–{m.roundsLost},{' '}
-      {m.kills}/{m.deaths}/{m.assists}, ACS {m.acs}
+      <b>{esc(m.map)}</b>
+      <AgentIcon name={m.agent} icon={m.agentIcon} />
+      <span>
+        {m.roundsWon}–{m.roundsLost}, {m.kills}/{m.deaths}/{m.assists}, ACS {m.acs}
+      </span>
       <span className={`res-badge ${isDraw(m) ? 'e' : m.won ? 'w' : 'l'}`}>{isDraw(m) ? 'E' : m.won ? 'V' : 'D'}</span>
       <LossBadge m={m} />
     </div>
@@ -227,10 +232,10 @@ interface MiniRow {
   hsPct: number;
 }
 
-function MiniTable({ rows, active, onToggle }: { rows: MiniRow[]; active: string | null; onToggle: (value: string) => void }) {
+function MiniTable({ rows, active, onToggle, iconOnly = false }: { rows: MiniRow[]; active: string | null; onToggle: (value: string) => void; iconOnly?: boolean }) {
   return (
     <div className="table-scroll">
-      <table className="score-table dd-mini">
+      <table className={`score-table dd-mini${iconOnly ? ' icon-col' : ''}`}>
         <thead>
           <tr>
             <th></th><th>PJ</th><th>W-L</th><th>K/D</th><th>ACS</th><th>ADR</th><th>HS%</th>
@@ -240,10 +245,14 @@ function MiniTable({ rows, active, onToggle }: { rows: MiniRow[]; active: string
           {rows.map((r) => (
             <tr key={r.key} className={active === r.label ? 'row-on' : undefined}>
               <td className="dd-filter" title="Filtrar las partidas del día" onClick={() => onToggle(r.label)}>
-                <span className="icon-cell">
-                  {r.icon ? <img className="agent-icon" src={r.icon} alt="" loading="lazy" /> : null}
-                  {esc(r.label)}
-                </span>
+                {iconOnly ? (
+                  <AgentIcon name={r.label} icon={r.icon} title={`Filtrar por ${r.label}`} />
+                ) : (
+                  <span className="icon-cell">
+                    {r.icon ? <img className="agent-icon" src={r.icon} alt="" loading="lazy" /> : null}
+                    {esc(r.label)}
+                  </span>
+                )}
               </td>
               <td className="num">{r.games}</td>
               <td className="num">{r.wins}-{r.losses}{r.draws > 0 ? ` · ${r.draws}E` : ''}</td>

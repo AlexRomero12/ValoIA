@@ -5,6 +5,7 @@ import { esc } from '@/lib/metas';
 import { groupByDay, dayStats } from '@/lib/dayAnalysis';
 import { UNWINNABLE_LIMITS } from '@/lib/unwinnable';
 import type { MatchRow } from '@/lib/types';
+import { AgentIcon } from './AgentIcon';
 import { MatchDetailModal } from './MatchDetailModal';
 import { DayDetailModal } from './DayDetailModal';
 import { LossBadge } from './LossBadge';
@@ -326,11 +327,9 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
       <td className="agent">
         <span
           className={`icon-cell clickable${fAgents.includes(m.agent) ? ' filter-on' : ''}`}
-          title={`Filtrar por ${m.agent}`}
           onClick={(e) => { e.stopPropagation(); toggle('agent', m.agent); }}
         >
-          {m.agentIcon ? <img className="agent-icon" src={m.agentIcon} alt="" loading="lazy" /> : null}
-          {esc(m.agent)}
+          <AgentIcon name={m.agent} icon={m.agentIcon} title={`Filtrar por ${m.agent}`} />
         </span>
         {m.accountTag ? (
           <span className="acct-tag" title={`${m.accountName ?? ''}#${m.accountTag}`}>#{m.accountTag}</span>
@@ -370,8 +369,7 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
           {m.mapIcon ? <img className="map-icon" src={m.mapIcon} alt="" loading="lazy" /> : null}
           <b>{esc(m.map)}</b>
           <span className="mc-dot">·</span>
-          {m.agentIcon ? <img className="agent-icon" src={m.agentIcon} alt="" loading="lazy" /> : null}
-          {esc(m.agent)}
+          <AgentIcon name={m.agent} icon={m.agentIcon} />
         </span>
         <span className="mc-line2">
           <b className="mc-score">{m.roundsWon}–{m.roundsLost}</b>

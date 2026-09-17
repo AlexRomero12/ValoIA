@@ -2,6 +2,15 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.24.0] — 2026-09-17
+
+El agente se muestra con su icono (sin el nombre al lado) en las vistas de partida.
+
+### Changed
+- **Agente solo con icono** (nombre en tooltip) en el detalle de partida, el análisis del día y el historial de Ranked: el header del detalle ya no repite «Mapa · Agente», y el scoreboard, las partidas del día, «Destacadas», las filas de escritorio y las tarjetas móviles muestran el retrato del agente. Si la partida no trae icono se cae al nombre (`components/AgentIcon.tsx`)
+- **«Por agente» del día gana aire**: con el icono sin nombre la columna se estrecha (64px escritorio / 56px móvil) y las stats reparten el resto
+- **Estados clicables del icono**: hover y filtro activo marcan el borde del retrato — el color/subrayado de texto no se veía sobre una imagen
+
 ## [1.23.1] — 2026-09-16
 
 ### Changed

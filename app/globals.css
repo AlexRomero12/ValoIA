@@ -393,6 +393,11 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
      no llene el círculo y respire como antes (displayIcon traía más aire). */
   transform: scale(0.85);
 }
+/* Fallback cuando la partida no trae icono de agente: se muestra el nombre. */
+.agent-fallback { font-weight: 600; }
+/* El color de texto no se nota en un icono: hover y filtro activo marcan el borde. */
+.icon-cell.clickable:hover img.agent-icon,
+.icon-cell.filter-on img.agent-icon { border-color: var(--red); }
 .map-icon {
   width: 36px;
   height: 22px;
@@ -787,8 +792,12 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
    quedaban con margen distinto. Fija a 170px, las stats reparten el resto en partes iguales */
 .score-table.dd-mini { table-layout: fixed; }
 .score-table.dd-mini th:first-child { width: 170px; }
+/* "Por agente" en modo icono (sin nombre): la columna se estrecha y las stats ganan aire */
+.score-table.dd-mini.icon-col th:first-child { width: 64px; }
 .dd-mini td.dd-filter { cursor: pointer; }
 .dd-mini td.dd-filter:hover { color: var(--red); }
+.dd-mini td.dd-filter:hover img.agent-icon,
+.dd-mini tr.row-on td.dd-filter img.agent-icon { border-color: var(--red); }
 .score-table.dd-mini tr.row-on td { background: rgba(255, 70, 85, 0.08); }
 .score-table.dd-mini tr.row-on td:first-child { box-shadow: inset 2px 0 0 var(--red); }
 /* En el historial del día, las columnas numéricas van a la izquierda (headers y datos);
@@ -2414,6 +2423,7 @@ body { overflow-x: clip; }
   }
   .score-table.dd-mini { min-width: 520px; }
   .dd-mini th:first-child { width: 140px; }
+  .score-table.dd-mini.icon-col th:first-child { width: 56px; }
   .dd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .loading-overlay, .loading-backdrop { padding: 14px; }
 }

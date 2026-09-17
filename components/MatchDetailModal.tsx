@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useMatchDetail } from '@/lib/hooks';
 import { TierIcon } from '@/components/TierIcon';
+import { AgentIcon } from './AgentIcon';
 import { LossBadge } from './LossBadge';
 import type { MatchRow } from '@/lib/types';
 import type { DetailPlayer } from '@/lib/matchDetail';
@@ -51,11 +52,11 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
         <header className="md-head">
           <div className="md-icons">
             {match.mapIcon ? <img className="map-icon" src={match.mapIcon} alt="" /> : null}
-            {match.agentIcon ? <img className="agent-icon" src={match.agentIcon} alt="" /> : null}
+            <AgentIcon name={match.agent} icon={match.agentIcon} />
           </div>
           <div className="md-title">
             <h3>
-              {match.map} · {match.agent}
+              {match.map}
               <span className={`res-badge ${isDraw ? 'e' : match.won ? 'w' : 'l'}`}>
                 {isDraw ? 'Empate' : match.won ? 'Victoria' : 'Derrota'}
               </span>
@@ -177,7 +178,7 @@ function Scoreboard({ title, players }: { title: string; players: DetailPlayer[]
               .map((p) => (
                 <tr key={p.name + p.tag} className={p.isMe ? 'me-row' : ''}>
                   <td>{p.name}<span className="muted-tag">#{p.tag}</span></td>
-                  <td>{p.agentName}</td>
+                  <td><AgentIcon name={p.agentName} icon={p.agentIcon} /></td>
                   <td className="num"><TierIcon tier={p.tier} size={18} /></td>
                   <td className="num">{p.kills}/{p.deaths}/{p.assists}</td>
                   <td className="num">{p.acs}</td>
