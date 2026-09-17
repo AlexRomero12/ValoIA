@@ -7,7 +7,7 @@ import { TierIcon } from '@/components/TierIcon';
 import { AgentIcon } from './AgentIcon';
 import { LossBadge } from './LossBadge';
 import type { MatchRow } from '@/lib/types';
-import type { DetailPlayer } from '@/lib/matchDetail';
+import type { DetailPlayer, RoundCell } from '@/lib/matchDetail';
 
 interface MatchDetailModalProps {
   match: MatchRow;
@@ -43,6 +43,10 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
   const myTeamId = detail?.players.find((x) => x.isMe)?.teamId;
   const myPlayers = detail?.players.filter((p) => p.teamId === myTeamId) ?? [];
   const enemyPlayers = detail?.players.filter((p) => p.teamId !== myTeamId) ?? [];
+  const playersByName = new Map((detail?.players ?? []).map((p) => [p.name, p]));
+  const me = detail?.players.find((p) => p.isMe) ?? null;
+  const others = detail?.players.filter((p) => !p.isMe) ?? [];
+  const vsRows = me ? vsLobbyRows(me, others) : [];
 
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -83,24 +87,33 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
           <>
             <section className="md-section">
               <h4>Timeline de rondas</h4>
-              <div className="round-strip">
-                {detail.rounds.map((r) => (
-                  <span
-                    key={r.n}
-                    className={`round-cell ${r.won ? 'w' : 'l'}`}
-                    title={`Ronda ${r.n} · ${r.won ? 'Ganada' : 'Perdida'} por ${resultEs(r.result)}${r.plantSite ? ` · planta en ${r.plantSite}${r.plantBy ? ` (${r.plantBy})` : ''}` : ''}${r.defuseBy ? ` · defusó ${r.defuseBy}` : ''}`}
-                  >
-                    <b className="rc-n">{r.n}</b>
-                    <span className="rc-res">{resultIcon(r.result)}</span>
-                    {r.plantSite ? <i className="rc-plant">◉</i> : null}
-                  </span>
+              <div className="round-halves">
+                {roundHalves(detail.rounds).map((h) => (
+                  <div key={h.key} className="round-half">
+                    <span className="rh-label">{h.label}</span>
+                    <div className="round-strip">
+                      {h.rounds.map((r) => (
+                        <span key={r.n} className={`round-cell ${r.won ? 'w' : 'l'}`} title={roundTitle(r)}>
+                          <b className="rc-n">{r.n}</b>
+                          <span className="rc-res">{resultIcon(r.result)}</span>
+                          {r.plantSite ? <i className="rc-plant">◉</i> : null}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
+              <p className="round-legend">
+                {ROUND_LEGEND.map((l) => (
+                  <span key={l.label}><b>{l.icon}</b> {l.label}</span>
+                ))}
+                <span><b>◉</b> planta (sitio A/B)</span>
+              </p>
             </section>
 
             <section className="md-section">
               <h4>Tu combate</h4>
-              <div className="combat-grid">
+              <div className="combat-grid three">
                 <div className="combat-box">
                   <div className="cb-title">Duelos de apertura</div>
                   <div className="cb-duo">
@@ -130,7 +143,8 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
                       <div className="killer-list">
                         {detail.combat.topKillers.map((k) => (
                           <div key={k.name} className="killer-row">
-                            <span className="k-name">{k.name}</span>
+                            <KillerName name={k.name} icon={playersByName.get(k.name)?.agentIcon} />
+                            <span className="k-weapon">{k.weapon && k.weapon !== '?' ? k.weapon : ''}</span>
                             <span className="k-times">×{k.times}</span>
                           </div>
                         ))}
@@ -143,6 +157,67 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
                     </>
                   ) : (
                     <p className="empty" style={{ padding: '8px 0' }}>Nadie te eliminó más de una vez.</p>
+                  )}
+                </div>
+
+                {vsRows.length ? (
+                  <div className="combat-box">
+                    <div className="cb-title">Tú vs el lobby</div>
+                    <div className="vs-list">
+                      {vsRows.map((r) => (
+                        <div key={r.label} className="vs-row">
+                          <span className="vs-label">{r.label}</span>
+                          <b className="vs-me">{r.me}</b>
+                          <span className={`vs-delta ${r.delta >= 0 ? 'up' : 'down'}`}>
+                            {r.delta >= 0 ? '+' : ''}{r.delta.toFixed(0)}%
+                          </span>
+                          <span className="vs-avg">media {r.avg}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="cb-note">Media de los otros {others.length} jugadores de la partida.</div>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="md-section">
+              <h4>Impacto</h4>
+              <div className="combat-grid">
+                <div className="combat-box">
+                  <div className="cb-title">Bajas múltiples</div>
+                  <div className="mk-row">
+                    {MULTIKILLS.map((k) => {
+                      const n = detail.multikills[k.key];
+                      return (
+                        <div
+                          key={k.key}
+                          className={`mk${n > 0 ? ' on' : ''}${k.key === 'five' && n > 0 ? ' ace' : ''}`}
+                          title={`${k.full}: ${n} ronda${n === 1 ? '' : 's'}`}
+                        >
+                          <span className="n">{n}</span>
+                          <span className="lbl">{k.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="cb-note">Rondas con esa cantidad de kills tuyas (5K = ace).</div>
+                </div>
+
+                <div className="combat-box">
+                  <div className="cb-title">A quién mataste más</div>
+                  {detail.topVictims.length ? (
+                    <div className="killer-list">
+                      {detail.topVictims.map((v) => (
+                        <div key={v.name} className="killer-row">
+                          <KillerName name={v.name} icon={playersByName.get(v.name)?.agentIcon} />
+                          <span />
+                          <span className="k-times kills">×{v.times}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty" style={{ padding: '8px 0' }}>Sin kills en esta partida.</p>
                   )}
                 </div>
               </div>
@@ -200,6 +275,92 @@ function rrCls(v: number | null | undefined): string {
   if (v == null || v === 0) return '';
   return v > 0 ? 'up' : 'down';
 }
+
+/** Nombre del jugador con su icono de agente (los dos vienen del mismo DTO). */
+function KillerName({ name, icon }: { name: string; icon: string | null | undefined }) {
+  return (
+    <span className="k-name">
+      {icon ? <img className="agent-icon sm" src={icon} alt="" loading="lazy" /> : null}
+      <span className="k-txt">{name}</span>
+    </span>
+  );
+}
+
+interface VsRow {
+  label: string;
+  me: string;
+  avg: string;
+  delta: number;
+}
+
+/** Tus KPI contra la media de los otros jugadores: todo sale del detalle ya cargado. */
+function vsLobbyRows(me: DetailPlayer, others: DetailPlayer[]): VsRow[] {
+  if (!others.length) return [];
+  const kdOf = (p: DetailPlayer) => p.kills / Math.max(1, p.deaths);
+  const mean = (pick: (p: DetailPlayer) => number) => others.reduce((a, p) => a + pick(p), 0) / others.length;
+  const rows: { label: string; pick: (p: DetailPlayer) => number; fmt: (v: number) => string }[] = [
+    { label: 'ACS', pick: (p) => p.acs, fmt: (v) => v.toFixed(0) },
+    { label: 'K/D', pick: kdOf, fmt: (v) => v.toFixed(2) },
+    { label: 'ADR', pick: (p) => p.adr, fmt: (v) => v.toFixed(0) },
+    { label: 'HS%', pick: (p) => p.hsPct, fmt: (v) => `${v.toFixed(1)}%` },
+  ];
+  return rows.map((r) => {
+    const mine = r.pick(me);
+    const avg = mean(r.pick);
+    return {
+      label: r.label,
+      me: r.fmt(mine),
+      avg: r.fmt(avg),
+      delta: avg > 0 ? ((mine - avg) / avg) * 100 : 0,
+    };
+  });
+}
+
+interface RoundHalf {
+  key: string;
+  label: string;
+  rounds: RoundCell[];
+}
+
+/** Rondas por mitades (1ª: 1-12, 2ª: 13-24, OT: 25+) con el bando inferido. */
+function roundHalves(rounds: RoundCell[]): RoundHalf[] {
+  const groups = [
+    { key: 'h1', base: '1ª mitad', rounds: rounds.filter((r) => r.n <= 12) },
+    { key: 'h2', base: '2ª mitad', rounds: rounds.filter((r) => r.n > 12 && r.n <= 24) },
+    { key: 'ot', base: 'OT', rounds: rounds.filter((r) => r.n > 24) },
+  ];
+  return groups
+    .filter((g) => g.rounds.length > 0)
+    .map((g) => {
+      // La OT alterna bando por ronda: solo se etiqueta la mitad.
+      const side = g.rounds.find((r) => r.side != null)?.side ?? null;
+      const suffix = g.key !== 'ot' && side != null ? ` · ${side === 1 ? 'ATK' : 'DEF'}` : '';
+      return { key: g.key, label: `${g.base}${suffix}`, rounds: g.rounds };
+    });
+}
+
+/** Tooltip de una celda del timeline (incluye el bando cuando se conoce). */
+function roundTitle(r: RoundCell): string {
+  const side = r.side == null ? '' : ` · ${r.side === 1 ? 'ATK' : 'DEF'}`;
+  const plant = r.plantSite ? ` · planta en ${r.plantSite}${r.plantBy ? ` (${r.plantBy})` : ''}` : '';
+  const defuse = r.defuseBy ? ` · defusó ${r.defuseBy}` : '';
+  return `Ronda ${r.n}${side} · ${r.won ? 'Ganada' : 'Perdida'} por ${resultEs(r.result)}${plant}${defuse}`;
+}
+
+const ROUND_LEGEND = [
+  { icon: '⚔', label: 'eliminación' },
+  { icon: '💥', label: 'spike' },
+  { icon: '✂', label: 'defuse' },
+  { icon: '⏱', label: 'tiempo' },
+  { icon: '🏳', label: 'rendición' },
+];
+
+const MULTIKILLS: { key: 'two' | 'three' | 'four' | 'five'; label: string; full: string }[] = [
+  { key: 'two', label: '2K', full: 'Dobles' },
+  { key: 'three', label: '3K', full: 'Triples' },
+  { key: 'four', label: '4K', full: 'Cuádruples' },
+  { key: 'five', label: '5K', full: 'Ace' },
+];
 
 const RESULT_ICONS: Record<string, string> = {
   elimination: '⚔',

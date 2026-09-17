@@ -4,12 +4,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [1.24.0] — 2026-09-17
 
-El agente se muestra con su icono (sin el nombre al lado) en las vistas de partida.
+Resumen de partida más visual y con más contexto (todo desde datos ya cacheados, $0 requests extra).
 
 ### Changed
 - **Agente solo con icono** (nombre en tooltip) en el detalle de partida, el análisis del día y el historial de Ranked: el header del detalle ya no repite «Mapa · Agente», y el scoreboard, las partidas del día, «Destacadas», las filas de escritorio y las tarjetas móviles muestran el retrato del agente. Si la partida no trae icono se cae al nombre (`components/AgentIcon.tsx`)
 - **«Por agente» del día gana aire**: con el icono sin nombre la columna se estrecha (64px escritorio / 56px móvil) y las stats reparten el resto
+- **Historial con columnas reequilibradas**: el hueco que dejó el nombre del agente va a Mapa, Resultado y K/D/A (menos truncado en pantallas medianas)
 - **Estados clicables del icono**: hover y filtro activo marcan el borde del retrato — el color/subrayado de texto no se veía sobre una imagen
+- **Timeline de rondas por mitades**: 1ª/2ª mitad y OT en bloques con el bando inferido (ATK/DEF, mismo criterio que Aperturas) y leyenda de los iconos de ronda
+
+### Added
+- **«Quién te eliminó» con contexto**: icono del agente que te mató y el arma de la última kill (el arma ya viajaba en el DTO y no se mostraba)
+- **«Tú vs el lobby»**: ACS, K/D, ADR y HS% contra la media de los otros 9 jugadores, con delta coloreado
+- **«Impacto»**: rondas con 2K/3K/4K/5K (el ace en dorado) y «a quién mataste más» desde el kill feed
+
+### Notes
+- Motor puro `lib/impact.ts` con `lib/impact.test.ts` (6 tests); el detalle sube a `val:detail:v4` y los campos nuevos se rellenan desde el bucket/archivo ya cacheado
 
 ## [1.23.1] — 2026-09-16
 

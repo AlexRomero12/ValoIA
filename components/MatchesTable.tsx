@@ -157,10 +157,12 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
 
       <div className="table-scroll matches-desktop">
         <table className="matches">
+          {/* El agente es solo icono: su columna se estrecha y el aire va a Mapa,
+              Resultado y K/D/A, que son las que truncan en pantallas medianas. */}
           <colgroup>
-            <col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '13%' }} /><col style={{ width: '12%' }} />
-            <col style={{ width: '8%' }} /><col style={{ width: '10%' }} /><col style={{ width: '6%' }} /><col style={{ width: '7%' }} />
-            <col style={{ width: '6%' }} /><col style={{ width: '6%' }} /><col style={{ width: '8%' }} />
+            <col style={{ width: '9%' }} /><col style={{ width: '15%' }} /><col style={{ width: '6%' }} /><col style={{ width: '14%' }} />
+            <col style={{ width: '9%' }} /><col style={{ width: '12%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} />
+            <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} />
           </colgroup>
           <thead>
             <tr>

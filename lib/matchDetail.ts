@@ -4,6 +4,8 @@ import { getArchiveMatchById } from './archive';
 import { getHenrikAccount } from './henrik';
 import { listProfiles, listProfilesFor, type ProfileViewer } from './profiles';
 import { memberAccounts } from './profileTypes';
+import { sidesByRound } from './aperturas';
+import { roundImpact } from './impact';
 import type { HenrikMatch } from './henrik';
 
 export interface DetailPlayer {
@@ -33,6 +35,8 @@ export interface RoundCell {
   plantSite?: string;
   plantBy?: string;
   defuseBy?: string;
+  /** Bando de la ronda (mismo criterio que Aperturas): 1 = ATK, 0 = DEF, null = sin determinar. */
+  side: 0 | 1 | null;
 }
 
 export interface MatchDetail {
@@ -59,6 +63,10 @@ export interface MatchDetail {
     otherKillers: number;
     otherDeaths: number;
   };
+  /** Rondas con N kills tuyas (el ace es `five`). */
+  multikills: { two: number; three: number; four: number; five: number };
+  /** A quién mataste más (top 3). */
+  topVictims: { name: string; times: number }[];
 }
 
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -69,9 +77,10 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NOT_CACHED' });
   }
   const preferred = candidates.find((m) => m.id === playerId) ?? candidates[0];
+  // v4: añade multikills, víctimas y bando por ronda (los DTO v3 no los traen).
   // v3: los DTO guardan URLs de iconos; la clave nueva evita servir detalles
   // cacheados 7 días con los iconos de agente pesados (~555 KB).
-  const cacheKey = `val:detail:v3:${preferred.id}:${matchId}`;
+  const cacheKey = `val:detail:v4:${preferred.id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 
@@ -120,6 +129,12 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
 
   const me = (match.players ?? []).find((p) => p.puuid === account.puuid);
   const myTeamId = me?.team_id ?? null;
+  // Bando del timeline: si el player no trae team_id, cae al kill feed (como Aperturas).
+  const sideTeam =
+    myTeamId ??
+    (match.kills ?? []).find((k) => k.killer?.puuid === account.puuid && k.killer?.team)?.killer?.team ??
+    (match.kills ?? []).find((k) => k.victim?.puuid === account.puuid && k.victim?.team)?.victim?.team ??
+    null;
   const myTeam = (match.teams ?? []).find((t) => t.team_id != null && t.team_id === myTeamId) ?? (match.teams ?? [])[0];
 
   const players: DetailPlayer[] = (match.players ?? []).map((p) => {
@@ -174,14 +189,21 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
   const otherKillers = ranked.length - topKillers.length;
   const otherDeaths = ranked.slice(3).reduce((a, k) => a + k.times, 0);
 
-  const rounds: RoundCell[] = (match.rounds ?? []).map((r, idx) => ({
-    n: (r.id ?? idx) + 1,
-    won: r.winning_team != null ? r.winning_team === myTeamId : Boolean(myTeam?.won),
-    result: r.result ?? '',
-    plantSite: r.plant?.site,
-    plantBy: r.plant?.player?.name,
-    defuseBy: r.defuse?.player?.name,
-  }));
+  const impact = roundImpact(match.kills, account.puuid);
+
+  const sides = sideTeam ? sidesByRound(match, sideTeam) : new Map<number, 0 | 1>();
+  const rounds: RoundCell[] = (match.rounds ?? []).map((r, idx) => {
+    const id = r.id ?? idx;
+    return {
+      n: id + 1,
+      won: r.winning_team != null ? r.winning_team === myTeamId : Boolean(myTeam?.won),
+      result: r.result ?? '',
+      plantSite: r.plant?.site,
+      plantBy: r.plant?.player?.name,
+      defuseBy: r.defuse?.player?.name,
+      side: sides.get(id) ?? null,
+    };
+  });
 
   const dto: MatchDetail = {
     matchId,
@@ -201,6 +223,8 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     players,
     rounds,
     combat: { firstBloods: fb, firstDeaths: fd, topKillers, otherKillers, otherDeaths },
+    multikills: impact.multikills,
+    topVictims: impact.victims,
   };
 
   cacheSet(cacheKey, dto, DETAIL_TTL);

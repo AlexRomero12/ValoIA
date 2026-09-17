@@ -393,6 +393,8 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
      no llene el círculo y respire como antes (displayIcon traía más aire). */
   transform: scale(0.85);
 }
+/* Variante pequeña (listas de asesinos/víctimas del detalle) */
+.agent-icon.sm { width: 18px; height: 18px; }
 /* Fallback cuando la partida no trae icono de agente: se muestra el nombre. */
 .agent-fallback { font-weight: 600; }
 /* El color de texto no se nota en un icono: hover y filtro activo marcan el borde. */
@@ -829,12 +831,31 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
   color: var(--gold);
 }
 
+/* Timeline agrupado por mitades (1ª/2ª/OT) con el bando inferido */
+.round-halves { display: flex; flex-direction: column; gap: 10px; }
+.rh-label {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mute);
+  border: 1px solid var(--line);
+  background: var(--steel-2);
+  padding: 2px 8px;
+  margin-bottom: 6px;
+}
+.round-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 0; font-size: 11px; color: var(--mute); }
+.round-legend b { color: var(--bone); font-weight: 700; }
+
 .combat-grid {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
   gap: 12px;
 }
-@media (max-width: 720px) { .combat-grid { grid-template-columns: 1fr; } }
+/* Tres tarjetas (aperturas + asesino + tú vs lobby): reparte en 3 cuando caben. */
+.combat-grid.three { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+@media (max-width: 720px) { .combat-grid, .combat-grid.three { grid-template-columns: 1fr; } }
 .combat-box {
   border: 1px solid var(--line);
   background: var(--steel-2);
@@ -862,7 +883,7 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .killer-list { display: flex; flex-direction: column; }
 .killer-row {
   display: grid;
-  grid-template-columns: 1fr 48px;
+  grid-template-columns: 1fr auto 48px;
   align-items: center;
   gap: 10px;
   padding: 7px 2px;
@@ -870,7 +891,9 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
   font-size: 12.5px;
 }
 .killer-row:last-child { border-bottom: none; }
-.k-name { font-weight: 600; color: var(--bone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; color: var(--bone); }
+.k-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-weapon { color: var(--mute); font-size: 11px; white-space: nowrap; }
 .k-times {
   text-align: center;
   color: var(--loss);
@@ -878,6 +901,36 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
   background: rgba(255, 92, 105, 0.1);
   padding: 1px 0;
 }
+.k-times.kills { color: var(--win); background: rgba(47, 208, 138, 0.1); }
+
+/* Detalle: tus KPI contra la media de los otros 9 jugadores */
+.vs-list { display: flex; flex-direction: column; gap: 6px; }
+.vs-row { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
+.vs-label { width: 40px; flex: none; color: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; }
+.vs-me { font-size: 15px; font-variant-numeric: tabular-nums; }
+.vs-delta { margin-left: auto; font-weight: 700; font-size: 11.5px; }
+.vs-delta.up { color: var(--win); }
+.vs-delta.down { color: var(--loss); }
+.vs-avg { color: var(--mute); font-size: 11px; }
+
+/* Detalle: bajas múltiples (2K–5K) */
+.mk-row { display: flex; gap: 8px; }
+.mk {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+  background: var(--steel-2);
+  padding: 7px 4px;
+}
+.mk .n { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--faint); }
+.mk .lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--faint); }
+.mk.on { border-color: var(--line-strong); }
+.mk.on .n { color: var(--bone); }
+.mk.ace { border-color: var(--gold); }
+.mk.ace .n, .mk.ace .lbl { color: var(--gold); }
 
 .score-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
 .score-table th {
