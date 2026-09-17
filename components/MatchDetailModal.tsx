@@ -111,6 +111,9 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
               </p>
             </section>
 
+            <Scoreboard title={`Tu equipo · ${myPlayers.reduce((a, p) => a + p.kills, 0)} kills`} players={myPlayers} />
+            <Scoreboard title={`Equipo rival · ${enemyPlayers.reduce((a, p) => a + p.kills, 0)} kills`} players={enemyPlayers} />
+
             <section className="md-section">
               <h4>Tu combate</h4>
               <div className="combat-grid three">
@@ -222,9 +225,6 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
                 </div>
               </div>
             </section>
-
-            <Scoreboard title={`Tu equipo · ${myPlayers.reduce((a, p) => a + p.kills, 0)} kills`} players={myPlayers} />
-            <Scoreboard title={`Equipo rival · ${enemyPlayers.reduce((a, p) => a + p.kills, 0)} kills`} players={enemyPlayers} />
           </>
         )}
       </div>
