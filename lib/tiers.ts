@@ -2,7 +2,8 @@ import { cached } from './cache';
 
 /**
  * Iconos de rangos competitivos (valorant-api.com/v1/competitivetiers).
- * Solo cambia por episodio: se cachea 7 días. Clave = número de tier (3..27).
+ * Solo cambia por episodio: se cachea 7 días.
+ * Clave = número de tier (0 = Unrated, que trae emblema de "sin rango"; 3..27).
  */
 export type TierIconMap = Record<string, string>;
 

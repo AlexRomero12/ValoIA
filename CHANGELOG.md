@@ -11,6 +11,7 @@ Resumen de partida más visual y con más contexto (todo desde datos ya cacheado
 - **«Por agente» del día gana aire**: con el icono sin nombre la columna se estrecha (64px escritorio / 56px móvil) y las stats reparten el resto
 - **Historial con columnas reequilibradas**: el hueco que dejó el nombre del agente va a Mapa, Resultado y K/D/A (menos truncado en pantallas medianas)
 - **Estados clicables del icono**: hover y filtro activo marcan el borde del retrato — el color/subrayado de texto no se veía sobre una imagen
+- **Unrated con su emblema**: `TierIcon` ya usa el icono oficial de «sin rango» para el tier 0 (antes caía al texto) en el scoreboard, el chip del perfil, las tarjetas de Equipo y el header del detalle
 - **Timeline de rondas por mitades**: 1ª/2ª mitad y OT en bloques con el bando inferido (ATK/DEF, mismo criterio que Aperturas) y leyenda de los iconos de ronda
 
 ### Added

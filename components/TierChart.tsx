@@ -80,7 +80,7 @@ export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
     gridlines.push(
       <g key={t}>
         <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#20303f" strokeWidth={major ? 1.3 : 0.7} opacity={major ? 1 : 0.6} />
-        {tierName(t) !== '—' && (
+        {t >= 3 ? (
           tierIcons[String(t)] ? (
             <image key={t} x={compact ? 4 : PL - 30} y={y - (compact ? 8 : 9)} width={compact ? 16 : 20} height={compact ? 16 : 20} href={tierIcons[String(t)]}>
               <title>{tierName(t)}</title>
@@ -90,7 +90,7 @@ export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
               {compact ? tierShort(t) : tierName(t)}
             </text>
           )
-        )}
+        ) : null}
       </g>,
     );
   }
