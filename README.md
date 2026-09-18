@@ -2,18 +2,18 @@
 
 Dashboard personal de rendimiento para VALORANT. Datos en vivo desde la API de HenrikDev (partidas, MMR, RR) con cache persistente, Docker y **perfiles configurables** (tú decides a quién ver y qué reglas aplicar).
 
-> Estado actual: **v1.23.1** — ver [CHANGELOG.md](./CHANGELOG.md)
+> Estado actual: **v1.24.0** — ver [CHANGELOG.md](./CHANGELOG.md)
 
 ## Estructura
 
 ```
 app/                  Páginas (/valorant, /team, /tienda, /reglas, /perfiles) + API routes
-components/           TopBar, KpiGrid, WrPanel, TierChart, MatchesTable, MatchDetailModal, LoadingOverlay, InfoTip
+components/           TopBar, KpiGrid, WrPanel, TierChart, MatchesTable, MatchDetailModal, AgentIcon, LoadingOverlay, InfoTip
 components/rules/     Reglas de sesión: intro y propuesta, día evaluado, recomendaciones con acción
 components/compare/   Filtros, ranking, trend y tarjetas de agentes Por jugador / Por agente
 components/profiles/  Formulario de perfil, selector, editor de reglas de sesión y selector de agentes
 components/store/     Tienda de hoy, favoritas y panel de notificaciones
-lib/                  Clientes Henrik/Riot, perfiles, agregación, reglas de sesión, propuesta, export/import, cache L1+L2, hooks
+lib/                  Clientes Henrik/Riot, perfiles, agregación, aperturas/impacto (FB/FD por bando y bajas múltiples), reglas de sesión, propuesta, export/import, cache L1+L2, hooks
 docs/                 Guía de despliegue en Oracle
 public/               Estáticos (incluye sw.js para Web Push)
 ```
@@ -35,18 +35,18 @@ public/               Estáticos (incluye sw.js para Web Push)
 - **Hub con tabs** (`Resumen · Agentes · Mapas · Arsenal · Aperturas`, enlazables con `?tab=`): Resumen = KPIs + historial + top 3 + trend; Agentes/Mapas con tabla completa y ordenable (click en fila filtra las partidas); Arsenal con el panel de armas; Aperturas con el FB/FD por ronda
 - **Selector de perfiles visibles**: los que marques en `/perfiles` (el inicial se siembra desde `VAL_NAME`/`VAL_TAG`) — todo el dash se recalcula
 - **Todas las cuentas combinadas**: KPIs, WR por agente y mapa, arsenal y trend se calculan sobre la unión de la cuenta principal + alternativas del perfil elegido (útil para ver todo lo que juega y dónde)
-- **Rango con badges oficiales**: icono del tier con tooltip en el chip (con **RR dentro del rango** en vez de MMR crudo), en el eje Y del gráfico de tendencia y en el scoreboard del detalle
+- **Rango con badges oficiales**: icono del tier con tooltip en el chip (con **RR dentro del rango** en vez de MMR crudo), en el eje Y del gráfico de tendencia y en el scoreboard del detalle; **Unrated usa su emblema de «sin rango»** (sin texto)
 - KPIs vs metas del plan (WR ≥55%, K/D ≥1.05, ACS ≥220, HS% ≥25%, ADR ≥150) con ayuda `(?)` en cada tarjeta
 - **Forma reciente y deltas**: últimas 5 partidas (V/D/E) con racha actual, y cada KPI con su variación contra la ventana anterior de igual duración (mín. 3 partidas)
 - Winrate por agente y por mapa con íconos oficiales (click filtra las partidas); el panel de **agente muestra los 6 más jugados** con **Ver más/Ver menos** (el resto queda a un toque, sin estirar el layout)
 - **Arsenal · Uso de armas** por perfil: kills por arma con barra de uso, K/D por arma y "con qué te matan" — calculado desde el kill feed del archivo acumulativo ($0 requests), con íconos y categorías de valorant-api.com
 - **Aperturas · FB/FD por ronda** (`?tab=aperturas`): recap Global/ATK/DEF con FD y FB por 100 rondas, WR con FD (cuánto cuesta morir primero), WR sin FD y conversión de primeras sangres; tablas por mapa y agente con FD/FB **promedio por partida jugada en cada bando**, WR con/sin FD y aviso de muestras bajas; **Revisión VOD** de la partida más reciente a la más vieja (FB sin convertir/FD, señal 2+ o 3+, **20 por página**) que abre el timeline de rondas del detalle. Bando por ronda inferido de las plantas + mitades/OT ($0 requests)
 - **Trend de rango** (últimas 20 partidas, con nota «de N»): resumen del período (rango inicial → actual, pico, RR neto y récord), leyenda V/D/E y detalle de cada partida al pasar o tocar el punto (fecha, mapa, agente, marcador, K/D/A, ACS, ±RR y rango)
-- **Partidas recientes**: agrupadas por día (el día más reciente expandido al entrar; el resto, colapsado), con WR%, V-D-E, K/D, ACS, ADR y ±RR en el resumen de cada día; click en el día abre el análisis completo con mejores/peores partidas, por agente y por mapa
-- **Columnas por partida**: íconos de agente/mapa, K/D, ACS, ADR, HS%, ±RR con tooltip de MMR; stats en verde al cumplir meta
+- **Partidas recientes**: agrupadas por día (el día más reciente expandido al entrar; el resto, colapsado), con WR%, V-D-E, K/D, ACS, ADR y ±RR en el resumen de cada día; click en el día abre el análisis completo (KPIs, destacadas, por agente con icono y por mapa, y las partidas del día filtrables por agente/mapa)
+- **Columnas por partida**: agente **solo con su icono** (nombre en tooltip), mapa con ícono + nombre, K/D, ACS, ADR, HS%, ±RR con tooltip de MMR; stats en verde al cumplir meta y anchos reequilibrados en escritorio (menos truncado); en móvil, tarjetas por partida con el mismo criterio
 - **Iconos de derrota**: ☠ **Injugable** (2+ compañeros muy flojos: ≤155 ACS y ≤0.8 KD cada uno, y tu ACS ≥ la media) y ⚠ **Mi culpa** (quedaste bajo la media del equipo con K/D < 0.8), con leyenda desplegable en «Partidas recientes» (`? iconos`) y tooltip del porqué; detección automática, no altera stats
 - **Filtros multi en el historial**: agrega varios agentes/mapas desde la barra de «Partidas recientes» (selects con conteo, chips para quitar, Limpiar y contador `N de M partidas · D días`); también se filtran desde los iconos de cada fila, los paneles de WR y las tablas de Agentes/Mapas («Ver partidas»); con filtro activo el historial se despliega completo
-- **Detalle de partida** (click en fila): scoreboard completo de los 10 jugadores con economía, timeline ronda por ronda con motivo (⚔ eliminación · 💥 detonación · ✂ defusa · ⏱ tiempo), duelos de apertura y quién te eliminó
+- **Detalle de partida** (click en fila), en este orden: **timeline de rondas** por mitades (1ª/2ª · ATK/DEF y OT, con leyenda ⚔ 💥 ✂ ⏱ 🏳 ◉), **tu equipo** y **equipo rival** (scoreboard con economía y rango), **Tu combate** (duelos de apertura con total y desglose **ATK/DEF**, quién te eliminó con icono del agente y el arma, y **tú vs el lobby**: ACS/K/D/ADR/HS% contra la media de los otros 9) e **Impacto** (bajas múltiples 2K–5K —el ace en dorado— y a quién mataste más). Agentes solo con icono (nombre en tooltip) y todo calculado del kill feed ya cacheado ($0 requests)
 - Filtro por **temporada** o ventanas de 7/14/30/90 días
 
 ### Página Equipo (`/team`)
