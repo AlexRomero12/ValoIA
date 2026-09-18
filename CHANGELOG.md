@@ -18,9 +18,10 @@ Resumen de partida más visual y con más contexto (todo desde datos ya cacheado
 - **«Quién te eliminó» con contexto**: icono del agente que te mató y el arma de la última kill (el arma ya viajaba en el DTO y no se mostraba)
 - **«Tú vs el lobby»**: ACS, K/D, ADR y HS% contra la media de los otros 9 jugadores, con delta coloreado
 - **«Impacto»**: rondas con 2K/3K/4K/5K (el ace en dorado) y «a quién mataste más» desde el kill feed
+- **«Duelos de apertura» por bando**: el detalle separa tus FB/FD en ATK y DEF (mismo criterio de bandos que Aperturas) con el total arriba y aviso de rondas sin bando inferible
 
 ### Notes
-- Motor puro `lib/impact.ts` con `lib/impact.test.ts` (6 tests); el detalle sube a `val:detail:v4` y los campos nuevos se rellenan desde el bucket/archivo ya cacheado
+- Motores puros `lib/impact.ts` (6 tests) y `matchAperturas()` en `lib/aperturas.ts`; el detalle sube a `val:detail:v5` y los campos nuevos se rellenan desde el bucket/archivo ya cacheado
 
 ## [1.23.1] — 2026-09-16
 

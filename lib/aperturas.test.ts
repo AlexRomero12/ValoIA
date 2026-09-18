@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeAperturas, sidesByRound } from './aperturas';
+import { computeAperturas, matchAperturas, sidesByRound } from './aperturas';
 import { mergeAperturas } from './compare';
 import type { HenrikKill, HenrikMatch, HenrikMatchRound } from './henrik';
 
@@ -168,6 +168,58 @@ describe('computeAperturas', () => {
     const sinEquipo = mkMatch({ rounds: [mkRound(0, 'Blue', 'Blue')] });
     sinEquipo.players = [{ puuid: ME }];
     expect(computeAperturas([sinEquipo], ME)).toBeUndefined();
+  });
+});
+
+describe('matchAperturas', () => {
+  // Mismas 6 rondas que computeAperturas: ids 0-3 (ATK) y 12-13 (DEF).
+  const rounds = [
+    mkRound(0, 'Blue', 'Blue'),
+    mkRound(1, 'Red', null),
+    mkRound(2, 'Red', null),
+    mkRound(3, 'Blue', null),
+    mkRound(12, 'Blue', null),
+    mkRound(13, 'Red', null),
+  ];
+  const kills = [
+    mkKill(0, 1000, BLUE, RED), // FB (ATK)
+    mkKill(1, 500, RED, BLUE), // FD (ATK)
+    mkKill(2, 400, BLUE, RED), // FB (ATK)
+    mkKill(2, 800, RED, BLUE),
+    mkKill(12, 200, RED, BLUE), // FD (DEF)
+    mkKill(13, 100, BLUE, RED), // FB (DEF)
+  ];
+
+  it('separa FB/FD por bando manteniendo el total', () => {
+    const a = matchAperturas(mkMatch({ rounds, kills }), ME);
+    if (!a) throw new Error('sin aperturas');
+    expect(a.rounds).toBe(6);
+    expect(a.sinLado).toBe(0);
+    expect(a.total.fb).toBe(3);
+    expect(a.total.fd).toBe(2);
+    expect(a.atk.rounds).toBe(4);
+    expect(a.atk.fb).toBe(2);
+    expect(a.atk.fd).toBe(1);
+    expect(a.def.rounds).toBe(2);
+    expect(a.def.fb).toBe(1);
+    expect(a.def.fd).toBe(1);
+  });
+
+  it('las rondas sin planta quedan en sinLado y fuera de ATK/DEF', () => {
+    const sinPlantas = [mkRound(0, 'Blue', null), mkRound(1, 'Red', null)];
+    const a = matchAperturas(mkMatch({ rounds: sinPlantas, kills: [mkKill(0, 1000, BLUE, RED)] }), ME);
+    if (!a) throw new Error('sin aperturas');
+    expect(a.sinLado).toBe(2);
+    expect(a.atk.rounds).toBe(0);
+    expect(a.def.rounds).toBe(0);
+    expect(a.total.fb).toBe(1);
+  });
+
+  it('null sin equipo identificable ni rondas', () => {
+    expect(matchAperturas(mkMatch({ rounds: [] }), ME)).toBeNull();
+    const sinEquipo = mkMatch({ rounds: [mkRound(0, 'Blue', 'Blue')] });
+    sinEquipo.players = [{ puuid: ME }];
+    expect(matchAperturas(sinEquipo, ME)).toBeNull();
   });
 });
 

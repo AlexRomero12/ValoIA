@@ -47,6 +47,11 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
   const me = detail?.players.find((p) => p.isMe) ?? null;
   const others = detail?.players.filter((p) => !p.isMe) ?? [];
   const vsRows = me ? vsLobbyRows(me, others) : [];
+  // Duelos de apertura: total desde las aperturas (mismo cálculo que ATK/DEF).
+  const ap = detail?.aperturas ?? null;
+  const fbTotal = ap ? ap.total.fb : (detail?.combat.firstBloods ?? 0);
+  const fdTotal = ap ? ap.total.fd : (detail?.combat.firstDeaths ?? 0);
+  const apSplit = ap && ap.atk.rounds + ap.def.rounds > 0 ? ap : null;
 
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -121,22 +126,40 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
                   <div className="cb-title">Duelos de apertura</div>
                   <div className="cb-duo">
                     <div className="cb-stat win">
-                      <span className="num">{detail.combat.firstBloods}</span>
+                      <span className="num">{fbTotal}</span>
                       <span className="lbl">primeras sangres</span>
                     </div>
                     <div className="cb-vs">vs</div>
                     <div className="cb-stat loss">
-                      <span className="num">{detail.combat.firstDeaths}</span>
+                      <span className="num">{fdTotal}</span>
                       <span className="lbl">primeras muertes</span>
                     </div>
                   </div>
+                  {apSplit ? (
+                    <div className="ap-split">
+                      <span className="ap-head" />
+                      <span className="ap-head">FB</span>
+                      <span className="ap-head">FD</span>
+                      <span className="ap-side" title={`${apSplit.atk.rounds} rondas de ataque`}>ATK</span>
+                      <span className="ap-val fb">{apSplit.atk.rounds ? apSplit.atk.fb : '—'}</span>
+                      <span className="ap-val fd">{apSplit.atk.rounds ? apSplit.atk.fd : '—'}</span>
+                      <span className="ap-side" title={`${apSplit.def.rounds} rondas de defensa`}>DEF</span>
+                      <span className="ap-val fb">{apSplit.def.rounds ? apSplit.def.fb : '—'}</span>
+                      <span className="ap-val fd">{apSplit.def.rounds ? apSplit.def.fd : '—'}</span>
+                    </div>
+                  ) : null}
                   <div className="cb-note">
-                    {detail.combat.firstBloods > detail.combat.firstDeaths
+                    {fbTotal > fdTotal
                       ? '✅ Ganaste más duelos de apertura'
-                      : detail.combat.firstBloods < detail.combat.firstDeaths
+                      : fbTotal < fdTotal
                         ? '⚠ Perdiste más duelos de apertura'
                         : 'Duelos de apertura parejos'}
                   </div>
+                  {apSplit && apSplit.sinLado > 0 ? (
+                    <div className="cb-note">
+                      {apSplit.sinLado} ronda{apSplit.sinLado === 1 ? '' : 's'} sin bando inferible (sin plantas) — no entran en ATK/DEF.
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="combat-box">

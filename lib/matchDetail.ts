@@ -4,7 +4,7 @@ import { getArchiveMatchById } from './archive';
 import { getHenrikAccount } from './henrik';
 import { listProfiles, listProfilesFor, type ProfileViewer } from './profiles';
 import { memberAccounts } from './profileTypes';
-import { sidesByRound } from './aperturas';
+import { sidesByRound, matchAperturas, type MatchAperturas } from './aperturas';
 import { roundImpact } from './impact';
 import type { HenrikMatch } from './henrik';
 
@@ -67,6 +67,8 @@ export interface MatchDetail {
   multikills: { two: number; three: number; four: number; five: number };
   /** A quién mataste más (top 3). */
   topVictims: { name: string; times: number }[];
+  /** FB/FD de esta partida por bando (null si no hay rondas/equipo). */
+  aperturas: MatchAperturas | null;
 }
 
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -77,10 +79,11 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NOT_CACHED' });
   }
   const preferred = candidates.find((m) => m.id === playerId) ?? candidates[0];
+  // v5: añade aperturas por bando (los DTO v4 no las traen).
   // v4: añade multikills, víctimas y bando por ronda (los DTO v3 no los traen).
   // v3: los DTO guardan URLs de iconos; la clave nueva evita servir detalles
   // cacheados 7 días con los iconos de agente pesados (~555 KB).
-  const cacheKey = `val:detail:v4:${preferred.id}:${matchId}`;
+  const cacheKey = `val:detail:v5:${preferred.id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 
@@ -190,6 +193,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
   const otherDeaths = ranked.slice(3).reduce((a, k) => a + k.times, 0);
 
   const impact = roundImpact(match.kills, account.puuid);
+  const aperturas = matchAperturas(match, account.puuid);
 
   const sides = sideTeam ? sidesByRound(match, sideTeam) : new Map<number, 0 | 1>();
   const rounds: RoundCell[] = (match.rounds ?? []).map((r, idx) => {
@@ -225,6 +229,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     combat: { firstBloods: fb, firstDeaths: fd, topKillers, otherKillers, otherDeaths },
     multikills: impact.multikills,
     topVictims: impact.victims,
+    aperturas,
   };
 
   cacheSet(cacheKey, dto, DETAIL_TTL);

@@ -162,6 +162,38 @@ function roundsOf(m: HenrikMatch, puuid: string, myTeam: string): RoundFlags[] {
   });
 }
 
+/** FB/FD por bando de una partida (detalle): buckets con el mismo criterio que el resumen. */
+export interface MatchAperturas {
+  /** Rondas de la partida (todas, tengan bando o no). */
+  rounds: number;
+  total: AperturaBucket;
+  atk: AperturaBucket;
+  def: AperturaBucket;
+  /** Rondas sin bando inferible: no entran en ATK/DEF. */
+  sinLado: number;
+}
+
+/** Calcula los buckets de una partida; `null` si no hay equipo o rondas utilizables. */
+export function matchAperturas(m: HenrikMatch, puuid: string): MatchAperturas | null {
+  const me = (m.players ?? []).find((p) => p.puuid === puuid);
+  const myTeam = myTeamOf(m, me, puuid);
+  if (!myTeam) return null;
+  const rounds = roundsOf(m, puuid, myTeam);
+  if (!rounds.length) return null;
+
+  const total = emptyBucket();
+  const atk = emptyBucket();
+  const def = emptyBucket();
+  let sinLado = 0;
+  for (const r of rounds) {
+    registerRound(total, r.won, r.fd, r.fb);
+    if (r.side === 1) registerRound(atk, r.won, r.fd, r.fb);
+    else if (r.side === 0) registerRound(def, r.won, r.fd, r.fb);
+    else sinLado += 1;
+  }
+  return { rounds: rounds.length, total, atk, def, sinLado };
+}
+
 /**
  * Agrega FB/FD por ronda de una lista de partidas (mismo orden que el resumen).
  * Devuelve `undefined` si ninguna partida tiene rondas utilizables.
