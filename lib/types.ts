@@ -181,6 +181,12 @@ export interface ValSummary {
     mmrSyncedAt?: string | null;
     /** La ventana puede estar recortada (bucket al tope sin cobertura total) */
     truncated?: boolean;
+    /** true = la red falló (Riot/Henrik) y se sirvió desde el archivo/caché local */
+    stale?: boolean;
+    /** Fecha ISO de la última sincronización conocida cuando `stale` */
+    cachedAt?: string | null;
+    /** Motivo de la degradación (p. ej. "henrikdev HTTP 500") */
+    degradedReason?: string | null;
   };
   kpis: ValKpis;
   /** Ventana anterior de igual duración (deltas de KPIs); null si no hay datos. */

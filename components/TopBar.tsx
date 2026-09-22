@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { UserMenu } from '@/components/auth/UserMenu';
 import { MobileNav } from '@/components/MobileNav';
+import { ServiceBanner } from '@/components/ServiceBanner';
 import { useCooldown } from '@/lib/useCooldown';
 
 
@@ -78,6 +79,8 @@ export function TopBar({ accent, title, subtitle, chip, updated, onRefresh, load
         <Link href="/tienda" className={activePage === 'tienda' ? 'active' : ''}>Tienda</Link>
         <Link href="/perfiles" className={activePage === 'perfiles' ? 'active' : ''}>Perfiles</Link>
       </nav>
+
+      <ServiceBanner />
 
       <MobileNav activePage={activePage} />
     </>

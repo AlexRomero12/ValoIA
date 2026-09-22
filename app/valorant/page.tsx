@@ -167,8 +167,11 @@ function RankedPage() {
 
   const rrMissing = data?.window.rrMissing ?? 0;
   const rrTxt = data?.window.rrTotal != null ? ` · RR ${data.window.rrTotal > 0 ? '+' : ''}${data.window.rrTotal}${rrMissing > 0 ? '~' : ''}` : '';
+  const cachedAtTxt = data?.window.cachedAt
+    ? new Date(data.window.cachedAt).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : null;
   const windowInfo = data
-    ? `${data.window.seasonShort ? `Temporada ${data.window.seasonShort} · ` : ''}${data.window.consideredMatches} competitivas${rrTxt}${rrMissing > 0 ? ` (RR de ${data.window.consideredMatches - rrMissing}/${data.window.consideredMatches})` : ''}${data.window.truncated ? ' · ventana truncada' : ''}`
+    ? `${data.window.seasonShort ? `Temporada ${data.window.seasonShort} · ` : ''}${data.window.consideredMatches} competitivas${rrTxt}${rrMissing > 0 ? ` (RR de ${data.window.consideredMatches - rrMissing}/${data.window.consideredMatches})` : ''}${data.window.truncated ? ' · ventana truncada' : ''}${data.window.stale ? ' · de caché' : ''}`
     : '';
 
   const agentIcons = new Map<string, string | null>((data?.matches ?? []).map((m) => [m.agent, m.agentIcon ?? null]));
@@ -300,6 +303,13 @@ function RankedPage() {
 
       {anyFailed && !error ? (
         <div className="banner warn">Una de las cuentas falló; las stats combinadas pueden estar incompletas.</div>
+      ) : null}
+
+      {data?.window.stale && !error ? (
+        <div className="banner warn" title={data.window.degradedReason ?? undefined}>
+          Sin conexión con Riot/Henrik: mostrando el histórico local
+          {cachedAtTxt ? ` (última sync: ${cachedAtTxt})` : ''}. Las partidas nuevas pueden no aparecer todavía.
+        </div>
       ) : null}
 
       {refreshError && (

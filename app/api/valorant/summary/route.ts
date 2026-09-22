@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getValSummary } from '@/lib/valorant';
+import { getServiceStatus } from '@/lib/serviceStatus';
 import { refreshPlayer } from '@/lib/refresh';
 import { profileAccess, getProfile } from '@/lib/profiles';
 import { memberAccounts } from '@/lib/profileTypes';
@@ -63,11 +64,20 @@ export async function GET(req: NextRequest) {
     const summary = await getValSummary({ days, season, maxFetch: limit, playerId, accountName, accountTag, viewer });
     return Response.json(summary, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
-    const code = (err as { code?: string })?.code ?? 'HTTP';
+    let code = (err as { code?: string })?.code ?? 'HTTP';
+    let message = err instanceof Error ? err.message : String(err);
+    // Un HTTP genérico no dice nada al usuario: si Riot está en mantenimiento
+    // (o Henrik reporta incidencias), se explica en vez de culpar a la key.
+    if (code === 'HTTP') {
+      const status = await getServiceStatus();
+      if (status.degraded) {
+        code = 'MAINTENANCE';
+        message = status.maintenance
+          ? 'Riot está en mantenimiento y no hay histórico local suficiente para esta ventana. Reintenta en un rato.'
+          : 'Riot/Henrik reportan incidencias y no hay histórico local suficiente para esta ventana. Reintenta en un rato.';
+      }
+    }
     const isKeyIssue = code === 'KEY_MISSING' || code === 'KEY_EXPIRED' || code === 'KEY_INVALID';
-    return Response.json(
-      { error: err instanceof Error ? err.message : String(err), code },
-      { status: isKeyIssue ? 403 : 500 },
-    );
+    return Response.json({ error: message, code }, { status: isKeyIssue ? 403 : 500 });
   }
 }

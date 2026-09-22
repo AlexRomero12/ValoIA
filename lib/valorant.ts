@@ -1,18 +1,22 @@
 import { env } from './env';
-import { cached, cacheSet, cacheUpdatedAt } from './cache';
+import { cached, cacheSet, cacheUpdatedAt, peek } from './cache';
 import { getArchiveMatches } from './archive';
 import {
   HENRIK_CONFIG,
   getHenrikAccount,
   getMatchesBucket,
   getHenrikMmrHistory,
+  henrikAccountKey,
   henrikMmrKey,
   henrikMatchId,
   henrikMatchTimestamp,
   henrikRoundsPlayed,
+  peekMatchesBucket,
   BUCKET_LIMIT,
+  type HenrikAccount,
   type HenrikMatch,
   type HenrikMatchPlayer,
+  type MatchesBucket,
 } from './henrik';
 import { requireProfile, type ProfileViewer } from './profiles';
 import { computeAperturas } from './aperturas';
@@ -337,7 +341,7 @@ export type ValKpisBlock = StatBlock & { losses: number; fb?: number; fd?: numbe
 export interface ValSummary {
   generatedAt: string;
   account: ValAccount;
-  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; rrMissing?: number; eloTotal?: number | null; syncedAt?: string | null; mmrSyncedAt?: string | null; truncated?: boolean };
+  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; rrMissing?: number; eloTotal?: number | null; syncedAt?: string | null; mmrSyncedAt?: string | null; truncated?: boolean; /** true = la red falló y se sirvió desde el archivo/caché local */ stale?: boolean; /** última sync conocida (bucket/mmr) cuando se sirve de caché */ cachedAt?: string | null; /** motivo de la degradación (p. ej. henrikdev HTTP 500) */ degradedReason?: string | null };
   kpis: ValKpisBlock;
   /** Ventana anterior de igual duración (deltas de KPIs); null si no hay datos. */
   prev?: ValKpisBlock | null;
@@ -472,11 +476,22 @@ function henrikStatsOf(list: HenrikMatch[], puuid: string, rrOf: (matchId: strin
   );
 }
 
+/** PUUID del jugador a partir de una partida archivada (respaldo sin red). */
+function findPuuidInMatches(matches: HenrikMatch[], name: string, tag: string): string | null {
+  const n = name.toLowerCase();
+  const t = tag.toLowerCase();
+  for (const m of matches) {
+    for (const p of m.players ?? []) {
+      if (p.puuid && (p.name ?? '').toLowerCase() === n && (p.tag ?? '').toLowerCase() === t) return p.puuid;
+    }
+  }
+  return null;
+}
+
 async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> {
   const member = requireProfile(opts.playerId, opts.viewer);
   const acctName = opts.accountName ?? member.name;
   const acctTag = opts.accountTag ?? member.tag;
-  const account = await getHenrikAccount(acctName, acctTag);
   const sinceMs = Date.now() - opts.days * 24 * 60 * 60 * 1000;
   const seasonMode = Boolean(opts.season);
   const dicts = await getContent();
@@ -487,13 +502,39 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   // En modo temporada pedimos más historial para cubrir el acto completo.
   // El bucket hace sync incremental: con todo llegado, un refresh cuesta 1 request.
   const want = Math.min(opts.maxFetch ?? (seasonMode ? BUCKET_LIMIT : 20), BUCKET_LIMIT);
-  const bucket = await getMatchesBucket(acctName, acctTag, want);
 
   // Archivo acumulativo (estilo tracker.gg): el bucket solo cubre 40 partidas,
-  // pero el archivo guarda todo lo sincronizado históricamente. La unión
-  // garantiza que las agregaciones de temporada/ventanas largas no queden
-  // recortadas cuando el jugador pasa de 40 partidas en el período.
+  // pero el archivo guarda todo lo sincronizado históricamente. Se lee ANTES de
+  // la red porque es la base del modo degradado (sirve el histórico sin API).
   const archived = getArchiveMatches(acctName, acctTag);
+
+  // Cuenta: si la red falla (p. ej. Riot en mantenimiento -> Henrik 500), se
+  // usa la última copia cacheada o el puuid reconstruido del archivo local.
+  let degraded = false;
+  let degradedReason: string | null = null;
+  let account: HenrikAccount;
+  try {
+    account = await getHenrikAccount(acctName, acctTag);
+  } catch (err) {
+    const cachedAcc = peek<HenrikAccount>(henrikAccountKey(acctName, acctTag));
+    const puuid = cachedAcc?.puuid ?? findPuuidInMatches(archived, acctName, acctTag);
+    if (!puuid) throw err;
+    degraded = true;
+    degradedReason = err instanceof Error ? err.message : String(err);
+    account = { puuid, name: cachedAcc?.name ?? acctName, tag: cachedAcc?.tag ?? acctTag };
+  }
+
+  // Bucket: con la red caída se usa la última copia en caché (aunque venciera);
+  // la unión con el archivo mantiene KPIs, WR y rango de lo ya sincronizado.
+  let bucket: MatchesBucket;
+  try {
+    bucket = await getMatchesBucket(acctName, acctTag, want);
+  } catch (err) {
+    degraded = true;
+    degradedReason ??= err instanceof Error ? err.message : String(err);
+    bucket = peekMatchesBucket(acctName, acctTag) ?? { updatedAt: 0, matches: [] };
+  }
+
   const seenIds = new Set<string>();
   const matches: HenrikMatch[] = [];
   for (const m of [...bucket.matches, ...archived]) {
@@ -712,12 +753,18 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       rrTotal: stats.rrTotal,
       rrMissing: stats.rrMissing,
       eloTotal,
-      syncedAt: new Date(bucket.updatedAt).toISOString(),
+      syncedAt: bucket.updatedAt ? new Date(bucket.updatedAt).toISOString() : null,
       mmrSyncedAt: (() => {
         const t = cacheUpdatedAt(henrikMmrKey(acctName, acctTag));
         return t != null ? new Date(t).toISOString() : null;
       })(),
       truncated,
+      stale: degraded,
+      cachedAt: (() => {
+        const t = Math.max(bucket.updatedAt, cacheUpdatedAt(henrikMmrKey(acctName, acctTag)) ?? 0);
+        return t > 0 ? new Date(t).toISOString() : null;
+      })(),
+      degradedReason,
     },
     kpis: { ...toStatBlock(stats), losses: stats.losses, fb: stats.fb, fd: stats.fd },
     prev: prevStats ? { ...toStatBlock(prevStats), losses: prevStats.losses, fb: prevStats.fb, fd: prevStats.fd } : null,

@@ -327,6 +327,7 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
     return Number.isFinite(min) ? new Date(min) : null;
   }, [entries]);
   const anyTruncated = entries.some((e) => e.data?.window.truncated === true);
+  const anyStale = entries.some((e) => e.data?.window.stale === true);
 
   useEffect(() => () => setFilters(DEFAULT_FILTERS), [win]);
 
@@ -471,6 +472,7 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
         <p className="window-info" style={{ margin: '10px 0 0', paddingLeft: 4 }}>
           cobertura de datos desde {oldestTs.toLocaleDateString('es')} — el rango custom filtra dentro de lo consultado
           {anyTruncated ? ' · ventana truncada: puede haber más partidas fuera de lo sincronizado' : ''}
+          {anyStale ? ' · de caché: sin conexión con Riot/Henrik, se muestra el histórico local' : ''}
         </p>
       )}
 

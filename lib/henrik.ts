@@ -441,6 +441,14 @@ export async function syncMatchesBucket(
 }
 
 /**
+ * Última copia conocida del bucket (aunque su TTL haya vencido). Respaldo
+ * offline: cuando la red falla, el resumen sigue sirviendo el histórico.
+ */
+export function peekMatchesBucket(nameArg: string, tagArg: string): MatchesBucket | null {
+  return peek<MatchesBucket>(bucketKey(encodeURIComponent(nameArg), encodeURIComponent(tagArg)));
+}
+
+/**
  * Bucket de partidas competitivas de un jugador.
  * - Sirve del caché mientras esté fresco (15 min).
  * - Si el caché no cubre el `want` actual, lo amplía incrementalmente.
