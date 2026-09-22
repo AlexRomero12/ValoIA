@@ -13,7 +13,8 @@ components/rules/     Reglas de sesión: intro y propuesta, día evaluado, recom
 components/compare/   Filtros, ranking, trend y tarjetas de agentes Por jugador / Por agente
 components/profiles/  Formulario de perfil, selector, editor de reglas de sesión y selector de agentes
 components/store/     Tienda de hoy, favoritas y panel de notificaciones
-lib/                  Clientes Henrik/Riot, perfiles, agregación, aperturas/impacto (FB/FD por bando y bajas múltiples), reglas de sesión, propuesta, export/import, cache L1+L2, hooks
+../valoia-overlay/   Overlay (widget + harness Electron): repo aparte (AlexRomero12/ValoIA-overlay) — consume /api/overlay/* de la instancia local
+lib/                  Clientes Henrik/Riot, perfiles, agregación, aperturas/impacto (FB/FD por bando y bajas múltiples), reglas de sesión, propuesta, export/import, cache L1+L2, hooks, backend del overlay
 docs/                 Guía de despliegue en Oracle
 public/               Estáticos (incluye sw.js para Web Push)
 ```
@@ -169,6 +170,9 @@ cp .env.example .env
 # Docker (recomendado)
 docker compose up -d --build        # http://localhost:4321
 
+# Docker · instancia dedicada del overlay Overwolf (puerto 4322, sin login en /api/overlay/*)
+docker compose -f docker-compose.overlay.yml up -d --build
+
 # Local
 npm install && npm run dev          # http://localhost:3000
 ```
@@ -219,6 +223,9 @@ Oracle Cloud Always Free (ARM) con `docker-compose.prod.yml` + Caddy
 | `POST /api/valorant/rules-history` | `{days:[...]}` — guarda/actualiza snapshots de días completos |
 | `GET /api/valorant/comments` | Notas por partida del usuario (el admin ve todas) |
 | `POST /api/valorant/comments` | `{matchId, text}` — guarda o borra (texto vacío) la nota de una partida (queda con autor) |
+| `GET /api/overlay/summary?player=&days=` | **Overlay (loopback, sin login)**: tier/RR, KPIs, forma, últimos 5 y top agente/mapa |
+| `GET /api/overlay/rules?player=` | **Overlay**: pool por mapa, prohibidos, corte, pausa de sesión y metas del perfil principal |
+| `GET /api/overlay/session?player=` | **Overlay**: evaluación de hoy (contador de corte, sesiones, RR real vs plan, `shouldStop`) |
 
 ## Notas
 

@@ -1,0 +1,44 @@
+# INSTANCIA OVERLAY (local) · valo-dash-overlay · puerto 4322
+#
+# Backend dedicado del overlay Overwolf (endpoints /api/overlay/*, sin login).
+# Reutiliza los datos reales del dash principal: perfiles/reglas (valo-data),
+# archivo acumulativo (valo-archive) y cache (valo-cache) — solo lectura ligera;
+# el cache propio de Next es de esta instancia.
+#
+#   docker compose -f docker-compose.overlay.yml up -d --build
+#   docker compose -f docker-compose.overlay.yml down
+#
+# Overlay: manifest.json en ../valoia-overlay/ (carga con Load unpacked extension).
+# Backend por defecto del overlay: http://localhost:4322
+
+name: valo-overlay
+
+services:
+  valo-dash-overlay:
+    build: .
+    image: valo-dash-overlay
+    container_name: valo-dash-overlay
+    ports:
+      - "4322:3000"
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      CACHE_DIR: /app/data/cache
+      ARCHIVE_DIR: /app/data/archive
+      DATA_DIR: /app/data
+    volumes:
+      - valo-dash-next_valo-cache:/app/data/cache
+      - valo-dash-next_valo-archive:/app/data/archive
+      - valo-dash-next_valo-data:/app/data
+      - valo-overlay-next-cache:/app/.next/cache
+    restart: unless-stopped
+
+volumes:
+  valo-dash-next_valo-cache:
+    external: true
+  valo-dash-next_valo-archive:
+    external: true
+  valo-dash-next_valo-data:
+    external: true
+  valo-overlay-next-cache:

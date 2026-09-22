@@ -40,6 +40,24 @@ function sameOrigin(request: NextRequest): boolean {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith('/api/');
+  const isOverlay = pathname.startsWith('/api/overlay/');
+
+  // Overlay local (Overwolf): sin auth, solo loopback/LAN, solo lectura.
+  // El gate real (GET + rate-limit + no-store) vive en cada route
+  // (lib/overlay.ts); aquí solo se deja pasar sin sesión + CORS preflight.
+  if (isOverlay) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      });
+    }
+    return NextResponse.next();
+  }
 
   if (!sameOrigin(request)) {
     return Response.json({ error: 'Origen no permitido', code: 'BAD_ORIGIN' }, { status: 403 });

@@ -50,3 +50,8 @@ backups/
 
 # planes de diseño locales (no se publican)
 /docs/plan-*.md
+
+# Overlay: el cliente (widget + harness Electron) vive en un repo aparte
+# (AlexRomero12/ValoIA-overlay). Aquí solo queda el backend /api/overlay/*.
+# El .opk suelto es un build del widget: no se versiona.
+/valoia-overlay.opk
