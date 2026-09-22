@@ -1430,8 +1430,25 @@ svg image { cursor: default; }
   max-width: 100%;
   min-width: 0;
 }
-.bundle-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bundle-item-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .bundle-item img { width: 44px; height: 28px; object-fit: contain; background: #0a0f16; }
+.bundle-item-kind {
+  color: var(--faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--line);
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+.bundle-item-price { color: var(--gold); font-weight: 700; flex-shrink: 0; }
+.bundle-art {
+  border: 1px solid var(--line);
+  background: #0a0f16;
+  flex-shrink: 0;
+}
+.bundle-desc { color: var(--faint); font-size: 11.5px; line-height: 1.5; margin: 8px 0 0; }
 
 .store-foot {
   display: flex;
@@ -1664,7 +1681,23 @@ svg image { cursor: default; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.skin-cell-weapon { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }
+.skin-cell-weapon { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skin-cell-rarity {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+/* Conteos "N4 · V3" (niveles de evolución · variantes de color) */
+.skin-counts {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  margin-top: 3px;
+}
+.fav-rarity { font-weight: 700; }
 .skin-cell .star-btn { margin-top: 9px; }
 .skin-cell-icon.previewable { cursor: zoom-in; transition: border-color 0.12s ease; }
 .skin-cell-icon.previewable:hover { border-color: var(--red); }
@@ -1732,6 +1765,17 @@ svg image { cursor: default; }
   text-transform: uppercase;
   margin-bottom: 12px;
 }
+.skin-preview-collection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: -6px 0 12px;
+}
 .skin-preview .modal-close { position: absolute; top: 14px; right: 16px; }
 .skin-preview-vars {
   display: flex;
@@ -1765,6 +1809,47 @@ svg image { cursor: default; }
 .skin-preview-var.on { border-color: var(--red); color: #fff; background: rgba(255, 70, 85, 0.14); }
 /* Sin render en la API (niveles salvo el base): chip de solo texto, sin slot roto. */
 .skin-preview-var.no-img { padding: 5px 12px; gap: 0; }
+/* Marca ▶ en los niveles/variantes que tienen vídeo ingame */
+.spr-video-dot { color: var(--red); font-size: 8.5px; }
+/* Vídeo ingame (streaming desde el CDN de Riot, click-to-play) */
+.skin-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #0a0f16;
+}
+.skin-preview-play {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  background: rgba(255, 70, 85, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+.skin-preview-play:hover { background: var(--red); }
+.spr-play-icon { font-size: 10px; }
+/* Accesorios del bundle (ItemPreview) */
+.item-preview-card .skin-preview-img { aspect-ratio: 16 / 9; width: min(100%, 480px); }
+.item-preview-title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--gold);
+  padding: 26px 0 10px;
+}
+.item-preview-note { color: var(--faint); font-size: 11px; margin: 0 0 8px; }
 .store-icon.previewable, .bundle-item.previewable, .fav-icon.previewable { cursor: zoom-in; }
 .store-icon.previewable:hover, .fav-icon.previewable:hover { border-color: var(--red); }
 .bundle-item.previewable:hover { border-color: var(--red); }

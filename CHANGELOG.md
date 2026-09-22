@@ -2,6 +2,36 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.26.0] — 2026-09-22
+
+La Tienda muestra niveles, variantes y vídeos ingame, y enriquece los accesorios del bundle.
+
+### Added
+- **Niveles y variantes en la Tienda**: la previsualización de una skin (tienda de hoy, bundle, favoritas y explorador) suma una fila **Niveles** (Base, Nivel 2…) a la de **Variantes**, con el render o el vídeo de cada uno; el lightbox de la tienda pasa rareza/colección (antes solo lo hacía el explorador). Muchos niveles 2+ no traen render en la API: se muestra el render base + el vídeo
+- **Vídeos ingame sin almacenar**: `streamedVideo` de valorant-api apunta al CDN de Riot (`valorant.dyn.riotcdn.net`, mp4 con range requests). Botón **«Ver ingame»** con click-to-play (0 bytes hasta pulsar), `muted`/`loop`/`playsInline`, y fallback al render si el vídeo falla. `preconnect` al CDN en el layout
+- **Contadores en las tarjetas** (`N4 · V3` = niveles · variantes) en tienda, bundle y favoritas, calculados en el catálogo ($0 requests)
+- **Accesorios del bundle enriquecidos** (`lib/items.ts`): player cards (banner `largeArt`), buddies (charm + niveles), sprays (icono + **GIF animado** de la animación real) y títulos, resueltos por `ItemTypeID`/uuid desde valorant-api.com. `ItemPreview` los previsualiza; el bundle muestra **tipo y precio por ítem** y su arte promocional (`/v1/bundles`, best-effort)
+- `GET /api/store/chromas` ahora devuelve también `levels` con su `video`
+- Tests `lib/skins.test.ts` y `lib/items.test.ts` (11 casos, sin red)
+
+### Changed
+- **`lib/skins.ts`**: `byId`/`variantsBySkinId` pasan de `Map` a `Record` — los Maps se serializaban a `{}` y dejaban inservible la caché L2 en disco (re-descarga completa en cada arranque); ahora persiste. Caché `valo:skins-catalog:v4`
+- `parseStorefront` conserva el `ItemTypeID` de cada ítem del bundle (antes se descartaba)
+
+## [1.25.0] — 2026-09-22
+
+El dashboard sobrevive a las caídas de Riot: sirve el histórico local y avisa del mantenimiento.
+
+### Added
+- **Modo degradado (histórico sin red)**: cuando Henrik/Riot fallan (mantenimiento), el resumen cae al archivo acumulativo + última copia en caché en vez de romper con error. La cuenta se reconstruye del archivo local (puuid por nombre#tag) si el cache de la cuenta venció; el `window` expone `stale`, `cachedAt` y `degradedReason`
+- **Aviso "de caché"**: Ranked muestra un banner «Sin conexión con Riot/Henrik: mostrando el histórico local (última sync: X)» y marca el periodo como «· de caché»; Comparar avisa lo mismo en la línea de cobertura
+- **Monitor de estado de Riot** (`lib/serviceStatus.ts` + `GET /api/valorant/service-status`): consulta Henrik `/valorant/v1/status/{region}` y, como respaldo, la Riot oficial VAL-STATUS-V1; normaliza mantenimientos e incidencias (título, severidad, último update)
+- **Banner global de mantenimiento** (`components/ServiceBanner.tsx`) en la TopBar de todas las páginas, y mensaje con contexto (`code: MAINTENANCE`) cuando el resumen no puede servir ni del histórico, en vez de un `henrikdev HTTP 500` seco
+- **Rareza y colección de skins** en el catálogo de la Tienda (`valorant-api.com` `/contenttiers` + `/themes`), mostradas en el explorador de arsenal y en la previsualización (caché `valo:skins-catalog:v3`)
+
+### Changed
+- `lib/roles.ts`: fallback de roles sincronizado con el catálogo canónico de agentes (29 agentes) — añade **Miks** y **Veto**, quita el obsoleto `Thresh`, con test `lib/roles.test.ts`
+
 ## [1.24.0] — 2026-09-17
 
 Resumen de partida más visual y con más contexto (todo desde datos ya cacheados, $0 requests extra).

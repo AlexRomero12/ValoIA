@@ -57,6 +57,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       {/* React los eleva al <head>: adelantan la conexión con el CDN de assets */}
       <link rel="preconnect" href="https://media.valorant-api.com" crossOrigin="anonymous" />
       <link rel="dns-prefetch" href="https://media.valorant-api.com" />
+      {/* Vídeos ingame de las skins: CDN de Riot (se reproducen en streaming) */}
+      <link rel="preconnect" href="https://valorant.dyn.riotcdn.net" />
+      <link rel="dns-prefetch" href="https://valorant.dyn.riotcdn.net" />
       <body>
         <Providers>{children}</Providers>
       </body>

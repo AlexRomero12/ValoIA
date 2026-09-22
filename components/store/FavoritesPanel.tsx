@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { SkinPicker } from './SkinPicker';
 import { SkinPreview, type PreviewSkin } from './SkinPreview';
+import { Counts } from './StorePanel';
 
 export interface FavoriteUI {
   offerId: string;
@@ -14,6 +15,11 @@ export interface FavoriteUI {
   inStoreToday: boolean;
   price?: number;
   notified: boolean;
+  rarity?: string | null;
+  rarityColor?: string | null;
+  collection?: string | null;
+  levelCount?: number;
+  variantCount?: number;
 }
 
 export function FavoritesPanel({
@@ -63,15 +69,29 @@ export function FavoritesPanel({
             <div key={f.offerId} className={`fav-row${f.inStoreToday ? ' in-store' : ''}`}>
               <div
                 className="fav-icon previewable"
-                onClick={() => f.icon && setPreview({ id: f.offerId, name: f.name, icon: f.icon, weapon: f.weapon })}
-                title={f.icon ? 'Ver en grande' : undefined}
-                role={f.icon ? 'button' : undefined}
+                onClick={() =>
+                  setPreview({
+                    id: f.offerId,
+                    name: f.name,
+                    icon: f.icon,
+                    weapon: f.weapon,
+                    rarity: f.rarity,
+                    rarityColor: f.rarityColor,
+                    collection: f.collection,
+                  })
+                }
+                title="Ver niveles, variantes y vídeo"
+                role="button"
               >
                 {f.icon ? <Image src={f.icon} alt="" fill sizes="64px" style={{ objectFit: 'contain' }} /> : null}
               </div>
               <div className="fav-info">
                 <div className="fav-name" title={f.name}>{f.name}</div>
-                <div className="fav-meta">{f.weapon || 'Skin'}</div>
+                <div className="fav-meta">
+                  {f.weapon || 'Skin'}
+                  {f.rarity ? <span className="fav-rarity" style={{ color: f.rarityColor ?? undefined }}> · {f.rarity}</span> : null}
+                </div>
+                <Counts levelCount={f.levelCount} variantCount={f.variantCount} />
               </div>
               {f.inStoreToday ? (
                 <span className="badge-today" title={f.notified ? 'Ya se te notificó hoy' : undefined}>

@@ -25,6 +25,8 @@ export interface StoreDailyItem {
 
 export interface StoreBundleItem {
   itemId: string;
+  /** ItemTypeID de Riot: distingue skin / variante / card / buddy / spray / título */
+  itemType?: string;
   /** Precio con descuento (si aplica) */
   price?: number;
   basePrice?: number;
@@ -520,6 +522,7 @@ function parseStorefront(json: StorefrontPayload): StoreFront {
           .filter((it) => it.Item?.ItemID)
           .map((it) => ({
             itemId: it.Item!.ItemID!,
+            itemType: it.Item!.ItemTypeID,
             price: it.DiscountedPrice ?? it.BasePrice,
             basePrice: it.BasePrice,
           })),

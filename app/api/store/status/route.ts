@@ -2,12 +2,102 @@ import { NextRequest } from 'next/server';
 import { getStoreFront, refreshStoreFront, rsoHealth } from '@/lib/riotClient';
 import { getFavorites, type FavoriteSkin } from '@/lib/favorites';
 import { getSkinsCatalog } from '@/lib/skins';
+import { getBundleArt, resolveStoreItem, ITEM_TYPES, type BundleArt, type StoreItem } from '@/lib/items';
 import { pushEnabled, pushConfig, getSubscriptions } from '@/lib/push';
 import { notifiedToday } from '@/lib/storeWatch';
 import { listProfilesFor } from '@/lib/profiles';
 import { viewerFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Ítem de tienda ya resuelto (skin con niveles/variantes, o accesorio).
+ * `kind` decide qué preview abre el cliente.
+ */
+export interface StoreItemUI {
+  kind: 'skin' | 'card' | 'buddy' | 'spray' | 'title' | 'unknown';
+  id: string;
+  name: string;
+  icon: string;
+  // skins
+  weapon?: string;
+  rarity?: string | null;
+  rarityColor?: string | null;
+  collection?: string | null;
+  levelCount?: number;
+  variantCount?: number;
+  // player card
+  largeArt?: string;
+  // spray
+  fullIcon?: string;
+  animationGif?: string | null;
+  animationPng?: string | null;
+  // buddy
+  levels?: Array<{ id: string; name: string; icon: string; level: number }>;
+  // title
+  titleText?: string;
+}
+
+export interface StoreDailyItemUI extends StoreItemUI {
+  offerId: string;
+  price: number;
+  isFavorite: boolean;
+}
+
+export interface StoreBundleItemUI extends StoreItemUI {
+  itemId: string;
+  price?: number;
+  basePrice?: number;
+}
+
+export interface StoreBundleUI {
+  id: string;
+  name?: string;
+  durationSec: number;
+  totalBaseCost?: number;
+  totalDiscountedCost?: number;
+  discountPercent?: number;
+  /** Arte del bundle desde valorant-api.com (best-effort) */
+  art?: BundleArt | null;
+  items: StoreBundleItemUI[];
+}
+
+/** Traduce el ítem resuelto al DTO que consume el cliente. */
+function itemUi(item: StoreItem): StoreItemUI {
+  switch (item.kind) {
+    case 'skin':
+      return {
+        kind: 'skin',
+        id: item.id,
+        name: item.name,
+        icon: item.icon,
+        weapon: item.weapon,
+        rarity: item.rarity ?? null,
+        rarityColor: item.rarityColor ?? null,
+        collection: item.collection ?? null,
+        levelCount: item.levelCount,
+        variantCount: item.variantCount,
+      };
+    case 'card':
+      return { kind: 'card', id: item.id, name: item.name, icon: item.icon, largeArt: item.largeArt };
+    case 'buddy':
+      return { kind: 'buddy', id: item.id, name: item.name, icon: item.icon, levels: item.levels };
+    case 'spray':
+      return {
+        kind: 'spray',
+        id: item.id,
+        name: item.name,
+        icon: item.icon,
+        fullIcon: item.fullIcon,
+        animationGif: item.animationGif,
+        animationPng: item.animationPng,
+      };
+    case 'title':
+      return { kind: 'title', id: item.id, name: item.name, icon: '', titleText: item.titleText };
+    default:
+      return { kind: 'unknown', id: item.id, name: 'Item', icon: '' };
+  }
+}
 
 export interface StoreStatusResponse {
   source: 'rso' | 'none';
@@ -20,24 +110,20 @@ export interface StoreStatusResponse {
   account: { name: string; tag: string } | null;
   /** true = la sesión es de su principal; false = es otra cuenta; null = sin datos. */
   matchesPrimary: boolean | null;
-  daily: Array<{
-    offerId: string;
-    price: number;
-    name: string;
-    icon: string;
-    weapon: string;
-    isFavorite: boolean;
-  }>;
-  bundle: {
-    id: string;
-    name?: string;
-    durationSec: number;
-    totalBaseCost?: number;
-    totalDiscountedCost?: number;
-    discountPercent?: number;
-    items: Array<{ itemId: string; price?: number; name: string; icon: string; weapon: string }>;
-  } | null;
-  favorites: Array<FavoriteSkin & { inStoreToday: boolean; price?: number; notified: boolean }>;
+  daily: StoreDailyItemUI[];
+  bundle: StoreBundleUI | null;
+  favorites: Array<
+    FavoriteSkin & {
+      inStoreToday: boolean;
+      price?: number;
+      notified: boolean;
+      rarity?: string | null;
+      rarityColor?: string | null;
+      collection?: string | null;
+      levelCount?: number;
+      variantCount?: number;
+    }
+  >;
   rso: {
     status: 'ok' | 'needs_2fa' | 'needs_cookie';
     needsCode: boolean;
@@ -68,42 +154,43 @@ export async function GET(req: NextRequest) {
     const favIds = new Set(favorites.map((f) => f.offerId));
     const notifiedSet = new Set(notifiedIds);
 
-    const daily = front.daily.map((d) => {
-      const skin = catalog.byId.get(d.offerId);
-      return {
-        offerId: d.offerId,
-        price: d.price,
-        name: skin?.name ?? 'Skin',
-        icon: skin?.icon ?? '',
-        weapon: skin?.weapon ?? '',
-        isFavorite: favIds.has(d.offerId),
-      };
-    });
+    // Las ofertas diarias son siempre skins (skinlevel uuid).
+    const daily: StoreDailyItemUI[] = await Promise.all(
+      front.daily.map(async (d) => {
+        const item = await resolveStoreItem(d.offerId, ITEM_TYPES.skins);
+        return { ...itemUi(item), offerId: d.offerId, price: d.price, isFavorite: favIds.has(d.offerId) };
+      }),
+    );
 
     const dailyByOffer = new Map(front.daily.map((d) => [d.offerId, d]));
     const favoritesEnriched = favorites.map((f) => {
       const item = dailyByOffer.get(f.offerId);
+      const skin = catalog.byId[f.offerId];
       return {
         ...f,
         inStoreToday: !!item,
         price: item?.price,
         notified: notifiedSet.has(f.offerId),
+        rarity: skin?.rarity ?? null,
+        rarityColor: skin?.rarityColor ?? null,
+        collection: skin?.collection ?? null,
+        levelCount: skin?.levelCount,
+        variantCount: skin?.variantCount,
       };
     });
 
+    // El bundle puede mezclar skins, variantes, cards, buddies, sprays y títulos:
+    // cada ítem se resuelve por su uuid (y su ItemTypeID como pista).
     const bundle = front.bundle
       ? {
           ...front.bundle,
-          items: front.bundle.items.map((it) => {
-            const skin = catalog.byId.get(it.itemId);
-            return {
-              itemId: it.itemId,
-              price: it.price,
-              name: skin?.name ?? 'Item',
-              icon: skin?.icon ?? '',
-              weapon: skin?.weapon ?? '',
-            };
-          }),
+          art: await getBundleArt(front.bundle.id),
+          items: await Promise.all(
+            front.bundle.items.map(async (it) => {
+              const item = await resolveStoreItem(it.itemId, it.itemType);
+              return { ...itemUi(item), itemId: it.itemId, price: it.price, basePrice: it.basePrice };
+            }),
+          ),
         }
       : null;
 

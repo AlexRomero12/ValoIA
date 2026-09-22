@@ -11,6 +11,9 @@ interface PickerSkin {
   name: string;
   icon: string;
   weapon: string;
+  rarity?: string | null;
+  rarityColor?: string | null;
+  collection?: string | null;
 }
 
 interface WeaponsResponse {
@@ -233,7 +236,15 @@ export function SkinPicker({
                     ) : null}
                   </div>
                   <span className="skin-cell-name">{s.name}</span>
-                  <span className="skin-cell-weapon">{s.weapon}</span>
+                  <span className="skin-cell-weapon">
+                    {s.weapon}
+                    {s.collection ? ` · ${s.collection}` : ''}
+                  </span>
+                  {s.rarity ? (
+                    <span className="skin-cell-rarity" style={{ color: s.rarityColor ?? undefined }}>
+                      {s.rarity}
+                    </span>
+                  ) : null}
                   <button
                     className={`star-btn${fav ? ' on' : ''}`}
                     onClick={() => toggle(s.id)}
