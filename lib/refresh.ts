@@ -17,7 +17,8 @@ import type { ProfileAccount } from './profileTypes';
 export type RefreshScope = 'all' | 'matches' | 'mmr';
 
 const ACCOUNT_TTL_MS = 60 * 60 * 1000;
-const MMR_TTL_MS = 10 * 60 * 1000;
+// El warmup corre cada 15 min: el TTL va por encima para no expirar entre ciclos.
+const MMR_TTL_MS = 20 * 60 * 1000;
 
 /**
  * Revalidación quirúrgica de un jugador:

@@ -21,14 +21,30 @@ class HenrikError extends Error {
   }
 }
 
-// Throttle: la key Basic tiene ~20 req/min (teóricamente 30, en la práctica
-// los bursts de 4 en 5 s ya devuelven 429). Operamos con margen: 18/min.
+// Throttle: la key Basic expone 30 req/min (lo confirman las cabeceras
+// x-ratelimit-limit/reset de cada respuesta). Operamos con margen: 27/min y
+// espaciado mínimo para no disparar bursts; además, si las cabeceras dicen que
+// queda poco presupuesto, esperamos a que Henrik reponga la ventana.
 const MINUTE_MS = 60_000;
-const MAX_REQ_PER_MINUTE = 18;
-const MIN_GAP_MS = 3_400;
+const MAX_REQ_PER_MINUTE = 27;
+const MIN_GAP_MS = 2_200;
 const requestTimes: number[] = [];
+let rateRemaining: number | null = null;
+let rateResetMs = MINUTE_MS;
+
+function noteRateLimit(res: Response): void {
+  const rem = Number(res.headers.get('x-ratelimit-remaining'));
+  const reset = Number(res.headers.get('x-ratelimit-reset'));
+  if (Number.isFinite(rem)) rateRemaining = rem;
+  if (Number.isFinite(reset) && reset > 0) rateResetMs = reset * 1000;
+}
 
 async function throttle(): Promise<void> {
+  if (rateRemaining != null && rateRemaining <= 1) {
+    // Presupuesto casi agotado: espera a que Henrik reponga la ventana.
+    await new Promise((resolve) => setTimeout(resolve, Math.min(rateResetMs, MINUTE_MS) + 250));
+    rateRemaining = null;
+  }
   const now = Date.now();
   while (requestTimes.length > 0 && now - requestTimes[0] > MINUTE_MS) {
     requestTimes.shift();
@@ -38,7 +54,7 @@ async function throttle(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   // Sin ráfagas: espaciado mínimo entre requests (el limiter de Henrik también
-  // penaliza bursts cortos, p. ej. 4 requests seguidos en ~5 s ya dió 429).
+  // penaliza bursts cortos).
   const last = requestTimes[requestTimes.length - 1];
   if (last != null) {
     const elapsed = Date.now() - last;
@@ -71,8 +87,10 @@ async function henrikFetch<T>(path: string): Promise<T> {
   try {
     // La API acepta Authorization directo (sin "Bearer"); reintentamos con Bearer por si cambia.
     res = await rawFetch(path, { Authorization: key });
+    noteRateLimit(res);
     if (res.status === 401 || res.status === 403) {
       res = await rawFetch(path, { Authorization: `Bearer ${key}` });
+      noteRateLimit(res);
     }
   } catch (e) {
     throw new HenrikError('HTTP', `Sin conexión con api.henrikdev.xyz: ${e instanceof Error ? e.message : e}`);
@@ -89,6 +107,7 @@ async function henrikFetch<T>(path: string): Promise<T> {
     // Un reintento tardío antes de rendirse (el throttle ya minimiza esto).
     await new Promise((resolve) => setTimeout(resolve, 15_000));
     res = await rawFetch(path, { Authorization: key });
+    noteRateLimit(res);
     if (res.status === 429) {
       throw new HenrikError('RATE_LIMITED', 'Rate limit de api.henrikdev.xyz alcanzado, reintenta en un minuto', 429);
     }
@@ -278,11 +297,14 @@ export async function fetchHenrikMmrHistoryRaw(nameArg: string, tagArg: string):
   return json?.data?.history ?? [];
 }
 
+/** El warmup corre cada 15 min; el TTL del MMR va por encima para no expirar entre ciclos. */
+export const MMR_TTL_MS = 20 * 60 * 1000;
+
 export async function getHenrikMmrHistory(
   nameArg = HENRIK_CONFIG.name(),
   tagArg = HENRIK_CONFIG.tag(),
 ): Promise<HenrikMmrHistoryEntry[]> {
-  return cached(henrikMmrKey(nameArg, tagArg), 10 * 60 * 1000, () => fetchHenrikMmrHistoryRaw(nameArg, tagArg));
+  return cached(henrikMmrKey(nameArg, tagArg), MMR_TTL_MS, () => fetchHenrikMmrHistoryRaw(nameArg, tagArg));
 }
 
 // ---------- Bucket de partidas por jugador (sync incremental) ----------
@@ -296,7 +318,9 @@ export async function getHenrikMmrHistory(
  */
 
 export const BUCKET_LIMIT = 40;
-export const BUCKET_TTL_MS = 15 * 60 * 1000;
+// El warmup corre cada 15 min: el TTL va por encima para que el bucket nunca
+// expire entre ciclos (si no, la primera petición del usuario bloquea en la red).
+export const BUCKET_TTL_MS = 20 * 60 * 1000;
 const BUCKET_PREFIX = 'henrik:matches:v2';
 
 export interface MatchesBucket {
@@ -304,6 +328,8 @@ export interface MatchesBucket {
   updatedAt: number;
   /** hasta BUCKET_LIMIT partidas competitivas, más recientes primero */
   matches: HenrikMatch[];
+  /** true = la API devolvió menos de lo pedido (no hay más historial): evita re-syncs por `want`. */
+  exhausted?: boolean;
 }
 
 function bucketKey(nameEncoded: string, tagEncoded: string): string {
@@ -377,6 +403,9 @@ export async function syncMatchesBucket(
   // profundas también pueden traer novedades y NO se saltan: saltarlas con
   // >10 partidas nuevas por ciclo abría huecos permanentes.
   let page0Overlap = false;
+  // true = la API confirmó que no hay más historial (evita pedir de nuevo el
+  // mismo `want` en cada lectura cuando la cuenta tiene menos de 40 partidas).
+  let exhausted = false;
 
   const pagesNeeded = Math.ceil(target / PAGE_SIZE);
   for (let p = 0; p < pagesNeeded; p++) {
@@ -396,7 +425,10 @@ export async function syncMatchesBucket(
       if (err instanceof HenrikError && err.code === 'RATE_LIMITED' && (fresh.length + deep.length) > 0) break;
       throw err;
     }
-    if (!batch.length) break;
+    if (!batch.length) {
+      exhausted = true;
+      break;
+    }
 
     for (const m of batch) {
       const id = matchId(m);
@@ -412,7 +444,10 @@ export async function syncMatchesBucket(
       (p === 0 ? fresh : deep).push(m);
     }
     // La API devolvió menos de lo pedido => no hay más historial.
-    if (batch.length < size) break;
+    if (batch.length < size) {
+      exhausted = true;
+      break;
+    }
   }
 
   // Orden final garantizado (más reciente primero): la API no promete orden
@@ -437,7 +472,7 @@ export async function syncMatchesBucket(
     }
   }
 
-  return { updatedAt: Date.now(), matches: all };
+  return { updatedAt: Date.now(), matches: all, exhausted };
 }
 
 /**
@@ -461,6 +496,9 @@ export async function getMatchesBucket(nameArg: string, tagArg: string, want: nu
     key,
     BUCKET_TTL_MS,
     () => syncMatchesBucket(nameArg, tagArg, want),
-    (v) => Array.isArray((v as MatchesBucket)?.matches) && (v as MatchesBucket).matches.length >= want,
+    (v) => {
+      const b = v as MatchesBucket;
+      return Array.isArray(b?.matches) && (b.matches.length >= want || b.exhausted === true);
+    },
   );
 }
