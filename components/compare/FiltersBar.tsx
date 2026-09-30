@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Granularity, MetricKey, CompareFilters } from '@/lib/compare';
+import type { Granularity, MetricKey, CompareFilters, WindowValue } from '@/lib/compare';
 import { AgentIconFilter } from './AgentIconFilter';
 
 interface FiltersBarProps {
@@ -17,8 +17,6 @@ interface FiltersBarProps {
   metric: MetricKey;
   onMetric: (m: MetricKey) => void;
 }
-
-export type WindowValue = 'season' | '7' | '14' | '30' | '90' | '365';
 
 const METRICS: { key: MetricKey; label: string }[] = [
   { key: 'wr', label: 'WR%' },
@@ -49,6 +47,7 @@ export function FiltersBar(p: FiltersBarProps) {
           <option value="14">14 días</option>
           <option value="30">30 días</option>
           <option value="90">90 días</option>
+          <option value="365">Último año</option>
         </select>
       </div>
 

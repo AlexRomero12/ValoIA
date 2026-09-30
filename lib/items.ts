@@ -28,7 +28,7 @@ export const ITEM_TYPES = {
   titles: 'de7caa6b-adf7-4588-bbd1-143831e786c6',
 } as const;
 
-export interface CardItem {
+interface CardItem {
   id: string;
   name: string;
   /** avatar cuadrado */
@@ -39,14 +39,14 @@ export interface CardItem {
   largeArt: string;
 }
 
-export interface BuddyLevel {
+interface BuddyLevel {
   id: string;
   name: string;
   icon: string;
   level: number;
 }
 
-export interface BuddyItem {
+interface BuddyItem {
   id: string;
   name: string;
   /** render del charm */
@@ -54,7 +54,7 @@ export interface BuddyItem {
   levels: BuddyLevel[];
 }
 
-export interface SprayItem {
+interface SprayItem {
   id: string;
   name: string;
   icon: string;
@@ -65,7 +65,7 @@ export interface SprayItem {
   animationGif: string | null;
 }
 
-export interface TitleItem {
+interface TitleItem {
   id: string;
   name: string;
   /** texto que se muestra bajo el nombre en partida */
@@ -82,7 +82,7 @@ export interface BundleArt {
   icon: string | null;
 }
 
-export interface ItemsCatalog {
+interface ItemsCatalog {
   cards: Record<string, CardItem>;
   buddies: Record<string, BuddyItem>;
   sprays: Record<string, SprayItem>;
@@ -255,7 +255,7 @@ async function fetchItemsRaw(): Promise<ItemsCatalog> {
   return buildItemsCatalog(cards, buddies, sprays, titles, bundles);
 }
 
-export async function getItemsCatalog(): Promise<ItemsCatalog> {
+async function getItemsCatalog(): Promise<ItemsCatalog> {
   return cached(ITEMS_KEY, ITEMS_TTL_MS, fetchItemsRaw, (v) => {
     const cat = v as ItemsCatalog;
     return (

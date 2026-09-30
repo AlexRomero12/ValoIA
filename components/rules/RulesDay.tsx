@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { esc } from '@/lib/metas';
 import { useElementWidth } from '@/lib/useElementWidth';
 import type { MatchRow } from '@/lib/types';
-import { isDraw, STOP_KD, type DayEvaluation, type EvaluatedMatch, type PickClass } from '@/lib/rules';
+import { STOP_KD, type DayEvaluation, type EvaluatedMatch, type PickClass } from '@/lib/rules';
+import { isDraw } from '@/lib/stats';
 import type { SessionRules } from '@/lib/profileTypes';
 import type { MatchComment } from '@/lib/matchComments';
 

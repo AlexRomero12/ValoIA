@@ -1,4 +1,5 @@
-import { evaluateDay, mondayOf } from './rules';
+import { evaluateDay } from './rules';
+import { mondayOf } from './dates';
 import { getValSummary } from './valorant';
 import { getStorePrimaryProfile } from './profiles';
 import { getSubscriptions, pushEnabled, sendPush } from './push';
@@ -36,7 +37,7 @@ function fmtRR(v: number | null): string {
   return `${v > 0 ? '+' : ''}${v}`;
 }
 
-export interface RulesWatchResult {
+interface RulesWatchResult {
   checked: boolean;
   week: string | null;
   sent: number;

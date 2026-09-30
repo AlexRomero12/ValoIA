@@ -4,7 +4,7 @@
  * Los iconos viven aparte, en `lib/tiers.ts` (server-only, usa cache).
  */
 
-export const TIER_NAMES: readonly string[] = [
+const TIER_NAMES: readonly string[] = [
   'Unrated', 'Unrated', 'Unrated',
   'Iron 1', 'Iron 2', 'Iron 3',
   'Bronze 1', 'Bronze 2', 'Bronze 3',

@@ -324,14 +324,6 @@ select {
 
 /* Arsenal · uso de armas (reutiliza la geometría wr-*) */
 .wr-row.ars { cursor: default; }
-.ars-title {
-  margin: 2px 0 10px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
 .ars-icon { width: 26px; height: 17px; object-fit: contain; margin-right: 8px; vertical-align: -4px; }
 .ars-type { margin-left: 7px; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
 .wr-name {
@@ -605,8 +597,6 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .rules-cover-note { color: var(--faint); font-size: 11.5px; margin: 0 0 10px; }
 .score { font-weight: 700; }
 .matches td.stat-ok { color: var(--win); font-weight: 700; }
-.tier-up { color: var(--gold); font-weight: 700; }
-.tier-down { color: var(--loss); font-weight: 700; }
 .rr-cell { color: var(--mute); cursor: default; }
 .rr-cell.rr-up { color: var(--win); font-weight: 700; }
 .rr-cell.rr-down { color: var(--loss); font-weight: 700; }
@@ -1277,7 +1267,6 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
   padding: 2px 0 2px 28px;
   align-items: center;
 }
-.comp-backs-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
 .comp-back {
   display: inline-flex;
   align-items: center;
@@ -1461,7 +1450,6 @@ svg image { cursor: default; }
   letter-spacing: 0.04em;
   flex-wrap: wrap;
 }
-.src-local { color: var(--win); }
 .src-rso { color: var(--gold); }
 .src-none { color: var(--loss); }
 
@@ -1491,27 +1479,6 @@ svg image { cursor: default; }
   outline: none;
 }
 .fav-input:focus { border-color: var(--red); }
-.fav-results {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--line);
-  margin-bottom: 14px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-.fav-result {
-  display: grid;
-  grid-template-columns: 40px 1fr auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-bottom: 1px solid rgba(38, 56, 74, 0.4);
-}
-.fav-result:last-child { border-bottom: none; }
-.fav-result img { width: 38px; height: 26px; object-fit: contain; background: #0a0f16; }
-.fav-result-name { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fav-result-weapon { color: var(--faint); font-size: 11px; white-space: nowrap; }
-
 .fav-list { display: flex; flex-direction: column; }
 .fav-row {
   display: grid;
@@ -1838,8 +1805,6 @@ svg image { cursor: default; }
 }
 .skin-preview-play:hover { background: var(--red); }
 .spr-play-icon { font-size: 10px; }
-/* Accesorios del bundle (ItemPreview) */
-.item-preview-card .skin-preview-img { aspect-ratio: 16 / 9; width: min(100%, 480px); }
 .item-preview-title {
   font-family: var(--font-display);
   font-size: 30px;
@@ -2586,7 +2551,7 @@ body { overflow-x: clip; }
   .dd-mini th:first-child { width: 140px; }
   .score-table.dd-mini.icon-col th:first-child { width: 56px; }
   .dd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .loading-overlay, .loading-backdrop { padding: 14px; }
+  .loading-backdrop { padding: 14px; }
 }
 
 @keyframes sheet-up {

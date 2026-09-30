@@ -1,14 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-interface AuthEvent {
-  ts: number;
-  type: string;
-  user?: string;
-  ip?: string;
-  detail?: string;
-}
+import type { AuthEvent } from '@/lib/authLog';
 
 const TYPE_LABEL: Record<string, string> = {
   login_ok: 'Inicio de sesión',

@@ -1,7 +1,7 @@
 import { getContent } from './valorant';
 import { findCachedValues, cacheSet } from './cache';
 import { getArchiveMatchById } from './archive';
-import { getHenrikAccount } from './henrik';
+import { getHenrikAccount, henrikMatchTimestamp, henrikRoundsPlayed } from './henrik';
 import { listProfiles, listProfilesFor, type ProfileViewer } from './profiles';
 import { memberAccounts } from './profileTypes';
 import { sidesByRound, matchAperturas, type MatchAperturas } from './aperturas';
@@ -142,7 +142,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
 
   const players: DetailPlayer[] = (match.players ?? []).map((p) => {
     const st = p.stats ?? {};
-    const rounds = Math.max(1, henrikRounds(match));
+    const rounds = Math.max(1, henrikRoundsPlayed(match));
     const shots = (st.headshots ?? 0) + (st.bodyshots ?? 0) + (st.legshots ?? 0);
     return {
       name: p.name ?? '?',
@@ -214,7 +214,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     meta: {
       map: match.metadata?.map?.name ?? '?',
       mapIcon: mapIconByName.get((match.metadata?.map?.name ?? '').toLowerCase()) ?? null,
-      date: new Date(henrikMatchTs(match)).toISOString(),
+      date: new Date(henrikMatchTimestamp(match)).toISOString(),
       durationMin: Math.round((match.metadata?.game_length_in_ms ?? 0) / 60000),
       seasonShort: match.metadata?.season?.short ?? '',
       myAgent: me?.agent?.name ?? '?',
@@ -242,20 +242,4 @@ function s2(v: unknown): number {
 
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
-}
-
-function henrikRounds(m: HenrikMatch): number {
-  const teams = m.teams ?? [];
-  let maxTeam = 0;
-  for (const t of teams) maxTeam = Math.max(maxTeam, (t.rounds?.won ?? 0) + (t.rounds?.lost ?? 0));
-  return Math.max(1, maxTeam);
-}
-
-function henrikMatchTs(m: HenrikMatch): number {
-  const iso = m.metadata?.started_at;
-  if (iso) {
-    const t = Date.parse(iso);
-    if (Number.isFinite(t)) return t;
-  }
-  return Date.now();
 }

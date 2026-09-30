@@ -28,7 +28,7 @@ function prune(now: number): void {
   }
 }
 
-export interface RateLimitResult {
+interface RateLimitResult {
   ok: boolean;
   /** segundos hasta poder reintentar (solo si ok=false) */
   retryAfterSec?: number;

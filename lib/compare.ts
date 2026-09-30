@@ -1,5 +1,6 @@
 import type { AperturaBucket, AperturaGrupo, AperturaPartida, ArsenalRow, MatchRow, ValAperturas, ValArsenal, ValKpis, ValSummary } from './types';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
+import { isoDayLocal, mondayOf } from './dates';
 
 export interface CompareFilters {
   agents: string[];
@@ -8,6 +9,9 @@ export interface CompareFilters {
   to: string;
   minGames: number;
 }
+
+/** Ventana temporal seleccionable en las vistas de comparación/ranked. */
+export type WindowValue = 'season' | '7' | '14' | '30' | '90' | '365';
 
 export const DEFAULT_FILTERS: CompareFilters = {
   agents: [],
@@ -32,7 +36,7 @@ export function applyFilters(ms: MatchRow[], f: CompareFilters): MatchRow[] {
   });
 }
 
-export type ResolvedGranularity = 'day' | 'week';
+type ResolvedGranularity = 'day' | 'week';
 export type Granularity = ResolvedGranularity | 'auto';
 export type MetricKey = 'wr' | 'acs' | 'kd' | 'rank';
 
@@ -68,7 +72,7 @@ export function agentCombos(
 }
 
 /** Celda de la matriz agente × jugador (heatmap de escritorio y vista "Por agente" móvil). */
-export interface AgentMatrixCell {
+interface AgentMatrixCell {
   games: number;
   wins: number;
   losses: number;
@@ -143,7 +147,7 @@ export interface BucketPoint {
  * (tier 27 + RR real, p. ej. 2700+350). Clampearlo aplanaba esos casos
  * y confundía los bordes de tier (P3·100 == D1·0).
  */
-export function rankPointsOf(m: MatchRow): number | null {
+function rankPointsOf(m: MatchRow): number | null {
   if (typeof m.tier !== 'number' || m.tier <= 0) return null;
   const rr = typeof m.rr === 'number' && Number.isFinite(m.rr) ? m.rr : 0;
   return m.tier * 100 + Math.max(0, rr);
@@ -152,20 +156,13 @@ export function rankPointsOf(m: MatchRow): number | null {
 /** Piso del eje Y de la métrica de rango: Platinum 3 (no mostrar rangos más bajos). */
 export const RANK_AXIS_MIN = 17 * 100;
 
-function mondayOf(d: Date): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = (x.getDay() + 6) % 7;
-  x.setDate(x.getDate() - day);
-  return x;
-}
-
 function keyFor(ts: number, gran: ResolvedGranularity): { key: string; label: string } {
   const d = new Date(ts);
   if (gran === 'day') {
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const key = isoDayLocal(ts);
     return { key, label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}` };
   }
-  const mo = mondayOf(d);
+  const mo = mondayOf(ts);
   // Semana con mes 1-indexado y pads (mismo formato que lib/rules.ts): sin pad,
   // el orden lexicográfico rompía el eje X (w-2026-7-11 < w-2026-7-4).
   const key = `w-${mo.getFullYear()}-${String(mo.getMonth() + 1).padStart(2, '0')}-${String(mo.getDate()).padStart(2, '0')}`;

@@ -5,6 +5,7 @@ import { esc } from '@/lib/metas';
 import { groupByDay, dayStats } from '@/lib/dayAnalysis';
 import { UNWINNABLE_LIMITS } from '@/lib/unwinnable';
 import type { MatchRow } from '@/lib/types';
+import { isDraw } from '@/lib/stats';
 import { AgentIcon } from './AgentIcon';
 import { MatchDetailModal } from './MatchDetailModal';
 import { DayDetailModal } from './DayDetailModal';
@@ -393,7 +394,4 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
   );
 }
 
-/** Empate: marcador igualado (p. ej. 14-14). No cuenta como derrota. */
-function isDraw(m: MatchRow): boolean {
-  return m.roundsWon === m.roundsLost;
-}
+

@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useMatchDetail } from '@/lib/hooks';
+import { useModalShell } from '@/lib/useModalShell';
 import { TierIcon } from '@/components/TierIcon';
 import { AgentIcon } from './AgentIcon';
 import { LossBadge } from './LossBadge';
 import type { MatchRow } from '@/lib/types';
+import { isDraw as isDrawMatch } from '@/lib/stats';
 import type { DetailPlayer, RoundCell } from '@/lib/matchDetail';
 
 interface MatchDetailModalProps {
@@ -19,27 +20,12 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
   const query = useMatchDetail(match.matchId, playerId);
   const detail = query.data;
   const error = query.error as (Error & { code?: string }) | null;
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  useModalShell(onClose);
 
   // El modal solo se monta tras un click del usuario (client-side): document existe.
   if (typeof document === 'undefined') return null;
 
-  const isDraw = match.roundsWon === match.roundsLost;
+  const isDraw = isDrawMatch(match);
   const myTeamId = detail?.players.find((x) => x.isMe)?.teamId;
   const myPlayers = detail?.players.filter((p) => p.teamId === myTeamId) ?? [];
   const enemyPlayers = detail?.players.filter((p) => p.teamId !== myTeamId) ?? [];

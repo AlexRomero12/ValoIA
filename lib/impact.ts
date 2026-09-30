@@ -13,7 +13,7 @@ export interface Multikills {
   five: number;
 }
 
-export interface VictimCount {
+interface VictimCount {
   name: string;
   times: number;
 }

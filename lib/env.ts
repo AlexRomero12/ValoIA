@@ -3,7 +3,7 @@ import path from 'node:path';
 
 let loaded = false;
 
-export function loadEnvFile(): void {
+function loadEnvFile(): void {
   if (loaded) return;
   loaded = true;
   try {

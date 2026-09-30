@@ -16,14 +16,14 @@ import { cookieHeader, mergeCookies, parseCookieInput, sessionEstimate, type Coo
  * plataforma/versión del cliente.
  */
 
-export type StoreSource = 'rso' | 'none';
+type StoreSource = 'rso' | 'none';
 
-export interface StoreDailyItem {
+interface StoreDailyItem {
   offerId: string;
   price: number;
 }
 
-export interface StoreBundleItem {
+interface StoreBundleItem {
   itemId: string;
   /** ItemTypeID de Riot: distingue skin / variante / card / buddy / spray / título */
   itemType?: string;
@@ -32,7 +32,7 @@ export interface StoreBundleItem {
   basePrice?: number;
 }
 
-export interface StoreBundle {
+interface StoreBundle {
   id: string;
   name?: string;
   durationSec: number;
@@ -257,7 +257,7 @@ async function saveTokensFromUri(user: string, uri: string): Promise<void> {
   invalidatePrefix(storeKey(user));
 }
 
-export type RsoLoginResult =
+type RsoLoginResult =
   | { ok: true }
   | { ok: false; needs2fa: boolean; error?: string };
 
@@ -568,7 +568,7 @@ async function fetchStorefront(
  * Storefront fresco del usuario (sin caché). Sin RSO conectado devuelve
  * { source: 'none', ... }.
  */
-export async function fetchStoreFrontFresh(user: string): Promise<StoreFront> {
+async function fetchStoreFrontFresh(user: string): Promise<StoreFront> {
   const tokens = await rsoTokensFresh(user);
   if (tokens) {
     try {

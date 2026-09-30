@@ -7,6 +7,7 @@ import { useTierIcons } from '@/lib/hooks';
 import { useElementWidth } from '@/lib/useElementWidth';
 import { esc } from '@/lib/metas';
 import type { MatchRow } from '@/lib/types';
+import { isDraw as isDrawMatch } from '@/lib/stats';
 
 interface TierChartProps {
   matchesAsc: MatchRow[];
@@ -71,7 +72,7 @@ export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
     const mi = String(d.getMinutes()).padStart(2, '0');
     return `${dd}/${mm} · ${hh}:${mi}`;
   };
-  const isDraw = selMatch ? selMatch.roundsWon === selMatch.roundsLost : false;
+  const isDraw = selMatch ? isDrawMatch(selMatch) : false;
 
   const gridlines = [];
   for (let t = minT; t <= maxT; t++) {

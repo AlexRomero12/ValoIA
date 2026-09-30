@@ -36,7 +36,7 @@ function utcDay(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
-export interface WatchResult {
+interface WatchResult {
   checked: boolean;
   source: string;
   daily: number;

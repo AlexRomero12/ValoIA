@@ -276,16 +276,3 @@ export function invalidatePrefix(prefix: string): void {
   }
 }
 
-export function invalidateAll(): void {
-  mem.clear();
-  inFlight.clear();
-  ensureDir();
-  if (!dirReady) return;
-  try {
-    for (const f of fs.readdirSync(CACHE_DIR)) {
-      if (f.endsWith('.json')) fs.rmSync(path.join(CACHE_DIR, f), { force: true });
-    }
-  } catch {
-    /* noop */
-  }
-}

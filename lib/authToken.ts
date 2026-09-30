@@ -25,11 +25,11 @@ export interface SessionPayload {
 
 const DEV_SECRET = 'valoia-dev-insecure-secret';
 export const SESSION_COOKIE = 'valoia_session';
-export const SESSION_DAYS = 30;
+const SESSION_DAYS = 30;
 export const SESSION_MAX_AGE = SESSION_DAYS * 24 * 60 * 60;
 
 /** Secreto efectivo; '' = login deshabilitado (falta AUTH_SECRET en prod). */
-export function authSecret(): string {
+function authSecret(): string {
   const s = process.env.AUTH_SECRET;
   if (s && s.length >= 16) return s;
   if (process.env.NODE_ENV === 'production') return '';

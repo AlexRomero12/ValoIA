@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
+import { useModalShell } from '@/lib/useModalShell';
 
 export interface PreviewItem {
   kind: 'card' | 'buddy' | 'spray' | 'title' | 'unknown';
@@ -35,19 +35,7 @@ const KIND_LABEL: Record<PreviewItem['kind'], string> = {
  * de valorant-api.com: no se almacena nada.
  */
 export function ItemPreview({ item, onClose }: { item: PreviewItem | null; onClose: () => void }) {
-  useEffect(() => {
-    if (!item) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [item, onClose]);
+  useModalShell(onClose, Boolean(item));
 
   if (!item || typeof document === 'undefined') return null;
 

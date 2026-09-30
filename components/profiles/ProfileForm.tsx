@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useModalShell } from '@/lib/useModalShell';
 import { useProfileActions, type ProfileInput } from '@/lib/hooks';
 import { ROTATION_MAPS } from '@/lib/proneta';
 import { ROLES } from '@/lib/roles';
@@ -42,22 +43,7 @@ export function ProfileForm({ profile, profiles, onClose, onSaved }: ProfileForm
   const [error, setError] = useState<string | null>(null);
 
   const iconState = useMemo(() => (rules ? 'on' : 'off'), [rules]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  useModalShell(onClose);
 
   const save = async () => {
     if (busy) return;

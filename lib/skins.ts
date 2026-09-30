@@ -43,14 +43,14 @@ export interface SkinlevelEntry {
   streamedVideo?: string | null;
 }
 
-export interface WeaponSkinLevel {
+interface WeaponSkinLevel {
   uuid?: string;
   displayName?: string;
   displayIcon?: string | null;
   streamedVideo?: string | null;
 }
 
-export interface WeaponSkinChroma {
+interface WeaponSkinChroma {
   uuid?: string;
   displayName?: string;
   displayIcon?: string | null;
@@ -58,7 +58,7 @@ export interface WeaponSkinChroma {
   streamedVideo?: string | null;
 }
 
-export interface WeaponSkin {
+interface WeaponSkin {
   displayName?: string;
   /** uuid de la rareza (contentTier) y del tema/colección de la skin */
   contentTierUuid?: string | null;
@@ -117,7 +117,7 @@ function isBaseSkin(name: string): boolean {
   return !/Level \d|\(/i.test(name);
 }
 
-export interface WeaponGroup {
+interface WeaponGroup {
   name: string;
   category: string;
   icon: string;
@@ -139,7 +139,7 @@ export interface ChromaInfo {
 }
 
 /** Nivel de evolución de una skin (Base, Nivel 2, Nivel 3…). */
-export interface SkinLevelInfo {
+interface SkinLevelInfo {
   id: string;
   label: string;
   icon: string;
@@ -155,7 +155,7 @@ export interface SkinVariants {
   chromas: ChromaInfo[];
 }
 
-export interface SkinsCatalog {
+interface SkinsCatalog {
   /** uuid del skinlevel (o chroma) -> SkinInfo */
   byId: Record<string, SkinInfo>;
   /** lista plana para búsqueda */

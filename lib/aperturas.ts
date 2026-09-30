@@ -15,20 +15,8 @@ import type { AperturaBucket, AperturaGrupo, AperturaPartida, ValAperturas } fro
  * en la UI: aquí solo se cuentan rondas y resultados.
  */
 
-export function emptyBucket(): AperturaBucket {
+function emptyBucket(): AperturaBucket {
   return { rounds: 0, fd: 0, fdWon: 0, noFd: 0, noFdWon: 0, fb: 0, fbWon: 0, fbLost: 0 };
-}
-
-/** Suma unos totales de un bucket en otro (mismo criterio en merge multi-cuenta). */
-export function addBucket(target: AperturaBucket, source: AperturaBucket): void {
-  target.rounds += source.rounds;
-  target.fd += source.fd;
-  target.fdWon += source.fdWon;
-  target.noFd += source.noFd;
-  target.noFdWon += source.noFdWon;
-  target.fb += source.fb;
-  target.fbWon += source.fbWon;
-  target.fbLost += source.fbLost;
 }
 
 function registerRound(b: AperturaBucket, won: boolean, fd: boolean, fb: boolean): void {

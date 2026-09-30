@@ -5,7 +5,7 @@ import { cached } from './cache';
  * Solo cambia por episodio: se cachea 7 días.
  * Clave = número de tier (0 = Unrated, que trae emblema de "sin rango"; 3..27).
  */
-export type TierIconMap = Record<string, string>;
+type TierIconMap = Record<string, string>;
 
 const TIERS_KEY = 'valo:tier-icons';
 const TIERS_TTL_MS = 7 * 24 * 60 * 60 * 1000;

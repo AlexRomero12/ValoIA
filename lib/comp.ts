@@ -1,6 +1,7 @@
 import type { MatchRow } from './types';
 import { agentRole, ROLES } from './roles';
 import { metaPickOf, ROTATION_MAPS } from './proneta';
+import { isDraw } from './stats';
 
 /**
  * Regla de datos: el WR que manda es **agente jugado en ese mapa** (1+ partida
@@ -8,12 +9,12 @@ import { metaPickOf, ROTATION_MAPS } from './proneta';
  * solo se usa como respaldo marcado como "global", y nunca para elegir a un
  * agente que el jugador no ha usado en el mapa.
  */
-export const MIN_MAP_GAMES = 1;
-export const MIN_AGENT_GAMES = 1;
+const MIN_MAP_GAMES = 1;
+const MIN_AGENT_GAMES = 1;
 /** Máximo de candidatos por jugador (producto 4 × 8 ≈ 4,1k combos por mapa). */
 const MAX_CANDIDATES = 8;
 /** Pick pro ≥ 10% = viable. */
-export const META_MIN = 10;
+const META_MIN = 10;
 
 export interface AgentPick {
   agent: string;
@@ -32,7 +33,7 @@ export interface AgentPick {
   score: number;
 }
 
-export interface CompEntry {
+interface CompEntry {
   label: string;
   color: string;
   pick: AgentPick;
@@ -119,14 +120,14 @@ function buildPlayer(team: CompTeam): PlayerModel {
   const add = (a: Acc, m: MatchRow) => {
     const ageDays = Math.max(0, (now - m.timestamp) / 86_400_000);
     const w = Math.exp(-ageDays / RECENT_HALF_LIFE_DAYS);
-    const isDraw = m.roundsWon === m.roundsLost;
+    const draw = isDraw(m);
     a.games += 1;
-    if (isDraw) a.draws += 1;
+    if (draw) a.draws += 1;
     else if (m.won) a.wins += 1;
     a.kills += m.kills;
     a.deaths += m.deaths;
     a.wGames += w;
-    if (isDraw) a.wDraws += w;
+    if (draw) a.wDraws += w;
     else if (m.won) a.wWins += w;
     a.wKills += m.kills * w;
     a.wDeaths += m.deaths * w;
@@ -156,7 +157,7 @@ function buildPlayer(team: CompTeam): PlayerModel {
  * ese agente del equipo. Ej.: el jugador que más juega Sova conserva el bonus
  * de propiedad cuando el equipo necesita un Sova.
  */
-export function agentOwners(models: PlayerModel[], agents: string[]): Map<string, { player: PlayerModel; wGames: number }> {
+function agentOwners(models: PlayerModel[], agents: string[]): Map<string, { player: PlayerModel; wGames: number }> {
   const owners = new Map<string, { player: PlayerModel; wGames: number }>();
   for (const agent of agents) {
     let best: { player: PlayerModel; wGames: number } | null = null;
@@ -363,7 +364,7 @@ function assignRoles(
  *  - El mismo agente no puede repetirse (dos Omen no juegan juntos).
  *  - Máx 2 jugadores por rol; si un rol tiene 2, ningún otro puede duplicar.
  */
-export function compOk(picks: AgentPick[]): boolean {
+function compOk(picks: AgentPick[]): boolean {
   const agents = new Set<string>();
   const counts = new Map<string, number>();
   for (const p of picks) {

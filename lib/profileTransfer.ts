@@ -6,10 +6,10 @@ import type { SessionRules, Profile, ProfileAccount, ProfilePref } from './profi
  * la API hace la validación final al guardar.
  */
 
-export const TRANSFER_KIND = 'valoia.profiles';
-export const TRANSFER_VERSION = 2;
+const TRANSFER_KIND = 'valoia.profiles';
+const TRANSFER_VERSION = 2;
 
-export interface ProfileExport {
+interface ProfileExport {
   label: string;
   name: string;
   tag: string;
@@ -22,14 +22,14 @@ export interface ProfileExport {
   rules?: SessionRules;
 }
 
-export interface TransferFile {
+interface TransferFile {
   kind: typeof TRANSFER_KIND;
   version: number;
   exportedAt: string;
   profiles: ProfileExport[];
 }
 
-export function toExportable(p: Profile): ProfileExport {
+function toExportable(p: Profile): ProfileExport {
   return {
     label: p.label,
     name: p.name,
@@ -112,7 +112,7 @@ function cleanProfileExport(raw: unknown): ProfileExport | null {
   };
 }
 
-export type ParseImportResult = { profiles: ProfileExport[] } | { error: string };
+type ParseImportResult = { profiles: ProfileExport[] } | { error: string };
 
 /**
  * Acepta el envelope (`{ kind, version, profiles }`), un array de perfiles o

@@ -59,6 +59,16 @@ export interface StatBlock {
   hsPct: number;
 }
 
+/** Empate: marcador igualado (no cuenta como victoria ni derrota). */
+export function isDraw(m: { roundsWon: number; roundsLost: number }): boolean {
+  return m.roundsWon === m.roundsLost;
+}
+
+/** K/D de una partida; sin muertes devuelve los kills (sin dividir por cero). */
+export function matchKd(m: { kills: number; deaths: number }): number {
+  return m.deaths ? m.kills / m.deaths : m.kills > 0 ? m.kills : 0;
+}
+
 export function computeStats(ms: readonly StatMatch[]): PlayerStats {
   let wins = 0;
   let draws = 0;

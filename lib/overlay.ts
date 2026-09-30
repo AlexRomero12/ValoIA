@@ -9,13 +9,13 @@ import { rateLimit } from './rateLimit';
  * keys, RSO, tienda ni mutaciones. Solo GET + `Cache-Control: no-store`.
  */
 
-export const OVERLAY_CORS_HEADERS: Record<string, string> = {
+const OVERLAY_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-export function overlayHeaders(): Record<string, string> {
+function overlayHeaders(): Record<string, string> {
   return { 'Cache-Control': 'no-store', ...OVERLAY_CORS_HEADERS };
 }
 
@@ -54,7 +54,7 @@ function isPrivateLanIp(ip: string): boolean {
  * IP aparente para rate-limit (best-effort en App Router: no hay socket IP).
  * Con TRUST_PROXY=1 usa X-Real-IP / última X-Forwarded-For; si no, 'local'.
  */
-export function overlayIp(req: NextRequest): string {
+function overlayIp(req: NextRequest): string {
   if (process.env.TRUST_PROXY === '1') {
     const real = req.headers.get('x-real-ip')?.trim();
     if (real) return real;
@@ -117,9 +117,4 @@ export function resolveOverlayProfile(playerId?: string | null) {
 /** Viewer indefinido: getValSummary resuelve contra todos los perfiles (solo lectura). */
 export function overlayViewer(): ProfileViewer | undefined {
   return undefined;
-}
-
-export function isoDayLocal(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

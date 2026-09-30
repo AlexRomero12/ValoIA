@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { TopBar } from '@/components/TopBar';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { FiltersBar, type WindowValue } from '@/components/compare/FiltersBar';
+import { FiltersBar } from '@/components/compare/FiltersBar';
+import type { WindowValue } from '@/lib/compare';
 import { RankingTable, type RankRow, type SortKey } from '@/components/compare/RankingTable';
 import { TrendCompare } from '@/components/compare/TrendCompare';
 import { AgentByPlayerCards, AgentByAgentCards } from '@/components/compare/AgentCards';
@@ -30,8 +31,6 @@ import { computeStats } from '@/lib/stats';
 import { tierShort } from '@/lib/ranks';
 import type { ValSummary } from '@/lib/types';
 
-type WinValue = WindowValue;
-
 const POLL_MS = 4_000;
 const POLL_TIMEOUT_MS = 120_000;
 
@@ -40,7 +39,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
-  const [win, setWin] = useState<WinValue>('season');
+  const [win, setWin] = useState<WindowValue>('season');
   const [filters, setFilters] = useState<CompareFilters>(DEFAULT_FILTERS);
   const [gran, setGran] = useState<Granularity>('auto');
   const [metric, setMetric] = useState<MetricKey>('wr');

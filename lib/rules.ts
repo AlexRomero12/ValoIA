@@ -1,6 +1,8 @@
 import type { MatchRow } from './types';
 import { agentRole } from './roles';
 import { poolRuleFor, type SessionRules } from './profileTypes';
+import { isDraw, matchKd } from './stats';
+import { isoDayLocal, mondayOf } from './dates';
 
 /**
  * Motor de reglas de sesión (reglas configurables por perfil).
@@ -19,20 +21,12 @@ import { poolRuleFor, type SessionRules } from './profileTypes';
 export type PickClass = 'main' | 'backup' | 'off' | 'banned' | 'flex';
 
 /** Pausa >= 3 h entre partidas = sesión nueva (default). */
-export const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
+const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
 /** Umbral de la regla de parada (default). */
 export const STOP_KD = 0.9;
 
-export function isDraw(m: MatchRow): boolean {
-  return m.roundsWon === m.roundsLost;
-}
-
-export function matchKd(m: MatchRow): number {
-  return m.deaths ? m.kills / m.deaths : m.kills > 0 ? m.kills : 0;
-}
-
 /** Clasifica el agente de una partida contra las reglas (flex = sin regla). */
-export function classifyPick(m: MatchRow, rules?: SessionRules): PickClass {
+function classifyPick(m: MatchRow, rules?: SessionRules): PickClass {
   if (!rules) return 'flex';
   if ((rules.bannedAgents ?? []).includes(m.agent)) return 'banned';
   const role = m.agentRole ?? agentRole(m.agent);
@@ -104,11 +98,6 @@ export interface DayEvaluation {
   fdTotal?: number | null;
   /** Partidas del día con 3+ primeras muertes (señal "no regalar"). */
   fdHighCount?: number;
-}
-
-function isoDayLocal(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function localLabel(ts: number): string {
@@ -231,15 +220,6 @@ export function evaluateDay(matches: MatchRow[], rules?: SessionRules): DayEvalu
     cutIgnored: cutIdx >= 0 && rows.some((r) => r.afterCut),
     sessions: session + 1,
   };
-}
-
-/** Lunes (local) de la semana de una fecha. */
-export function mondayOf(ts: number): Date {
-  const d = new Date(ts);
-  const day = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - day);
-  d.setHours(0, 0, 0, 0);
-  return d;
 }
 
 export interface RulesWeek {

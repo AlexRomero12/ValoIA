@@ -10,6 +10,8 @@
  * de la partida ya cacheado ($0 requests extra).
  */
 
+import { matchKd } from './stats';
+
 export interface LossFields {
   won: boolean;
   roundsWon: number;
@@ -46,7 +48,7 @@ export function lossTag(m: LossFields): LossTag | null {
   // Solo derrotas (los empates no cuentan como derrota en el dash).
   if (m.won || m.roundsWon === m.roundsLost) return null;
   if (m.mateAcs == null) return null;
-  const kd = m.deaths ? m.kills / m.deaths : m.kills;
+  const kd = matchKd(m);
   // Mi culpa: por debajo de la media del equipo y K/D negativo.
   if (m.acs < m.mateAcs && kd < UNWINNABLE_LIMITS.myFaultKd) return 'mine';
   // Injugable: 2+ compañeros muy malos y el jugador no fue el problema.

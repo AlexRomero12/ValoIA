@@ -10,7 +10,8 @@ import { RulesProposal } from '@/components/rules/RulesProposal';
 import { RulesRecommendations } from '@/components/rules/RulesRecommendations';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useElementWidth } from '@/lib/useElementWidth';
-import { evaluateDay, groupEvaluationWeeks, mondayOf, type DayEvaluation, type RulesWeek } from '@/lib/rules';
+import { evaluateDay, groupEvaluationWeeks, type DayEvaluation, type RulesWeek } from '@/lib/rules';
+import { isoDayLocal, mondayOf } from '@/lib/dates';
 import { sameRulesDay, storedDayKey, storedToRulesDay, toStoredRulesDay, type StoredRulesDay } from '@/lib/rulesHistory';
 import { useProfileActions, useProfiles, useValSummary } from '@/lib/hooks';
 import { emptySessionRules, primaryOf, type SessionRules, type Profile } from '@/lib/profileTypes';
@@ -19,11 +20,6 @@ import type { MatchRow } from '@/lib/types';
 
 const FETCH_DAYS = 30;
 const LIMIT = 40;
-
-function isoDayLocal(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function fmtRR(v: number | null): string {
   return v == null ? '—' : `${v > 0 ? '+' : ''}${v}`;

@@ -20,11 +20,11 @@ import {
 } from './henrik';
 import { requireProfile, type ProfileViewer } from './profiles';
 import { computeAperturas } from './aperturas';
-import { computeStats, groupMatches, toStatBlock, type PlayerStats, type StatBlock } from './stats';
+import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 import { UNWINNABLE_LIMITS } from './unwinnable';
-import type { ValAperturas } from './types';
+import type { MatchRow, ValAccount, ValArsenal, ValSummary } from './types';
 
-export const VAL_CONFIG = {
+const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
   tag: () => env('VAL_TAG', '0000'),
   shard: () => env('VAL_SHARD', 'latam'),
@@ -32,7 +32,7 @@ export const VAL_CONFIG = {
   apiKey: () => env('RIOT_API_KEY'),
 };
 
-export class RiotApiError extends Error {
+class RiotApiError extends Error {
   code: 'KEY_MISSING' | 'KEY_EXPIRED' | 'RATE_LIMITED' | 'HTTP' | 'NETWORK' | 'NOT_FOUND';
   status?: number;
   constructor(code: RiotApiError['code'], message: string, status?: number) {
@@ -78,13 +78,9 @@ async function riotFetch(path: string, base: string): Promise<unknown> {
   return res.json();
 }
 
-export interface ValAccount {
-  puuid: string;
-  gameName: string;
-  tagLine: string;
-}
+type RiotAccount = ValAccount & { puuid: string };
 
-export async function getAccount(): Promise<ValAccount> {
+async function getAccount(): Promise<RiotAccount> {
   const name = encodeURIComponent(VAL_CONFIG.name());
   const tag = encodeURIComponent(VAL_CONFIG.tag());
   const data = (await cached(
@@ -111,7 +107,7 @@ interface MatchlistResponse {
   history: MatchListEntry[];
 }
 
-export async function getMatchlist(puuid: string): Promise<MatchlistResponse> {
+async function getMatchlist(puuid: string): Promise<MatchlistResponse> {
   return (await cached(`val:matchlist:${puuid}`, 10 * 60 * 1000, async () =>
     riotFetch(
       `/val/match/v1/matchlists/by-puuid/${puuid}`,
@@ -136,7 +132,7 @@ interface RiotPlayerStats {
   assists?: number;
 }
 
-export interface ValPlayer {
+interface ValPlayer {
   puuid?: string;
   gameName?: string;
   tagLine?: string;
@@ -154,7 +150,7 @@ interface TeamInfo {
   roundsWon?: number;
 }
 
-export interface ValMatch {
+interface ValMatch {
   matchInfo: {
     matchId?: string;
     mapId?: string;
@@ -170,7 +166,7 @@ export interface ValMatch {
 const MATCH_TTL_COMPLETED = Number.MAX_SAFE_INTEGER;
 const MATCH_TTL_INCOMPLETE = 5 * 60 * 1000;
 
-export async function getMatch(matchId: string): Promise<ValMatch> {
+async function getMatch(matchId: string): Promise<ValMatch> {
   const raw = await cached(`val:match:${matchId}`, MATCH_TTL_INCOMPLETE, async () =>
     riotFetch(`/val/match/v1/matches/${matchId}`, `https://${VAL_CONFIG.shard()}.api.riotgames.com`),
   );
@@ -271,94 +267,7 @@ function mapDisplayName(mapId: string | undefined, dicts: ContentDicts): string 
 
 // ---------- Agregación ----------
 
-export interface ArsenalRow {
-  weapon: string;
-  /** Categoría del arma (Rifle, Sniper, Melee...) según valorant-api.com */
-  type: string | null;
-  icon: string | null;
-  kills: number;
-  deaths: number;
-  kd: number;
-  /** Primeras sangre del jugador con esta arma (primer kill del round) */
-  firstBloods: number;
-}
-
-export interface ValArsenal {
-  rows: ArsenalRow[];
-  totalKills: number;
-  totalFirstBloods: number;
-}
-
-export interface MatchSummary {
-  matchId: string;
-  date: string;
-  timestamp: number;
-  map: string;
-  agent: string;
-  won: boolean;
-  rounds: number;
-  roundsWon: number;
-  roundsLost: number;
-  kills: number;
-  deaths: number;
-  assists: number;
-  acs: number;
-  adr: number;
-  hsPct: number;
-  /** Primeras sangres del jugador (primer kill del round). Solo Henrik. */
-  firstBloods?: number;
-  /** Primeras muertes del jugador (primera muerte del round). Solo Henrik. */
-  firstDeaths?: number;
-  score?: number;
-  damageDealt?: number;
-  headshots?: number;
-  shots?: number;
-  tier: number;
-  tierChange: number;
-  /**
-   * Tier sin respaldo del mmr-history (viene del detalle del match, que es el
-   * tier previo al partido): el punto de rango es aproximado y en la frontera
-   * con historial puede saltar ±1 tier de más. El cliente lo marca con ~.
-   */
-  tierApprox?: boolean;
-  durationMin: number;
-  rrDelta?: number | null;
-  rr?: number | null;
-  elo?: number | null;
-  eloDelta?: number | null;
-  agentIcon?: string | null;
-  mapIcon?: string | null;
-  /** Rol del agente, cuando el catálogo de contenido lo tiene */
-  agentRole?: string | null;
-  /** ACS promedio de los compañeros de equipo (etiquetado de derrotas). */
-  mateAcs?: number | null;
-  /** Compañeros muy malos (≤155 ACS y ≤0.8 KD): etiquetado de derrotas. */
-  mateBadCount?: number | null;
-}
-
-export type ValKpisBlock = StatBlock & { losses: number; fb?: number; fd?: number };
-
-export interface ValSummary {
-  generatedAt: string;
-  account: ValAccount;
-  window: { days: number; since: string; fetchedMatches: number; consideredMatches: number; archivedMatches?: number; seasonShort?: string | null; rrTotal?: number | null; rrMissing?: number; eloTotal?: number | null; syncedAt?: string | null; mmrSyncedAt?: string | null; truncated?: boolean; /** true = la red falló y se sirvió desde el archivo/caché local */ stale?: boolean; /** última sync conocida (bucket/mmr) cuando se sirve de caché */ cachedAt?: string | null; /** motivo de la degradación (p. ej. henrikdev HTTP 500) */ degradedReason?: string | null };
-  kpis: ValKpisBlock;
-  /** Ventana anterior de igual duración (deltas de KPIs); null si no hay datos. */
-  prev?: ValKpisBlock | null;
-  currentTier: number;
-  startTier: number;
-  currentElo?: number | null;
-  currentRR?: number | null;
-  byAgent: (StatBlock & { agent: string })[];
-  byMap: (StatBlock & { map: string })[];
-  matches: MatchSummary[];
-  /** Solo proveedor Henrik: uso de armas derivado del kill feed de las partidas en ventana */
-  arsenal?: ValArsenal;
-  /** Solo proveedor Henrik: FB/FD por ronda con bando inferido de las plantas */
-  aperturas?: ValAperturas;
-}
-
-export interface AggregateOptions {
+interface AggregateOptions {
   days: number;
   maxFetch?: number;
   refresh?: boolean;
@@ -437,7 +346,7 @@ function henrikMateAggregates(m: HenrikMatch, me: HenrikMatchPlayer): { mateAcs:
   return { mateAcs: Math.round(score / mates.length / rds), mateBadCount: bad };
 }
 
-/** Stats agregadas de partidas Henrik sin construir MatchSummary (ventana anterior). */
+/** Stats agregadas de partidas Henrik sin construir MatchRow (ventana anterior). */
 function henrikStatsOf(list: HenrikMatch[], puuid: string, rrOf: (matchId: string) => number | null): PlayerStats {
   return computeStats(
     list.map((m) => {
@@ -586,7 +495,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     });
   }
 
-  const summaries: MatchSummary[] = [];
+  const summaries: MatchRow[] = [];
   let prevTier: number | null = null;
   let prevElo: number | null = null;
 
@@ -807,7 +716,7 @@ function riotMateAggregates(match: ValMatch, me: ValPlayer, rounds: number): { m
   return { mateAcs: Math.round(score / mates.length / rds), mateBadCount: bad };
 }
 
-export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
+async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
   const profile = requireProfile(opts.playerId, opts.viewer);
   // El proveedor Riot oficial solo conoce la cuenta del .env (VAL_NAME/VAL_TAG).
   if (opts.playerId && (profile.name !== VAL_CONFIG.name() || profile.tag !== VAL_CONFIG.tag())) {
@@ -847,7 +756,7 @@ export async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSumm
   const fatalErr = results.find((r) => r.err instanceof RiotApiError)?.err as RiotApiError | undefined;
   if (fatalErr && results.every((r) => r.match === null)) throw fatalErr;
 
-  const summaries: MatchSummary[] = [];
+  const summaries: MatchRow[] = [];
 
   let prevTier: number | null = null;
 

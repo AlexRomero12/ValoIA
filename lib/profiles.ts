@@ -96,17 +96,13 @@ export interface ProfileViewer {
   admin: boolean;
 }
 
-export function canAccessProfile(profile: Profile, viewer: ProfileViewer): boolean {
+function canAccessProfile(profile: Profile, viewer: ProfileViewer): boolean {
   return profile.owner === viewer.username;
 }
 
 /** Perfiles del usuario (solo propios). */
 export function listProfilesFor(viewer: ProfileViewer): Profile[] {
   return listProfiles().filter((p) => p.owner === viewer.username);
-}
-
-export function listVisibleProfilesFor(viewer: ProfileViewer): Profile[] {
-  return listProfilesFor(viewer).filter((p) => p.visible);
 }
 
 /** Filtra una lista en memoria segÃºn el visor (para respuestas tras mutar). */
@@ -155,12 +151,6 @@ export function requireProfile(id?: string | null, viewer?: ProfileViewer): Prof
   const profile = getProfile(id, viewer);
   if (!profile) throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NO_PROFILES' });
   return profile;
-}
-
-export function isValidProfile(id?: string | null, viewer?: ProfileViewer): boolean {
-  if (!id) return true;
-  if (!viewer) return listProfiles().some((p) => p.id === id);
-  return listProfiles().some((p) => p.id === id && canAccessProfile(p, viewer));
 }
 
 function cleanAccounts(accounts: unknown): ProfileAccount[] | undefined {

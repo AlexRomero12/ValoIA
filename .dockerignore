@@ -11,3 +11,11 @@ verify-*.mjs
 Dockerfile
 docker-compose.yml
 docker-compose.*.yml
+data
+docs
+*.opk
+*.md
+tsconfig.tsbuildinfo
+.git
+.gitignore
+iniciar.bat

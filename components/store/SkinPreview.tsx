@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
+import type { ChromaInfo } from '@/lib/skins';
+import { useModalShell } from '@/lib/useModalShell';
 
 export interface PreviewSkin {
   id: string;
@@ -19,15 +21,6 @@ interface LevelInfo {
   id: string;
   label: string;
   icon: string;
-  video?: string | null;
-}
-
-interface ChromaInfo {
-  id: string;
-  name: string;
-  icon: string;
-  label: string;
-  fullRender?: string | null;
   video?: string | null;
 }
 
@@ -72,24 +65,7 @@ export function SkinPreview({
   const [playingFor, setPlayingFor] = useState<string | null>(null);
   const [errorFor, setErrorFor] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!skin) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [skin, onClose]);
-
-  // Bloquea el scroll del body mientras el lightbox está abierto.
-  useEffect(() => {
-    if (!skin) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [skin]);
+  useModalShell(onClose, Boolean(skin));
 
   if (!skin || typeof document === 'undefined') return null;
 

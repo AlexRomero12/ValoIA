@@ -1,5 +1,3 @@
-'use client';
-
 import { esc, wrColor } from '@/lib/metas';
 import type { AgentPick, CompCard } from '@/lib/comp';
 

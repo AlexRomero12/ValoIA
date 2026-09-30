@@ -1,4 +1,4 @@
-export interface ProMetaAgent {
+interface ProMetaAgent {
   agent: string;
   /** % de pick pro en ese mapa (108–121 mapas de VCT 2026 Americas Stage 2) */
   pick: number;
@@ -65,7 +65,7 @@ export const PRONETA: Record<string, ProMetaAgent[]> = {
   ],
 };
 
-export function pronetaFor(map: string): ProMetaAgent[] {
+function pronetaFor(map: string): ProMetaAgent[] {
   return PRONETA[map] ?? [];
 }
 

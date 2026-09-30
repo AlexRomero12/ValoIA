@@ -1,5 +1,6 @@
 import type { MatchRow } from './types';
 import { computeStats, groupMatches } from './stats';
+import { isoDayLocal } from './dates';
 
 /**
  * Agrupación y análisis de partidas por día (todo client-side, $0 requests).
@@ -7,7 +8,7 @@ import { computeStats, groupMatches } from './stats';
  * con los totales crudos del MatchRow para que no diverjan entre vistas.
  */
 
-export interface DayGroup {
+interface DayGroup {
   /** clave local YYYY-MM-DD */
   key: string;
   /** timestamp de la primera partida del día (ms) */
@@ -21,7 +22,7 @@ export function groupByDay(matches: MatchRow[]): DayGroup[] {
   const groups = new Map<string, DayGroup>();
   for (const m of [...matches].sort((a, b) => b.timestamp - a.timestamp)) {
     const d = new Date(m.timestamp);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const key = isoDayLocal(m.timestamp);
     let g = groups.get(key);
     if (!g) {
       g = {
@@ -37,7 +38,7 @@ export function groupByDay(matches: MatchRow[]): DayGroup[] {
   return [...groups.values()];
 }
 
-export interface DaySubStats {
+interface DaySubStats {
   name: string;
   icon: string | null;
   games: number;

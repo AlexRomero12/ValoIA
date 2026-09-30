@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
+import { useModalShell } from '@/lib/useModalShell';
 import { SkinPreview } from './SkinPreview';
 
 interface PickerSkin {
@@ -104,14 +105,8 @@ export function SkinPicker({
   const showing = searching ? (searchQ.data ?? []) : (skinsQ.data ?? []);
   const loadingSkins = (!searching && skinsQ.isFetching) || (searching && searchQ.isFetching);
 
-  // Bloquea el scroll del body mientras el modal está abierto (como los otros).
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  // Cierra con Escape y bloquea el scroll del body mientras el modal está abierto.
+  useModalShell(onClose);
 
   const pickCategory = (name: string) => {
     setCategory(name);

@@ -35,9 +35,9 @@ const BACKFILL_DEFAULT_PAGES = 40; // ~400 partidas competitivas por pasada
 const BACKFILL_MAX_PAGES = 150; // techo duro por ejecución (~25 min con throttle)
 
 export type BackfillMode = 'season' | 'all';
-export type BackfillStop = 'empty' | 'partial' | 'maxPages' | 'seasonBoundary' | 'error' | 'skipped';
+type BackfillStop = 'empty' | 'partial' | 'maxPages' | 'seasonBoundary' | 'error' | 'skipped';
 
-export interface ArchiveIndex {
+interface ArchiveIndex {
   /** ms epoch de la última actualización del índice */
   updatedAt: number;
   total: number;
@@ -48,7 +48,7 @@ export interface ArchiveIndex {
   backfill?: { at: number; mode: BackfillMode; pages: number; added: number; stoppedBy: BackfillStop };
 }
 
-export interface ArchiveStats {
+interface ArchiveStats {
   total: number;
   oldestAt: number | null;
   newestAt: number | null;
@@ -56,12 +56,12 @@ export interface ArchiveStats {
   backfill?: ArchiveIndex['backfill'];
 }
 
-export interface MergeResult {
+interface MergeResult {
   added: number;
   total: number;
 }
 
-export interface BackfillOptions {
+interface BackfillOptions {
   /** 'season' (default) = hasta cubrir la temporada actual; 'all' = hasta el fondo */
   mode?: BackfillMode;
   /** páginas de 10 partidas; default 40, tope 150 */
@@ -193,7 +193,7 @@ function rebuildIndex(key: string): ArchiveIndex {
 }
 
 /** Lee el índice del jugador; si falta (primer arranque), lo reconstruye desde disco. */
-export function readArchiveIndex(nameArg: string, tagArg: string): ArchiveIndex {
+function readArchiveIndex(nameArg: string, tagArg: string): ArchiveIndex {
   const key = playerKey(nameArg, tagArg);
   const hit = memIndex.get(key);
   if (hit) return hit;

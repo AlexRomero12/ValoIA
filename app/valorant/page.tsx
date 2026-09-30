@@ -18,12 +18,10 @@ import { AperturasPanel } from '@/components/ranked/AperturasPanel';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useProfiles, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { useCooldown } from '@/lib/useCooldown';
-import { mergeAccountSummaries } from '@/lib/compare';
+import { mergeAccountSummaries, type WindowValue } from '@/lib/compare';
 import { memberAccounts } from '@/lib/profileTypes';
 import { tierName } from '@/lib/ranks';
 import type { ValSummary } from '@/lib/types';
-
-type WindowValue = 'season' | '7' | '14' | '30' | '90';
 
 const POLL_MS = 4_000;
 const POLL_TIMEOUT_MS = 120_000;
@@ -342,6 +340,7 @@ function RankedPage() {
               <option value="14">Últimos 14 días</option>
               <option value="30">Últimos 30 días</option>
               <option value="90">Últimos 90 días</option>
+              <option value="365">Último año</option>
             </select>
             <span className="window-info">{windowInfo}</span>
           </div>

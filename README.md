@@ -208,7 +208,6 @@ Oracle Cloud Always Free (ARM) con `docker-compose.prod.yml` + Caddy
 | `POST /api/valorant/profiles` | `{action: upsert, profile}` / `{action: delete, id}` — CRUD de perfiles |
 | `GET /api/valorant/match?id=&player=perfilId` | Detalle completo de una partida cacheada |
 | `GET /api/valorant/agents` | Catálogo de agentes con iconos y rol (cache 24 h) |
-| `GET /api/valorant/status?player=perfilId` | Estado de proveedor/key/cuenta |
 | `GET /api/store/status` | Tienda de hoy + bundle + favoritas (con coincidencias y estado de notificación) + estado RSO/push; `?refresh=1` fuerza revalidación |
 | `GET /api/store/catalog?q=\|weapon=` | Búsqueda en el catálogo de skins o todas las skins de un arma |
 | `GET /api/store/weapons` | Armas agrupadas por categoría con iconos y contador de skins |

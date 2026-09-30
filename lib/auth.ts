@@ -16,7 +16,7 @@ import type { NextRequest, NextResponse } from 'next/server';
  * así se pueden revocar (cambio de contraseña, borrar usuario, cerrar remoto).
  */
 
-export interface UserRecord {
+interface UserRecord {
   username: string;
   hash: string;
   createdAt: number;
@@ -29,7 +29,7 @@ export interface UserRecord {
   createdIp?: string;
 }
 
-export type PublicUser = Pick<UserRecord, 'username' | 'createdAt' | 'updatedAt' | 'admin' | 'mustChangePassword' | 'createdIp'>;
+type PublicUser = Pick<UserRecord, 'username' | 'createdAt' | 'updatedAt' | 'admin' | 'mustChangePassword' | 'createdIp'>;
 
 interface UsersFile {
   version: number;
@@ -41,7 +41,7 @@ const USERNAME_RE = /^[a-zA-Z0-9._-]{2,32}$/;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 128;
 
-export { SESSION_COOKIE, SESSION_MAX_AGE, authConfigured };
+export { authConfigured };
 
 if (usingDevSecret()) {
   console.warn('[auth] AUTH_SECRET no configurado: usando el secreto de DESARROLLO (no apto para producción)');
@@ -66,7 +66,7 @@ function writeUsers(users: UserRecord[]): void {
   writeDataSync(USERS_FILE, { version: 1, users });
 }
 
-export function normalizeUsername(raw: string): string {
+function normalizeUsername(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
@@ -76,7 +76,7 @@ export function validateUsername(raw: string): string | null {
   return null;
 }
 
-export function validatePassword(password: string): string | null {
+function validatePassword(password: string): string | null {
   if (password.length < MIN_PASSWORD) return `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`;
   if (password.length > MAX_PASSWORD) return `La contraseña no puede pasar de ${MAX_PASSWORD} caracteres`;
   return null;
@@ -144,11 +144,6 @@ export function isAdmin(username: string): boolean {
 export function mustChangePassword(username: string): boolean {
   const user = readUsers().find((u) => u.username === normalizeUsername(username));
   return user?.mustChangePassword === true;
-}
-
-function setMustChange(username: string, value: boolean): void {
-  const users = readUsers();
-  writeUsers(users.map((u) => (u.username === normalizeUsername(username) ? { ...u, mustChangePassword: value } : u)));
 }
 
 /**
@@ -264,7 +259,7 @@ export function viewerFromRequest(req: NextRequest): { username: string; admin: 
   return { username: session.u, admin: isAdmin(session.u) };
 }
 
-export function isHttps(req: NextRequest): boolean {
+function isHttps(req: NextRequest): boolean {
   const proto = req.headers.get('x-forwarded-proto');
   if (proto) return proto.split(',')[0]?.trim() === 'https';
   return req.nextUrl.protocol === 'https:';
@@ -290,5 +285,3 @@ export function startSession(res: NextResponse, username: string, req: NextReque
 export function clearSessionCookie(res: NextResponse): void {
   res.cookies.set({ name: SESSION_COOKIE, value: '', httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 });
 }
-
-export { setMustChange };

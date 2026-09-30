@@ -1,18 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-
-interface AccessRequest {
-  id: string;
-  username: string;
-  message?: string;
-  ip: string;
-  ua?: string;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: number;
-  decidedAt?: number;
-  decidedBy?: string;
-}
+import type { AccessRequest } from '@/lib/accessRequests';
 
 type Msg = { kind: 'ok' | 'error'; text: string } | null;
 

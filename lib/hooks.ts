@@ -5,12 +5,12 @@ import type { ValSummary, AgentIconInfo } from './types';
 import type { MatchDetail } from './matchDetail';
 import type { Profile, SessionRules } from './profileTypes';
 
-export type ValWindowMode =
+type ValWindowMode =
   | { kind: 'season' }
   | { kind: 'days'; days: number };
 
 export const DEFAULT_LIMIT = 10;
-export const LIMIT_STEPS = [10, 20, 40] as const;
+const LIMIT_STEPS = [10, 20, 40] as const;
 export const MAX_LIMIT = 40;
 
 export function nextLimit(current: number): number | null {
@@ -18,7 +18,7 @@ export function nextLimit(current: number): number | null {
   return next ?? null;
 }
 
-export function summaryUrl(mode: ValWindowMode, playerId: string, limit: number, refresh = false): string {
+function summaryUrl(mode: ValWindowMode, playerId: string, limit: number, refresh = false): string {
   const qs = mode.kind === 'season' ? 'season=current' : `days=${mode.days}`;
   return `/api/valorant/summary?${qs}&limit=${limit}&player=${encodeURIComponent(playerId)}${refresh ? '&refresh=1' : ''}`;
 }
@@ -91,7 +91,7 @@ export function useTierIcons() {
 
 // ---------- Perfiles ----------
 
-export const PROFILES_KEY = ['val-profiles'] as const;
+const PROFILES_KEY = ['val-profiles'] as const;
 
 export function useProfiles() {
   return useQuery<Profile[]>({
@@ -106,7 +106,7 @@ export function useProfiles() {
   });
 }
 
-export interface ProfileMutation {
+interface ProfileMutation {
   /** true si guardó/borró; error si falló */
   ok: boolean;
   error?: string;

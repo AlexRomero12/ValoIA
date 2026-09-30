@@ -1,5 +1,3 @@
-'use client';
-
 import type { ReactNode } from 'react';
 import { METAS, type Kpis } from '@/lib/metas';
 import { deltaOf } from '@/lib/form';

@@ -4,7 +4,7 @@
  * como `ValSummary.matches`.
  */
 
-export type FormResult = 'V' | 'D' | 'E';
+type FormResult = 'V' | 'D' | 'E';
 
 export interface FormMatch {
   won: boolean;
@@ -12,7 +12,7 @@ export interface FormMatch {
   roundsLost: number;
 }
 
-export interface MatchForm {
+interface MatchForm {
   /** Últimas N partidas, más reciente primero. */
   last: FormResult[];
   /** Racha actual (se corta con un empate). */

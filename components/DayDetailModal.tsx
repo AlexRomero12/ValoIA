@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DayStats } from '@/lib/dayAnalysis';
 import { esc } from '@/lib/metas';
+import { useModalShell } from '@/lib/useModalShell';
 import type { MatchRow } from '@/lib/types';
+import { isDraw } from '@/lib/stats';
 import { AgentIcon } from './AgentIcon';
 import { LossBadge } from './LossBadge';
 
@@ -17,21 +19,7 @@ type MiniFilter = { kind: 'agent' | 'map'; value: string } | null;
 
 export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
   const [filter, setFilter] = useState<MiniFilter>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  useModalShell(onClose);
 
   const rrCls = day.rrTotal != null && day.rrTotal < 0 ? 'down' : 'up';
   const streak = streakInfo(day.rows);
@@ -211,11 +199,6 @@ function MatchLine({ m }: { m: MatchRow }) {
       <LossBadge m={m} />
     </div>
   );
-}
-
-/** Empate: marcador igualado (p. ej. 14-14). No cuenta como derrota. */
-function isDraw(m: MatchRow): boolean {
-  return m.roundsWon === m.roundsLost;
 }
 
 interface MiniRow {

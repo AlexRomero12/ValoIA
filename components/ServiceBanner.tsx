@@ -1,22 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-
-interface ServiceStatus {
-  source: 'henrik' | 'riot' | 'none';
-  ok: boolean;
-  maintenance: boolean;
-  incident: boolean;
-  degraded: boolean;
-  incidents: {
-    kind: 'maintenance' | 'incident';
-    title: string;
-    message: string | null;
-    severity: 'critical' | 'warning' | 'info';
-    updatedAt: string | null;
-  }[];
-  fetchedAt: string;
-}
+import type { ServiceStatus } from '@/lib/serviceStatus';
 
 /**
  * Aviso global cuando Riot reporta mantenimiento o incidencias. Evita el ruido

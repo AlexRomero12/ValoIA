@@ -13,7 +13,7 @@ import { readData, writeDataSync } from './persist';
  * lea disco en cada request; las escrituras actualizan la caché al instante.
  */
 
-export interface SessionRecord {
+interface SessionRecord {
   id: string;
   user: string;
   ip: string;
@@ -62,7 +62,7 @@ function writeAll(sessions: SessionRecord[]): void {
 }
 
 /** Limpia expiradas (barato; se llama en lecturas públicas). */
-export function pruneSessions(now = Date.now()): void {
+function pruneSessions(now = Date.now()): void {
   const all = readAll();
   const next = all.filter((s) => alive(s, now));
   if (next.length !== all.length) writeAll(next);

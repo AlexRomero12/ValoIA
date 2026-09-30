@@ -27,13 +27,13 @@ export const PROPOSAL = {
   goals: { wr: 55, kd: 1.05, acs: 220, hsPct: 25, adr: 150, fbPositive: true },
 } as const;
 
-export interface ProposalCandidate {
+interface ProposalCandidate {
   name: string;
   wr: number;
   games: number;
 }
 
-export interface ProposalMapRule {
+interface ProposalMapRule {
   map: string;
   main: ProposalCandidate[];
   backup: ProposalCandidate[];
@@ -144,7 +144,7 @@ function containsAll(list: string[], items: ProposalCandidate[]): boolean {
   return items.every((c) => set.has(c.name));
 }
 
-export interface ProposalDiff {
+interface ProposalDiff {
   /** Mapas cuyo pool propuesto ya coincide con las reglas vigentes. */
   mapsApplied: string[];
   /** Mapas propuestos que aún no coinciden (aplicar los cambia). */

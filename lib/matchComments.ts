@@ -25,14 +25,14 @@ interface CommentsFile {
 }
 
 const COMMENTS_FILE = 'match-comments.json';
-export const MAX_COMMENT_LENGTH = 2000;
+const MAX_COMMENT_LENGTH = 2000;
 
 function readComments(): Record<string, MatchComment> {
   const file = readData<CommentsFile>(COMMENTS_FILE, { version: 1, comments: {} });
   return file?.comments && typeof file.comments === 'object' ? file.comments : {};
 }
 
-export interface CommentsViewer {
+interface CommentsViewer {
   username: string;
   admin: boolean;
 }

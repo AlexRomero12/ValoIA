@@ -5,14 +5,13 @@ import { useQueries } from '@tanstack/react-query';
 import { TopBar } from '@/components/TopBar';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { CompCard } from '@/components/team/CompCard';
-import type { WindowValue } from '@/components/compare/FiltersBar';
 import { ProfilePicker } from '@/components/profiles/ProfilePicker';
 import { ProfileForm } from '@/components/profiles/ProfileForm';
 import { EquipoTabs, type EquipoTabProps } from './EquipoTabs';
 import { buildCompCards, type CompTeam } from '@/lib/comp';
 import { useCooldown } from '@/lib/useCooldown';
 import { useProfiles } from '@/lib/hooks';
-import { mergeAccountSummaries } from '@/lib/compare';
+import { mergeAccountSummaries, type WindowValue } from '@/lib/compare';
 import { memberAccounts, profileColor, type Profile } from '@/lib/profileTypes';
 import type { ValSummary } from '@/lib/types';
 

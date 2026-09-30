@@ -12,9 +12,9 @@ export type CookieJar = Record<string, string>;
 export const SESSION_DAYS_FULL = 21;
 export const SESSION_DAYS_SSID_ONLY = 7;
 /** Días antes de la estimación en que avisamos para reconectar. */
-export const SESSION_WARN_DAYS = 4;
+const SESSION_WARN_DAYS = 4;
 
-export interface ParsedCookies {
+interface ParsedCookies {
   jar: CookieJar;
   /** true si vino el jar de auth completo (más que la sola ssid). */
   full: boolean;

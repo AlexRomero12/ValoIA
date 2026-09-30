@@ -95,7 +95,7 @@ export function removeUserSubscriptions(user: string): number {
   return subs.length - next.length;
 }
 
-export interface PushResult {
+interface PushResult {
   sent: number;
   failed: number;
 }

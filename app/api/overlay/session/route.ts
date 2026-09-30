@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { getValSummary } from '@/lib/valorant';
 import { evaluateDay } from '@/lib/rules';
+import { isoDayLocal } from '@/lib/dates';
 import {
-  isoDayLocal,
   overlayError,
   overlayGate,
   overlayJson,

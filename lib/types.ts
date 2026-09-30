@@ -21,8 +21,8 @@ export interface ValKpis {
   fd?: number;
 }
 
-export interface GroupRow {
-  name: string;
+/** Stats agregadas de un grupo (agente o mapa) tal como las emite la API. */
+interface GroupStats {
   matches: number;
   wins: number;
   /** Empates (marcador igualado): no cuentan como victorias ni derrotas */
@@ -196,8 +196,8 @@ export interface ValSummary {
   currentElo?: number | null;
   /** Puntos de rango (RR dentro del tier actual, 0-100). Solo proveedor Henrik. */
   currentRR?: number | null;
-  byAgent: (GroupRow & { agent: string })[];
-  byMap: (GroupRow & { map: string })[];
+  byAgent: (GroupStats & { agent: string })[];
+  byMap: (GroupStats & { map: string })[];
   matches: MatchRow[];
   /** Solo proveedor Henrik: uso de armas derivado del kill feed */
   arsenal?: ValArsenal;

@@ -18,10 +18,10 @@ import { HENRIK_CONFIG } from './henrik';
  * error para el llamante: devuelve `ok: false` (estado desconocido).
  */
 
-export type ServiceSource = 'henrik' | 'riot' | 'none';
+type ServiceSource = 'henrik' | 'riot' | 'none';
 export type Severity = 'critical' | 'warning' | 'info';
 
-export interface ServiceIncident {
+interface ServiceIncident {
   kind: 'maintenance' | 'incident';
   title: string;
   message: string | null;

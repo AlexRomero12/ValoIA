@@ -42,7 +42,7 @@ export function storedDayKey(profileId: string, day: string): string {
 }
 
 /** Día (`YYYY-MM-DD`) a partir de una clave compuesta (o la clave misma si es legacy). */
-export function storedDayOf(key: string): string {
+function storedDayOf(key: string): string {
   const i = key.indexOf(':');
   return i >= 0 ? key.slice(i + 1) : key;
 }

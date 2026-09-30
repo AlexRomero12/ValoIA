@@ -1,4 +1,4 @@
-export interface MetaDef {
+interface MetaDef {
   key: string;
   label: string;
   target: number;

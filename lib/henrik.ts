@@ -11,7 +11,7 @@ export const HENRIK_CONFIG = {
   platform: () => env('VAL_PLATFORM', 'pc'),
 };
 
-export class HenrikError extends Error {
+class HenrikError extends Error {
   code: 'KEY_MISSING' | 'KEY_INVALID' | 'RATE_LIMITED' | 'NOT_FOUND' | 'HTTP';
   status?: number;
   constructor(code: HenrikError['code'], message: string, status?: number) {
@@ -158,7 +158,7 @@ export async function getHenrikAccount(
 
 // ---------- Schema v4 real (según openapi del server 4.6.0) ----------
 
-export interface HenrikMatchPlayerStats {
+interface HenrikMatchPlayerStats {
   score?: number;
   kills?: number;
   deaths?: number;
@@ -184,7 +184,7 @@ export interface HenrikMatchPlayer {
   behavior?: { afk_rounds?: number };
 }
 
-export interface HenrikMatchTeam {
+interface HenrikMatchTeam {
   team_id?: string | null;
   rounds?: { won?: number; lost?: number };
   won?: boolean | null;
@@ -248,7 +248,7 @@ export function henrikRoundsPlayed(m: HenrikMatch): number {
 }
 
 
-export interface HenrikMmrHistoryEntry {
+interface HenrikMmrHistoryEntry {
   match_id?: string;
   tier?: { id?: number; name?: string };
   map?: { id?: string; name?: string };

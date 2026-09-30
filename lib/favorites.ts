@@ -58,10 +58,6 @@ export async function getFavorites(user: string): Promise<FavoriteSkin[]> {
   return readFavorites(user);
 }
 
-export function isFavorite(user: string, offerId: string): boolean {
-  return readFavorites(user).some((s) => s.offerId === offerId);
-}
-
 /** Añade una favorita (no-op si ya existe). Saca el snapshot del catálogo. */
 export async function addFavorite(user: string, offerId: string): Promise<FavoriteSkin[]> {
   const current = readFavorites(user);

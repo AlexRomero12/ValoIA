@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { UserMenu } from '@/components/auth/UserMenu';
-import { MobileNav } from '@/components/MobileNav';
+import { MobileNav, type NavPage } from '@/components/MobileNav';
 import { ServiceBanner } from '@/components/ServiceBanner';
 import { useCooldown } from '@/lib/useCooldown';
 
@@ -18,7 +18,7 @@ interface TopBarProps {
   disabled?: boolean;
   /** Motivo a mostrar cuando `disabled` lo apaga por algo que no es cooldown. */
   disabledReason?: string;
-  activePage: 'ranked' | 'equipo' | 'tienda' | 'reglas' | 'perfiles';
+  activePage: NavPage;
 }
 
 const REFRESH_COOLDOWN_S = 60;
