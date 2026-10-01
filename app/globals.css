@@ -3458,3 +3458,9 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
 .ap-bad { color: var(--loss); font-weight: 700; }
 .ap-vod td { white-space: nowrap; }
 
+/* --- Aporte (Ranked): puesto, stacks y economía de RR --- */
+.aporte-rows { display: flex; flex-direction: column; gap: 8px; }
+.aporte-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.aporte-row .aporte-lbl { color: var(--mute); }
+.aporte-row .aporte-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+

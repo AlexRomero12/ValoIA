@@ -15,6 +15,7 @@ import { FormStrip } from '@/components/FormStrip';
 import { RankedTabs, isRankedTab, type RankedTab } from '@/components/ranked/RankedTabs';
 import { StatsTable, type TopAgent } from '@/components/ranked/StatsTable';
 import { AperturasPanel } from '@/components/ranked/AperturasPanel';
+import { AportePanel } from '@/components/ranked/AportePanel';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useProfiles, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { useCooldown } from '@/lib/useCooldown';
@@ -437,6 +438,8 @@ function RankedPage() {
           {tab === 'aperturas' && (
             <AperturasPanel aperturas={data.aperturas} matches={data.matches} playerId={activeId} />
           )}
+
+          {tab === 'aporte' && <AportePanel matches={filteredMatches} profiles={profiles} />}
         </>
       )}
     </div>

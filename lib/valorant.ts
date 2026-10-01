@@ -346,6 +346,31 @@ function henrikMateAggregates(m: HenrikMatch, me: HenrikMatchPlayer): { mateAcs:
   return { mateAcs: Math.round(score / mates.length / rds), mateBadCount: bad };
 }
 
+/**
+ * Puesto por ACS dentro del equipo y del lobby (rankings de competición: los
+ * empates comparten el mejor puesto, 1,1,3) + lista de compañeros para el
+ * análisis de aporte/stacks. `null`/`[]` cuando el payload no trae el detalle.
+ */
+function henrikPlacement(
+  m: HenrikMatch,
+  me: HenrikMatchPlayer,
+  rounds: number,
+): { teamRank: number | null; lobbyRank: number | null; mates: string[] } {
+  const rds = Math.max(1, rounds);
+  const acsOf = (p: HenrikMatchPlayer) => Math.round((p.stats?.score ?? 0) / rds);
+  const players = m.players ?? [];
+  if (!players.length) return { teamRank: null, lobbyRank: null, mates: [] };
+  const mine = acsOf(me);
+  const lobbyRank = players.map(acsOf).sort((a, b) => b - a).indexOf(mine) + 1;
+  if (!me.team_id) return { teamRank: null, lobbyRank, mates: [] };
+  const team = players.filter((p) => p.team_id === me.team_id);
+  const teamRank = team.map(acsOf).sort((a, b) => b - a).indexOf(mine) + 1;
+  const mates = team
+    .filter((p) => p.puuid !== me.puuid && p.name)
+    .map((p) => `${p.name}#${p.tag ?? ''}`.toLowerCase());
+  return { teamRank, lobbyRank, mates };
+}
+
 /** Stats agregadas de partidas Henrik sin construir MatchRow (ventana anterior). */
 function henrikStatsOf(list: HenrikMatch[], puuid: string, rrOf: (matchId: string) => number | null): PlayerStats {
   return computeStats(
@@ -542,6 +567,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     // Impacto: primeras sangres / primeras muertes (mismo criterio que el arsenal).
     const { firstBloods, firstDeaths } = henrikFirsts(m, account.puuid);
     const mates = henrikMateAggregates(m, me);
+    const placement = henrikPlacement(m, me, rds);
 
     summaries.push({
       matchId: m.metadata?.match_id ?? '',
@@ -578,6 +604,9 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       agentRole: agentRoleByName.get(agent.toLowerCase()) ?? null,
       mateAcs: mates.mateAcs,
       mateBadCount: mates.mateBadCount,
+      teamRank: placement.teamRank,
+      lobbyRank: placement.lobbyRank,
+      mates: placement.mates,
     });
   }
 
@@ -716,6 +745,27 @@ function riotMateAggregates(match: ValMatch, me: ValPlayer, rounds: number): { m
   return { mateAcs: Math.round(score / mates.length / rds), mateBadCount: bad };
 }
 
+/** Puesto por ACS (equipo y lobby) + compañeros para el proveedor Riot. */
+function riotPlacement(
+  match: ValMatch,
+  me: ValPlayer,
+  rounds: number,
+): { teamRank: number | null; lobbyRank: number | null; mates: string[] } {
+  const rds = Math.max(1, rounds);
+  const acsOf = (p: ValPlayer) => Math.round((p.stats?.score ?? 0) / rds);
+  const players = match.players;
+  if (!players.length) return { teamRank: null, lobbyRank: null, mates: [] };
+  const mine = acsOf(me);
+  const lobbyRank = players.map(acsOf).sort((a, b) => b - a).indexOf(mine) + 1;
+  if (!me.teamId) return { teamRank: null, lobbyRank, mates: [] };
+  const team = players.filter((p) => p.teamId === me.teamId);
+  const teamRank = team.map(acsOf).sort((a, b) => b - a).indexOf(mine) + 1;
+  const mates = team
+    .filter((p) => p.puuid !== me.puuid && p.gameName)
+    .map((p) => `${p.gameName}#${p.tagLine ?? ''}`.toLowerCase());
+  return { teamRank, lobbyRank, mates };
+}
+
 async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
   const profile = requireProfile(opts.playerId, opts.viewer);
   // El proveedor Riot oficial solo conoce la cuenta del .env (VAL_NAME/VAL_TAG).
@@ -790,6 +840,7 @@ async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
     const rounds = s.roundsPlayed ?? 1;
     const lengthMin = Math.round((match.matchInfo.gameLengthMillis ?? 0) / 60000);
     const mates = riotMateAggregates(match, me, rounds);
+    const placement = riotPlacement(match, me, rounds);
 
     summaries.push({
       matchId: entry.matchId,
@@ -819,6 +870,9 @@ async function getValSummaryRiot(opts: AggregateOptions): Promise<ValSummary> {
       agentRole: agentEntry?.role ?? null,
       mateAcs: mates.mateAcs,
       mateBadCount: mates.mateBadCount,
+      teamRank: placement.teamRank,
+      lobbyRank: placement.lobbyRank,
+      mates: placement.mates,
     });
   }
 

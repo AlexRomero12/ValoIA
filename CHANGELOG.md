@@ -2,6 +2,16 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.27.0] — 2026-10-01
+
+Ranked suma la pestaña **Aporte**: en qué puesto del marcador quedas, con quién juegas y tu economía de RR (todo desde datos ya cacheados, $0 requests).
+
+### Added
+- **Pestaña Aporte** en Ranked (`components/ranked/AportePanel.tsx`, `?tab=aporte`): puesto medio en el equipo y en el lobby, % de veces último / bottom-2 / bajo la media del equipo, WR cuando eres último vs cuando vas top-2, tabla de **stacks por tamaño** (Solo/Dúo/Trío/4/full), tabla **por compañero** conocido y **economía de RR** (+RR victoria, −RR derrota, WR de equilibrio, neto)
+- **Puesto por ACS en cada partida** (`MatchRow.teamRank`/`lobbyRank`, rankings de competición 1,1,3) y **lista de compañeros** (`MatchRow.mates`), calculados en el servidor al construir el resumen — Henrik y Riot (`lib/valorant.ts`)
+- **Chip de puesto** en el detalle de partida: «Equipo #4/5 · Lobby #9/10» en el encabezado del modal
+- Módulos puros con tests: `lib/placement.ts` (puesto y dependencia), `lib/stacks.ts` (stacks por tamaño y compañero, resolviendo cuentas alternativas) y `lib/rrEconomy.ts` (equilibrio de RR), con `placement.test.ts`, `stacks.test.ts` y `rrEconomy.test.ts` (11 casos)
+
 ## [1.26.0] — 2026-09-22
 
 La Tienda muestra niveles, variantes y vídeos ingame, y enriquece los accesorios del bundle.

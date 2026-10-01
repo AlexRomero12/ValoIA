@@ -76,6 +76,12 @@ export interface MatchRow {
   mateAcs?: number | null;
   /** Compañeros muy malos (≤155 ACS y ≤0.8 KD): etiquetado de derrotas. */
   mateBadCount?: number | null;
+  /** Puesto por ACS dentro del propio equipo (1 = top; rankings de competición). */
+  teamRank?: number | null;
+  /** Puesto por ACS entre los 10 de la partida (1 = top). */
+  lobbyRank?: number | null;
+  /** Compañeros de equipo ("nombre#tag" en minúsculas): análisis de aporte/stacks. */
+  mates?: string[];
   /** Cuenta que jugó la partida (solo al combinar varias cuentas de un perfil). */
   accountName?: string;
   accountTag?: string;

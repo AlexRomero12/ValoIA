@@ -38,6 +38,13 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
   const fbTotal = ap ? ap.total.fb : (detail?.combat.firstBloods ?? 0);
   const fdTotal = ap ? ap.total.fd : (detail?.combat.firstDeaths ?? 0);
   const apSplit = ap && ap.atk.rounds + ap.def.rounds > 0 ? ap : null;
+  // Puesto por ACS en la partida (calculado en el servidor junto al MatchRow).
+  const teamSize = Array.isArray(match.mates) ? match.mates.length + 1 : null;
+  const placementTxt =
+    match.teamRank != null
+      ? `Equipo #${match.teamRank}${teamSize ? `/${teamSize}` : ''}`
+      : null;
+  const lobbyTxt = match.lobbyRank != null ? `Lobby #${match.lobbyRank}/10` : null;
 
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -60,6 +67,12 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
             <span className="md-sub">
               {new Date(match.timestamp).toLocaleString('es')} · {match.roundsWon}–{match.roundsLost} · <TierIcon tier={match.tier} size={20} /> ·{' '}
               {detail ? `${detail.meta.durationMin} min${detail.meta.seasonShort ? ` · ${detail.meta.seasonShort}` : ''}` : ''}
+              {placementTxt || lobbyTxt ? (
+                <span className="md-place" title="Tu puesto por ACS en el marcador">
+                  {' · '}
+                  {[placementTxt, lobbyTxt].filter(Boolean).join(' · ')}
+                </span>
+              ) : null}
             </span>
           </div>
           <div className={`md-rr ${rrCls(match.rrDelta)}`}>
