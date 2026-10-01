@@ -271,7 +271,7 @@ function Scoreboard({ title, players }: { title: string; players: DetailPlayer[]
           </thead>
           <tbody>
             {[...players]
-              .sort((a, b) => Number(b.isMe) - Number(a.isMe) || b.acs - a.acs)
+              .sort((a, b) => b.acs - a.acs || b.kills - a.kills || a.name.localeCompare(b.name))
               .map((p) => (
                 <tr key={p.name + p.tag} className={p.isMe ? 'me-row' : ''}>
                   <td>{p.name}<span className="muted-tag">#{p.tag}</span></td>
