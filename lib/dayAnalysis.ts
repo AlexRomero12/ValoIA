@@ -68,6 +68,8 @@ export interface DayStats {
   rrTotal: number | null;
   /** Partidas del día sin dato de RR (rrTotal parcial si > 0). */
   rrMissing: number;
+  /** true = el neto del día viene del snapshot guardado, no de los rrDelta de la ventana. */
+  rrFromStore?: boolean;
   minutes: number;
   /** Partidas del día, más recientes primero */
   rows: MatchRow[];
@@ -101,10 +103,22 @@ function subStats(
     .sort((a, b) => b.games - a.games);
 }
 
-export function dayStats(group: DayGroup): DayStats {
+export function dayStats(group: DayGroup, savedRR?: number | null): DayStats {
   const s = computeStats(group.matches);
   let minutes = 0;
   for (const m of group.matches) minutes += m.durationMin || 0;
+
+  // La API solo conserva el RR de ~20 partidas: si el día tiene partidas sin
+  // dato y existe un snapshot completo guardado de ese día, se usa su neto
+  // persistido (no se inventa nada por partida).
+  let rrTotal = s.rrTotal;
+  let rrMissing = s.rrMissing;
+  let rrFromStore = false;
+  if (savedRR != null && s.rrMissing > 0) {
+    rrTotal = savedRR;
+    rrMissing = 0;
+    rrFromStore = true;
+  }
 
   // Mejor/peor partida del día por ACS.
   const withAcs = group.matches.filter((m) => m.acs > 0);
@@ -124,8 +138,9 @@ export function dayStats(group: DayGroup): DayStats {
     acs: s.acs,
     adr: s.adr,
     hsPct: s.hsPct,
-    rrTotal: s.rrTotal,
-    rrMissing: s.rrMissing,
+    rrTotal,
+    rrMissing,
+    rrFromStore,
     minutes,
     rows: group.matches,
     byAgent: subStats(group.matches, (m) => m.agent, (m) => m.agentIcon),

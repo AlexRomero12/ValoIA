@@ -19,10 +19,22 @@ import {
   type MatchesBucket,
 } from './henrik';
 import { requireProfile, type ProfileViewer } from './profiles';
+import { getRrHistory, mergeRrHistory } from './rrHistoryStore';
+import { getRulesHistory } from './rulesHistoryStore';
 import { computeAperturas } from './aperturas';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 import { UNWINNABLE_LIMITS } from './unwinnable';
 import type { MatchRow, ValAccount, ValArsenal, ValSummary } from './types';
+
+/** Campos del mmr-history que el resumen consume (live y snapshot guardado comparten forma). */
+type MmrLike = {
+  tier?: { id?: number; name?: string };
+  season?: { id?: string; short?: string };
+  rr?: number;
+  last_change?: number;
+  elo?: number;
+  date?: string;
+};
 
 const VAL_CONFIG = {
   name: () => env('VAL_NAME', 'Player'),
@@ -527,7 +539,30 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const mmrHistory = await getHenrikMmrHistory(acctName, acctTag).catch(
     () => [] as Awaited<ReturnType<typeof getHenrikMmrHistory>>,
   );
-  const rrByMatch = new Map(mmrHistory.filter((h) => h.match_id).map((h) => [h.match_id!, h]));
+  // Persistimos el RR por partida: cuando salga de la ventana de ~20 de la API
+  // seguimos mostrándolo en el historial (y en los totales) sin perderlo.
+  const observedAt = Date.now();
+  mergeRrHistory(
+    acctName,
+    acctTag,
+    mmrHistory
+      .filter((h) => h.match_id)
+      .map((h) => ({
+        match_id: h.match_id!,
+        tier: h.tier,
+        season: h.season,
+        rr: h.rr,
+        last_change: h.last_change,
+        elo: h.elo,
+        date: h.date,
+        at: observedAt,
+      })),
+  );
+  const storedRr = getRrHistory(acctName, acctTag);
+  // Live (autoritativo) pisa a lo guardado; lo guardado cubre lo que la API ya no devuelve.
+  const rrByMatch = new Map<string, MmrLike>();
+  for (const [id, snap] of Object.entries(storedRr)) rrByMatch.set(id, snap);
+  for (const h of mmrHistory) if (h.match_id) rrByMatch.set(h.match_id, h);
 
   for (const m of inWindow) {
     const me = (m.players ?? []).find((p) => p.puuid === account.puuid)!;
@@ -625,7 +660,15 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   // no haber sincronizado la última partida y mostrar un rango viejo).
   // Se ordena por fecha y se filtra por temporada: la API no garantiza el
   // orden y el primer elemento podría ser de otro acto o el más viejo.
-  const byDateDesc = [...mmrHistory].sort(
+  // Si la API viene vacía/degradada, el snapshot guardado mantiene el rango.
+  const liveIds = new Set(mmrHistory.filter((h) => h.match_id).map((h) => h.match_id!));
+  const mmrAll: MmrLike[] = [
+    ...mmrHistory,
+    ...Object.entries(storedRr)
+      .filter(([id]) => !liveIds.has(id))
+      .map(([, snap]) => snap),
+  ];
+  const byDateDesc = [...mmrAll].sort(
     (a, b) => Date.parse(b.date ?? '') - Date.parse(a.date ?? ''),
   );
   const seasonMmr = seasonShort
@@ -678,6 +721,29 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   // ---------- Aperturas por ronda (FB/FD y conversión por bando) ----------
   const aperturas = computeAperturas(inWindow, account.puuid);
 
+  // RR neto por día desde los snapshots persistidos (página /reglas): completa
+  // los días que ya salieron de la ventana de ~20 del mmr-history. Solo aplica
+  // a la cuenta principal del perfil, porque el snapshot es del perfil, no por
+  // cuenta (evita mezclar el RR de otra cuenta).
+  const isPrimaryAccount =
+    !opts.accountName || (opts.accountName === member.name && (opts.accountTag ?? member.tag) === member.tag);
+  let savedDayRR: Record<string, number> | undefined;
+  if (isPrimaryAccount) {
+    try {
+      const storedDays = await getRulesHistory();
+      const map: Record<string, number> = {};
+      for (const [key, d] of Object.entries(storedDays)) {
+        const i = key.indexOf(':');
+        const pid = i >= 0 ? key.slice(0, i) : '';
+        const day = i >= 0 ? key.slice(i + 1) : key;
+        if (pid === member.id && d.rrCoverage && d.realRR != null) map[day] = d.realRR;
+      }
+      if (Object.keys(map).length) savedDayRR = map;
+    } catch {
+      /* sin store persistido: la vista sigue con el RR disponible */
+    }
+  }
+
   return {
     generatedAt: new Date().toISOString(),
     account: { puuid: account.puuid, gameName: account.name, tagLine: account.tag },
@@ -717,6 +783,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       .map(([map, list]) => ({ map, ...toStatBlock(computeStats(list)) }))
       .sort((a, b) => b.matches - a.matches),
     matches: summaries,
+    savedDayRR,
     arsenal,
     aperturas,
   };

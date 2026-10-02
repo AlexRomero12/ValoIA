@@ -365,6 +365,7 @@ function RankedPage() {
                   key={`${[...fMaps].sort().join(',')}|${[...fAgents].sort().join(',')}`}
                   matches={data.matches}
                   playerId={activeId}
+                  savedDayRR={data.savedDayRR}
                   fAgents={fAgents}
                   fMaps={fMaps}
                   onToggle={toggleFilter}

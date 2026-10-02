@@ -47,9 +47,15 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
           </div>
           <div
             className={`md-rr ${rrCls}`}
-            title={day.rrMissing > 0 ? `RR de ${day.matches - day.rrMissing}/${day.matches} partidas (${day.rrMissing} sin dato)` : undefined}
+            title={
+              day.rrFromStore
+                ? 'RR neto del día guardado (partidas fuera de la ventana de la API)'
+                : day.rrMissing > 0
+                  ? `RR de ${day.matches - day.rrMissing}/${day.matches} partidas (${day.rrMissing} sin dato)`
+                  : undefined
+            }
           >
-            {day.rrTotal != null ? `${day.rrTotal > 0 ? '+' : ''}${day.rrTotal}${day.rrMissing > 0 ? '~' : ''} RR` : '—'}
+            {day.rrTotal != null ? `${day.rrTotal > 0 ? '+' : ''}${day.rrTotal}${day.rrMissing > 0 ? '~' : ''}${day.rrFromStore ? '*' : ''} RR` : '—'}
           </div>
         </header>
 

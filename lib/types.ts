@@ -205,6 +205,11 @@ export interface ValSummary {
   byAgent: (GroupStats & { agent: string })[];
   byMap: (GroupStats & { map: string })[];
   matches: MatchRow[];
+  /**
+   * RR neto por día (`YYYY-MM-DD`) de los snapshots persistidos de /reglas.
+   * Cubre los días que ya salieron de la ventana de ~20 del mmr-history.
+   */
+  savedDayRR?: Record<string, number> | null;
   /** Solo proveedor Henrik: uso de armas derivado del kill feed */
   arsenal?: ValArsenal;
   /** Solo proveedor Henrik: FB/FD por ronda con bando inferido (plantas) */

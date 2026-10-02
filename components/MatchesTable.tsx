@@ -16,6 +16,8 @@ const DAYS_PER_PAGE = 5;
 interface MatchesTableProps {
   matches: MatchRow[];
   playerId?: string;
+  /** RR neto por día (`YYYY-MM-DD`) de snapshots guardados; completa días fuera de la ventana de la API */
+  savedDayRR?: Record<string, number> | null;
   /** Muestra botón "Cargar más" si hay más historial por descargar */
   canLoadMore?: boolean;
   /** Solicita más historial (crece limit 10 -> 20 -> 40) */
@@ -27,7 +29,7 @@ interface MatchesTableProps {
   onClear: () => void;
 }
 
-export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgents, fMaps, onToggle, onClear }: MatchesTableProps) {
+export function MatchesTable({ matches, playerId, savedDayRR, canLoadMore, onLoadMore, fAgents, fMaps, onToggle, onClear }: MatchesTableProps) {
   const [selected, setSelected] = useState<MatchRow | null>(null);
   const [analysisDay, setAnalysisDay] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -57,6 +59,10 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
   const remainingMaps = mapOptions.filter((o) => !fMaps.includes(o.name));
 
   const days = useMemo(() => groupByDay(rows), [rows]);
+  // El snapshot guardado es el neto del día COMPLETO: solo se aplica sin filtros
+  // (con filtro la agrupación es un subconjunto y el neto no correspondería).
+  const statsFor = (g: (typeof days)[number]) =>
+    dayStats(g, !filtering ? savedDayRR?.[g.key] ?? null : null);
   const totalPages = Math.max(1, Math.ceil(days.length / DAYS_PER_PAGE));
   const activePage = Math.min(page, totalPages - 1);
   const pageDays = days.slice(activePage * DAYS_PER_PAGE, activePage * DAYS_PER_PAGE + DAYS_PER_PAGE);
@@ -179,7 +185,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
               <tr><td colSpan={11}><p className="empty">Ninguna partida cumple el filtro activo.</p></td></tr>
             ) : (
               pageDays.flatMap((g) => {
-                const st = dayStats(g);
+                const st = statsFor(g);
                 const expanded = openDays.includes(g.key);
                 const head = (
                   <tr key={`day-${g.key}`} className="day-row">
@@ -210,9 +216,15 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
                           </span>
                           <span
                             className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}
-                            title={st.rrMissing > 0 ? `RR de ${st.matches - st.rrMissing}/${st.matches} partidas (${st.rrMissing} sin dato)` : undefined}
+                            title={
+                              st.rrFromStore
+                                ? 'RR neto del día guardado (partidas fuera de la ventana de la API)'
+                                : st.rrMissing > 0
+                                  ? `RR de ${st.matches - st.rrMissing}/${st.matches} partidas (${st.rrMissing} sin dato)`
+                                  : undefined
+                            }
                           >
-                            {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
+                            {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''}${st.rrFromStore ? '*' : ''} RR` : ''}
                           </span>
                         </button>
                       </div>
@@ -237,7 +249,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
           <p className="empty">Ninguna partida cumple el filtro activo.</p>
         ) : (
           pageDays.map((g) => {
-            const st = dayStats(g);
+            const st = statsFor(g);
             const expanded = openDays.includes(g.key);
             return (
               <section key={g.key} className="mc-day">
@@ -251,8 +263,11 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
                       </b>{' '}
                       · WR {st.wr.toFixed(0)}% · KD {st.kd.toFixed(2)}
                     </span>
-                    <span className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}>
-                      {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''} RR` : ''}
+                    <span
+                      className={`day-rr ${st.rrTotal != null && st.rrTotal < 0 ? 'down' : 'up'}`}
+                      title={st.rrFromStore ? 'RR neto del día guardado (fuera de la ventana de la API)' : undefined}
+                    >
+                      {st.rrTotal != null ? `${st.rrTotal > 0 ? '+' : ''}${st.rrTotal}${st.rrMissing > 0 ? '~' : ''}${st.rrFromStore ? '*' : ''} RR` : ''}
                     </span>
                   </button>
                   <button
@@ -294,7 +309,7 @@ export function MatchesTable({ matches, playerId, canLoadMore, onLoadMore, fAgen
       {analysisDay && (
         <DayDetailModal
           key={analysisDay}
-          day={dayStats(days.find((g) => g.key === analysisDay)!)}
+          day={statsFor(days.find((g) => g.key === analysisDay)!)}
           onClose={() => setAnalysisDay(null)}
         />
       )}
