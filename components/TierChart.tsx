@@ -5,7 +5,7 @@ import { tierName, tierShort } from '@/lib/ranks';
 import { pickXMarks } from '@/lib/chartAxis';
 import { useTierIcons } from '@/lib/hooks';
 import { useElementWidth } from '@/lib/useElementWidth';
-import { esc } from '@/lib/metas';
+import { esc, deltaClass } from '@/lib/metas';
 import type { MatchRow } from '@/lib/types';
 import { isDraw as isDrawMatch } from '@/lib/stats';
 
@@ -180,7 +180,7 @@ export function TierChart({ matchesAsc: allAsc, limit = 20 }: TierChartProps) {
           <span>{selMatch.roundsWon}–{selMatch.roundsLost}</span>
           <span>{selMatch.kills}/{selMatch.deaths}/{selMatch.assists}</span>
           <span>ACS {selMatch.acs}</span>
-          <span className={selMatch.rrDelta == null ? '' : selMatch.rrDelta > 0 ? 'stat-win' : 'stat-loss'}>
+          <span className={deltaClass(selMatch.rrDelta)}>
             {selMatch.rrDelta == null ? 'sin RR' : `${selMatch.rrDelta > 0 ? '+' : ''}${selMatch.rrDelta} RR`}
           </span>
           <span>{tierName(selMatch.tier)}</span>

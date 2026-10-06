@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DayStats } from '@/lib/dayAnalysis';
-import { esc } from '@/lib/metas';
+import { esc, deltaClass } from '@/lib/metas';
 import { useModalShell } from '@/lib/useModalShell';
 import type { MatchRow } from '@/lib/types';
 import { isDraw } from '@/lib/stats';
@@ -169,7 +169,7 @@ export function DayDetailModal({ day, onClose }: DayDetailModalProps) {
                     <td className="num">{m.roundsWon}–{m.roundsLost}</td>
                     <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
                     <td className="num">{m.acs}</td>
-                    <td className={`num ${m.rrDelta == null ? '' : m.rrDelta > 0 ? 'stat-win' : 'stat-loss'}`}>
+                    <td className={`num ${deltaClass(m.rrDelta)}`}>
                       {m.rrDelta == null ? '—' : `${m.rrDelta > 0 ? '+' : ''}${m.rrDelta}`}
                     </td>
                   </tr>

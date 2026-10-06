@@ -134,7 +134,7 @@ function LoginForm() {
               <>
                 <div className="banner error">{error}</div>
                 <p className="login-hint">
-                  Si aún no te aprobaron, tu solicitud sigue pendiente en Perfiles → Solicitudes.
+                  Si solicitaste acceso, tu cuenta queda pendiente hasta que el administrador la apruebe.
                 </p>
               </>
             ) : null}

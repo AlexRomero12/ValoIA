@@ -110,12 +110,17 @@ export function RulesRecommendations({
       }
       out.push({
         id: 'cuts',
-        tone: 'bad',
+        // El tono sigue al resultado: si jugar de más salió bien, avisa sin alarmar.
+        tone: evitable < 0 ? 'bad' : 'warn',
         title: `${cutDays.length} corte(s) ignorado(s)`,
         detail:
-          count > 0
-            ? `Jugar después del corte sumó ${fmtRR(evitable)} RR. Respetar la pausa te habría ahorrado ese saldo.`
-            : 'Se jugó después del corte en al menos una sesión; no hay RR disponible para calcular el saldo.',
+          count === 0
+            ? 'Se jugó después del corte en al menos una sesión; no hay RR disponible para calcular el saldo.'
+            : evitable < 0
+              ? `Jugar después del corte costó ${fmtRR(evitable)} RR: respetar la pausa los habría evitado.`
+              : evitable > 0
+                ? `Jugar después del corte sumó ${fmtRR(evitable)} RR más que respetando la pausa. Esta vez salió bien, pero la pausa sigue siendo la regla.`
+                : 'Jugar después del corte dejó el mismo RR que respetando la pausa.',
       });
     }
 

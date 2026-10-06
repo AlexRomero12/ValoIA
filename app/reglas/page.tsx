@@ -10,6 +10,7 @@ import { RulesProposal } from '@/components/rules/RulesProposal';
 import { RulesRecommendations } from '@/components/rules/RulesRecommendations';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useElementWidth } from '@/lib/useElementWidth';
+import { deltaClass } from '@/lib/metas';
 import { evaluateDay, groupEvaluationWeeks, type DayEvaluation, type RulesWeek } from '@/lib/rules';
 import { isoDayLocal, mondayOf } from '@/lib/dates';
 import { sameRulesDay, storedDayKey, storedToRulesDay, toStoredRulesDay, type StoredRulesDay } from '@/lib/rulesHistory';
@@ -449,7 +450,7 @@ export default function ReglasPage() {
                           </td>
                           <td className="num">{w.matches}</td>
                           <td className="num">{renderWeekImpact(w)}</td>
-                          <td className={`num ${(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}`}>{fmtRR(w.realRR)}</td>
+                          <td className={`num ${deltaClass(w.realRR)}`}>{fmtRR(w.realRR)}</td>
                           <td className="num">{fmtRR(w.planRR)}</td>
                           <td className="num">{fmtRR(w.planPoolRR)}</td>
                           <td className="num">
@@ -499,7 +500,7 @@ export default function ReglasPage() {
                     </div>
                     <div className="rwc-row">
                       <span>RR real</span>
-                      <b className={(w.realRR ?? 0) < 0 ? 'stat-loss' : 'stat-win'}>{fmtRR(w.realRR)}</b>
+                      <b className={deltaClass(w.realRR)}>{fmtRR(w.realRR)}</b>
                       <span>Con regla</span>
                       <b>{fmtRR(w.planRR)}</b>
                     </div>

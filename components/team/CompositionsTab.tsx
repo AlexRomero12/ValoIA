@@ -9,7 +9,6 @@ import { ProfilePicker } from '@/components/profiles/ProfilePicker';
 import { ProfileForm } from '@/components/profiles/ProfileForm';
 import { EquipoTabs, type EquipoTabProps } from './EquipoTabs';
 import { buildCompCards, type CompTeam } from '@/lib/comp';
-import { useCooldown } from '@/lib/useCooldown';
 import { useProfiles } from '@/lib/hooks';
 import { mergeAccountSummaries, type WindowValue } from '@/lib/compare';
 import { memberAccounts, profileColor, type Profile } from '@/lib/profileTypes';
@@ -30,7 +29,6 @@ export function CompositionsTab({ tab, onTab }: EquipoTabProps) {
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
   const [userSelected, setUserSelected] = useState<string[] | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const cooldown = useCooldown(15);
 
   const profilesQ = useProfiles();
   const allProfiles = useMemo(() => profilesQ.data ?? [], [profilesQ.data]);
@@ -83,7 +81,7 @@ export function CompositionsTab({ tab, onTab }: EquipoTabProps) {
   });
 
   const refresh = async () => {
-    if (isRefreshing || cooldown.locked || selected.length === 0) return;
+    if (isRefreshing || selected.length === 0) return;
     setIsRefreshing(true);
     setRefreshError(null);
     setRefreshProgress({ done: 0, total: queries.length });
@@ -118,7 +116,6 @@ export function CompositionsTab({ tab, onTab }: EquipoTabProps) {
     } finally {
       setIsRefreshing(false);
       setRefreshProgress(null);
-      cooldown.trigger();
     }
   };
 
@@ -170,7 +167,7 @@ export function CompositionsTab({ tab, onTab }: EquipoTabProps) {
         updated={null}
         onRefresh={refresh}
         loading={isRefreshing}
-        disabled={cooldown.locked || selected.length === 0}
+        disabled={selected.length === 0}
         activePage="equipo"
       />
 

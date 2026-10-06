@@ -31,7 +31,7 @@ const COLUMNS: { key: SortKey; label: string; fmt: (r: RankRow) => string; bette
   { key: 'acs', label: 'ACS', fmt: (r) => String(Math.round(r.stats.acs)), better: 'high' },
   { key: 'adr', label: 'ADR', fmt: (r) => String(Math.round(r.stats.adr)), better: 'high' },
   { key: 'hsPct', label: 'HS%', fmt: (r) => `${r.stats.hsPct.toFixed(1)}%`, better: 'high' },
-  { key: 'games', label: 'Partidas', fmt: (r) => `${r.stats.wins}–${r.stats.losses}`, better: 'high' },
+  { key: 'games', label: 'Partidas', fmt: (r) => `${r.stats.wins}V–${r.stats.losses}D${r.stats.draws ? `–${r.stats.draws}E` : ''}`, better: 'high' },
   { key: 'rr', label: 'RR neto', fmt: (r) => (r.stats.rrTotal == null ? '—' : `${r.stats.rrTotal > 0 ? '+' : ''}${r.stats.rrTotal}${r.stats.rrMissing > 0 ? '~' : ''}`), better: 'high' },
 ];
 
@@ -94,13 +94,15 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
 
   // Medallas solo en orden descendente (mejor-primero): en ascendente el
   // primero es el peor y la 🥇 mentía. Los empates comparten medalla
-  // (ranking de competición: 1, 1, 3…).
+  // (ranking de competición: 1, 1, 3…). Con un único jugador no hay
+  // comparación posible: lidera todo y las medallas son ruido.
   const desc = !asc[sortKey];
+  const multi = rows.length > 1;
   const vals = sorted.map((r) => metricValue(r, sortKey));
   const withRank = sorted.map((r, i) => {
     const v = vals[i];
     let medal = 0;
-    if (desc && v != null) {
+    if (multi && desc && v != null) {
       let rank = 1;
       for (let j = 0; j < i; j++) {
         const u = vals[j];
@@ -206,7 +208,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                 </td>
                 <td className="muted-cell"><TierIcon tier={r.tier} size={20} />{r.rr != null ? <span className="rr-cell rr-up"> {r.rr} RR</span> : ''}</td>
                 {COLUMNS.map((c) => {
-                  const isBest = bestId(rows, c.key, c.better) === r.id;
+                  const isBest = multi && bestId(rows, c.key, c.better) === r.id;
                   const val = metricValue(r, c.key);
                   return (
                     <td
@@ -214,7 +216,7 @@ export function RankingTable({ rows, sortKey, onSortKey }: RankingTableProps) {
                       className={`num${isBest && val != null ? ' stat-ok' : ''}${sortKey === c.key ? ' col-sorted' : ''}`}
                       title={c.key === 'rr' && r.stats.rrMissing > 0 ? `RR de ${r.stats.games - r.stats.rrMissing}/${r.stats.games} partidas (${r.stats.rrMissing} sin dato)` : c.label}
                     >
-                      {(r.medal ? `${MEDALS[r.medal - 1]} ` : '') + c.fmt(r)}
+                      {c.fmt(r)}
                     </td>
                   );
                 })}

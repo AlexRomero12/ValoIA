@@ -20,6 +20,10 @@ export function ArsenalPanel({ arsenal }: { arsenal?: ValArsenal }) {
         <p className="empty">Sin datos de armas en esta ventana.</p>
       ) : (
         <>
+          <p className="wr-hint">
+            Uso = parte de tus kills totales hecha con esa arma. Las kills van en verde cuando tu K/D con esa arma
+            llega a 1.00 y en rojo cuando queda por debajo.
+          </p>
           <div className="wr-list">
             <div className="wr-head"><span>Arma</span><span>Uso</span><span>Kills · K/D</span></div>
             {visible.map((r) => (

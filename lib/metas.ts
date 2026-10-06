@@ -84,9 +84,29 @@ export const METAS: MetaDef[] = [
   },
 ];
 
+/** Meta de winrate: el color pivota aquí para no contradecir los KPIs. */
+const WR_META = 55;
+const WR_CEIL = 70;
+
+/**
+ * Color del winrate en una escala continua anclada a la meta: por debajo va
+ * de rojo a ámbar (nunca verde) y por encima de ámbar a verde. Antes el 46%
+ * salía verde en los paneles mientras el KPI lo pintaba rojo.
+ */
 export function wrColor(wr: number): string {
-  const hue = Math.round((Math.min(Math.max(wr, 0), 70) / 70) * 130);
-  return `hsl(${hue} 58% 52%)`;
+  const v = Math.min(Math.max(wr, 0), WR_CEIL);
+  const hue = v < WR_META ? (v / WR_META) * 45 : 45 + ((v - WR_META) / (WR_CEIL - WR_META)) * 85;
+  return `hsl(${Math.round(hue)} 58% 52%)`;
+}
+
+/**
+ * Clase de color para un delta (RR, saldo): verde si sube, rojo si baja y
+ * neutro si es 0 o falta el dato. Sin esto, un `null` se pintaba verde y un
+ * 0 se pintaba rojo — ambos casos mienten sobre lo que pasó.
+ */
+export function deltaClass(v: number | null | undefined): string {
+  if (v == null || v === 0) return '';
+  return v > 0 ? 'stat-win' : 'stat-loss';
 }
 
 export function esc(s: unknown): string {

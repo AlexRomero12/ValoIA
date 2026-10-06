@@ -18,7 +18,6 @@ import { AperturasPanel } from '@/components/ranked/AperturasPanel';
 import { AportePanel } from '@/components/ranked/AportePanel';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useProfiles, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
-import { useCooldown } from '@/lib/useCooldown';
 import { mergeAccountSummaries, type WindowValue } from '@/lib/compare';
 import { memberAccounts } from '@/lib/profileTypes';
 import { tierName } from '@/lib/ranks';
@@ -49,7 +48,6 @@ function RankedPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
-  const cooldown = useCooldown(60);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -99,7 +97,7 @@ function RankedPage() {
   const anyFailed = queries.some((q) => q.error) && loadedAccounts > 0;
 
   const refresh = async () => {
-    if (isRefreshing || cooldown.locked || !activeId || accounts.length === 0) return;
+    if (isRefreshing || !activeId || accounts.length === 0) return;
     setIsRefreshing(true);
     setRefreshError(null);
     setRefreshProgress({ done: 0, total: queries.length });
@@ -138,7 +136,6 @@ function RankedPage() {
     } finally {
       setIsRefreshing(false);
       setRefreshProgress(null);
-      cooldown.trigger();
     }
   };
 
@@ -261,7 +258,7 @@ function RankedPage() {
         updated={updated}
         onRefresh={refresh}
         loading={isRefreshing || loadingProfiles}
-        disabled={cooldown.locked || !activeId || coldLoad}
+        disabled={!activeId || coldLoad}
         activePage="ranked"
       />
 

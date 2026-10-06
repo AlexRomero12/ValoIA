@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { esc } from '@/lib/metas';
+import { esc, deltaClass } from '@/lib/metas';
 import { useElementWidth } from '@/lib/useElementWidth';
 import type { MatchRow } from '@/lib/types';
 import { STOP_KD, type DayEvaluation, type EvaluatedMatch, type PickClass } from '@/lib/rules';
@@ -426,7 +426,7 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
                       >
                         {r.match.firstBloods == null ? '·' : `${r.match.firstBloods}/${r.match.firstDeaths}`}
                       </td>
-                      <td className={`num ${r.match.rrDelta == null ? '' : r.match.rrDelta > 0 ? 'stat-win' : 'stat-loss'}`}>
+                      <td className={`num ${deltaClass(r.match.rrDelta)}`}>
                         {r.match.rrDelta == null ? '·' : `${r.match.rrDelta > 0 ? '+' : ''}${r.match.rrDelta}`}
                       </td>
                       <td className={`num ${r.cutPoint ? 'rules-cut-num' : ''}`}>{r.afterCut ? '—' : r.counterAfter}</td>
@@ -476,7 +476,7 @@ export function RulesDay({ day, comments, onSaveComment, defaultOpen = false, ru
                       <span className="mc-dot">·</span>
                       K/D <b className={r.kd >= 1 ? 'stat-ok' : ''}>{r.kd.toFixed(2)}</b>
                       <span className="mc-dot">·</span>
-                      <span className={rr == null ? '' : rr > 0 ? 'stat-win' : 'stat-loss'}>
+                      <span className={deltaClass(rr)}>
                         {rr == null ? 'sin RR' : `${rr > 0 ? '+' : ''}${rr} RR`}
                       </span>
                     </div>

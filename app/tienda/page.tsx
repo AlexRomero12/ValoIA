@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TopBar, RankChip } from '@/components/TopBar';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { StorePanel } from '@/components/store/StorePanel';
 import { FavoritesPanel } from '@/components/store/FavoritesPanel';
 import { PushPanel } from '@/components/store/PushPanel';
@@ -99,6 +100,13 @@ export default function TiendaPage() {
         loading={loading}
         disabled={busy}
         activePage="tienda"
+      />
+
+      <LoadingOverlay
+        open={loading}
+        title="Cargando tienda"
+        message="Leyendo la tienda diaria, tus favoritas y el estado de la conexión"
+        blocking
       />
 
       {error ? <div className="banner error">{error instanceof Error ? error.message : String(error)}</div> : null}

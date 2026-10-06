@@ -12,7 +12,6 @@ import { AgentByPlayerCards, AgentByAgentCards } from '@/components/compare/Agen
 import { ProfilePicker } from '@/components/profiles/ProfilePicker';
 import { ProfileForm } from '@/components/profiles/ProfileForm';
 import { EquipoTabs, type EquipoTabProps } from './EquipoTabs';
-import { useCooldown } from '@/lib/useCooldown';
 import { DEFAULT_LIMIT, nextLimit, MAX_LIMIT, useProfiles } from '@/lib/hooks';
 import { memberAccounts, profileColor, type Profile } from '@/lib/profileTypes';
 import {
@@ -52,7 +51,6 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [tab, setTab] = useState<'resumen' | 'agentes'>('resumen');
   const [agentTab, setAgentTab] = useState<'jugador' | 'agente'>('jugador');
-  const cooldown = useCooldown(15);
 
   const profilesQ = useProfiles();
   const allProfiles = useMemo(() => profilesQ.data ?? [], [profilesQ.data]);
@@ -106,7 +104,7 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
   });
 
   const refresh = async () => {
-    if (isRefreshing || cooldown.locked || selected.length === 0) return;
+    if (isRefreshing || selected.length === 0) return;
     setIsRefreshing(true);
     setRefreshError(null);
     setRefreshProgress({ done: 0, total: queries.length });
@@ -147,7 +145,6 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
     } finally {
       setIsRefreshing(false);
       setRefreshProgress(null);
-      cooldown.trigger();
     }
   };
 
@@ -355,7 +352,7 @@ export function CompareTab({ tab: hubTab, onTab }: EquipoTabProps) {
         updated={null}
         onRefresh={refresh}
         loading={isRefreshing}
-        disabled={cooldown.locked || selected.length === 0}
+        disabled={selected.length === 0}
         activePage="equipo"
       />
 
