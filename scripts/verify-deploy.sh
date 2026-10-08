@@ -40,6 +40,9 @@ COOKIES=$(mktemp)
 
 echo "== contenedores =="
 docker ps --filter name=valo-dash --format '  {{.Names}} | {{.Status}} | {{.Image}}' || true
+# Fecha de construcción de la imagen: si es anterior al último commit de código,
+# el contenedor no tiene los cambios (los commits de scripts/ no van en la imagen).
+docker inspect valo-dash --format '  imagen construida: {{.Created}}' 2>/dev/null || true
 
 echo
 echo "== commit desplegado =="
