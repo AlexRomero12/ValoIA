@@ -6,7 +6,7 @@ import { fetchMatchesPage, henrikMatchId, henrikMatchTimestamp, HENRIK_CONFIG, P
 /**
  * Archivo acumulativo de partidas por jugador (modelo tracker.gg).
  *
- * El bucket de partidas (`henrik:matches:v2`) es una ventana fresca de las
+ * El bucket de partidas (`henrik:matches:v3`) es una ventana fresca de las
  * últimas 40: cuando el jugador juega más, las viejas salen de la API y con
  * ellas se perderían KPIs de temporada, WR por agente/mapa, etc. Este módulo
  * es la contraparte persistente: TODA partida competitiva descargada se guarda

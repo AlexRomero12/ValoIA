@@ -20,6 +20,7 @@ Aprovecha la API v4.10 de Henrik: first blood **oficial** por ronda (auditoría 
 - `lib/henrik.ts`: tipos del match v4 (rendimiento de Riot, MVP de partida y equipo, `team health`, placement, first blood y rol ganador por ronda) y del mmr-history v2 (`queue_id`, `match_length`, `tier_before_update`, `rr_before_update`, bonos y penalizaciones); fetchers nuevos de MMR v3, stored-MMR v2, accolades, maestría, Premier y cuenta por puuid, cada uno con su TTL
 - `mergeAccountSummaries` ahora propaga `stale`, `cachedAt`, `degradedReason`, `savedDayRR`, `rank` y la verificación de aperturas: en perfiles multi-cuenta el banner «de caché» y los datos nuevos ya no desaparecían
 - `lib/hooks.ts`, `RankedTabs` (pestaña Récords) y `EquipoTabs` (pestaña Premier) amplían sus uniones y sus `TABS`
+- **Bucket de partidas a `henrik:matches:v3`**: el sync incremental nunca re-descarga las partidas que ya conoce, así que las 40 del bucket seguían con el payload anterior a v4.10 (sin first blood oficial ni MVP). Subir la versión del prefijo fuerza un re-sync completo **una vez** (~5 requests por cuenta) y de paso unifica la clave en `henrikMatchesBucketKey()` (antes el refresh la construía a mano y podían desincronizarse)
 
 ### Notes
 - Todo lo nuevo se apoya en campos que Riot publica **donde están disponibles**: las partidas antiguas (bucket/archivo) no traen first blood oficial ni el detalle de RR, y en ese caso el dash mantiene el comportamiento anterior sin inventar datos

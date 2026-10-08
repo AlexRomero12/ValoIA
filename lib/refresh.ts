@@ -6,6 +6,7 @@ import {
   fetchHenrikAccountRaw,
   fetchHenrikMmrHistoryRaw,
   henrikAccountKey,
+  henrikMatchesBucketKey,
   henrikMmrKey,
   syncMatchesBucket,
   type MatchesBucket,
@@ -86,7 +87,7 @@ export async function refreshPlayer(
 }
 
 function bucketKeyOf(name: string, tag: string): string {
-  return `henrik:matches:v2:${encodeURIComponent(name)}:${encodeURIComponent(tag)}`;
+  return henrikMatchesBucketKey(name, tag);
 }
 
 export interface BackfillPlayerOptions {

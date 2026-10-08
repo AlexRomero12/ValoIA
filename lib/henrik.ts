@@ -699,14 +699,21 @@ export async function getHenrikAccountByPuuid(puuid: string): Promise<HenrikAcco
  * El sync es incremental: se pide la página más reciente y, si no hay partidas
  * nuevas o el cache ya cubre el objetivo (`want`), no se piden más páginas.
  *
- * Clave de caché: henrik:matches:v2:{name}:{tag} -> MatchesBucket (persistente en disco)
+ * Clave de caché: henrik:matches:v3:{name}:{tag} -> MatchesBucket (persistente en disco)
+ *
+ * v3 = la API empezó a publicar campos nuevos del match v4 (v4.10: first blood
+ * por ronda, rol del equipo ganador, MVP, rendimiento). El sync incremental NO
+ * re-descarga las partidas que ya conoce, así que subir la versión del prefijo
+ * fuerza un re-sync completo del bucket (una vez, ~5 requests por cuenta) para
+ * que las últimas 40 partidas traigan los campos nuevos. El archivo acumulativo
+ * conserva las versiones antiguas: cualquier campo nuevo debe tolerar `null`.
  */
 
 export const BUCKET_LIMIT = 40;
 // El warmup corre cada 15 min: el TTL va por encima para que el bucket nunca
 // expire entre ciclos (si no, la primera petición del usuario bloquea en la red).
 export const BUCKET_TTL_MS = 20 * 60 * 1000;
-const BUCKET_PREFIX = 'henrik:matches:v2';
+const BUCKET_PREFIX = 'henrik:matches:v3';
 
 export interface MatchesBucket {
   /** ms epoch de la última sincronización exitosa */
@@ -719,6 +726,14 @@ export interface MatchesBucket {
 
 function bucketKey(nameEncoded: string, tagEncoded: string): string {
   return `${BUCKET_PREFIX}:${nameEncoded}:${tagEncoded}`;
+}
+
+/**
+ * Clave del bucket de partidas de una cuenta (la comparten el sync, el refresh
+ * y el backfill: si cambia la versión del prefijo, cambian todos a la vez).
+ */
+export function henrikMatchesBucketKey(nameArg: string, tagArg: string): string {
+  return bucketKey(encodeURIComponent(nameArg), encodeURIComponent(tagArg));
 }
 
 /** Identificador único de partida (clave de dedupe global del bucket/archivo). */
