@@ -9,6 +9,11 @@ import type { ValMastery } from '@/lib/types';
  * Maestría de agentes (endpoint de v4.10), encima de las stats por agente:
  * cuánto has jugado cada agente según Riot, independiente de los resultados.
  * Los agentes sin nivel (nunca jugados) no se listan.
+ *
+ * `icons` puede venir con las claves como están en los datos de partida
+ * ("Chamber") o ya normalizadas ("chamber"), y puede no tener icono para un
+ * agente que no se ha jugado en la ventana: en ese caso se pinta solo el
+ * nombre (sin el fallback de texto de AgentIcon, que lo duplicaría).
  */
 export function MasteryPanel({
   mastery,
@@ -23,6 +28,8 @@ export function MasteryPanel({
 }) {
   const agents = (mastery?.agents ?? []).filter((a) => a.level > 0);
   const max = agents.length ? agents[0].level : 0;
+  const iconOf = (name: string): string | null =>
+    icons?.get(name) ?? icons?.get(name.toLowerCase()) ?? null;
 
   return (
     <div className="panel mastery-panel">
@@ -43,19 +50,26 @@ export function MasteryPanel({
             {mastery?.maxed ?? 0} al máximo (nivel {MAXED_LEVEL}+)
           </p>
           <ul className="mastery-list">
-            {agents.slice(0, 10).map((a) => (
-              <li key={a.agentId || a.agent} className="mastery-row">
-                <AgentIcon name={a.agent} icon={icons?.get(a.agent.toLowerCase()) ?? null} title={a.agent} />
-                <span className="mastery-agent">{a.agent}</span>
-                <span className="mastery-track" title={`Nivel ${a.level}`}>
-                  <span
-                    className="mastery-fill"
-                    style={{ width: `${max > 0 ? Math.max(6, Math.round((a.level / max) * 100)) : 100}%` }}
-                  />
-                </span>
-                <span className="mastery-level">{a.level}</span>
-              </li>
-            ))}
+            {agents.slice(0, 10).map((a) => {
+              const icon = iconOf(a.agent);
+              return (
+                <li key={a.agentId || a.agent} className="mastery-row">
+                  {icon ? (
+                    <AgentIcon name={a.agent} icon={icon} title={a.agent} />
+                  ) : (
+                    <span className="mastery-blank" aria-hidden />
+                  )}
+                  <span className="mastery-agent">{a.agent}</span>
+                  <span className="mastery-track" title={`Nivel ${a.level}`}>
+                    <span
+                      className="mastery-fill"
+                      style={{ width: `${max > 0 ? Math.max(6, Math.round((a.level / max) * 100)) : 100}%` }}
+                    />
+                  </span>
+                  <span className="mastery-level">{a.level}</span>
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

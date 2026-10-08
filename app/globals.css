@@ -3553,6 +3553,8 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
 .mastery-row { display: grid; grid-template-columns: 26px minmax(88px, 140px) 1fr 34px; align-items: center; gap: 10px; }
 .mastery-agent { font-size: 12.5px; font-weight: 600; color: var(--bone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mastery-track { height: 6px; border-radius: 999px; background: rgba(167, 183, 197, 0.14); overflow: hidden; }
+/* Hueco del icono cuando el agente no tiene retrato disponible: mantiene la rejilla. */
+.mastery-blank { width: 26px; height: 26px; display: block; }
 .mastery-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgba(255, 70, 85, 0.85), rgba(232, 201, 122, 0.85)); }
 .mastery-level { font-family: var(--font-data); font-size: 13px; font-weight: 800; color: var(--gold); text-align: right; font-variant-numeric: tabular-nums; }
 

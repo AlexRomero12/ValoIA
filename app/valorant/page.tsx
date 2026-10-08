@@ -20,7 +20,7 @@ import { RankCard } from '@/components/ranked/RankCard';
 import { MasteryPanel } from '@/components/ranked/MasteryPanel';
 import { RecordsPanel } from '@/components/ranked/RecordsPanel';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useProfiles, useRecords, useMastery, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
+import { useProfiles, useRecords, useMastery, useAgentIcons, agentIconLookup, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { mergeAccountSummaries, type WindowValue } from '@/lib/compare';
 import { memberAccounts } from '@/lib/profileTypes';
 import { tierName } from '@/lib/ranks';
@@ -103,6 +103,10 @@ function RankedPage() {
   // piden cuando su pestaña está abierta, y el servidor los cachea 6-12 h.
   const recordsQ = useRecords(activeId, 0, Boolean(activeId) && tab === 'records');
   const masteryQ = useMastery(activeId, 0, Boolean(activeId) && tab === 'agentes');
+  // Maestría puede listar agentes que no se jugaron en esta ventana (su icono no
+  // está en `agentIcons`, que sale de las partidas): el catálogo los tiene todos.
+  const catalogQ = useAgentIcons();
+  const catalogIcons = useMemo(() => agentIconLookup(catalogQ.data), [catalogQ.data]);
 
   const refresh = async () => {
     if (isRefreshing || !activeId || accounts.length === 0) return;
@@ -414,7 +418,7 @@ function RankedPage() {
             <>
               <MasteryPanel
                 mastery={masteryQ.data ?? null}
-                icons={agentIcons}
+                icons={catalogIcons}
                 loading={masteryQ.isLoading}
                 error={(masteryQ.error as Error | null)?.message ?? null}
               />
