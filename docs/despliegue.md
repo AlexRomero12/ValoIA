@@ -4,6 +4,23 @@ Guía paso a paso para publicar ValoIA en una VM Ampere A1 (ARM) de Oracle,
 con HTTPS automático y login propio. Todo el stack son dos contenedores:
 `valo-dash` (Next.js) y `caddy` (reverse proxy + TLS).
 
+> **Regla de trabajo: local primero, VPS después.** Ningún cambio se sube al
+> servidor sin haberlo probado antes en el Docker local (puerto 4321) con
+> `scripts/verify-deploy.sh`. El detalle está en `AGENTS.md`; el resumen:
+>
+> ```bash
+> cd valo-dash-next
+> docker compose up -d --build                        # local (4321)
+> BASE_URL=http://localhost:4321 bash scripts/verify-deploy.sh
+> # solo si está verde:
+> git push origin main                                # y en el VPS, paso 9
+> ```
+>
+> Ojo con la cuota: la key de Henrik es **la misma** en local y en el VPS. Por eso
+> el compose local fuerza `VAL_BACKGROUND_REFRESH=0`; si levantas las dos
+> instancias con warmup, entre las dos pasan del límite de 30 req/min y verás
+> «Rate limit de api.henrikdev.xyz alcanzado» en la UI.
+
 > **Requisitos**: cuenta Oracle Cloud (Free Tier), un dominio (o subdominio
 > DuckDNS gratis) y tu `.env` local a mano (tiene los secretos).
 

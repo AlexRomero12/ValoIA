@@ -7,17 +7,19 @@
 # Premier, rango enriquecido (MMR v3), desglose del RR y la auditoría del motor
 # de aperturas contra el first blood oficial de Riot.
 #
-# Pensado para el VPS: resuelve el dominio a loopback (--resolve) para no
-# depender del DNS/hairpin, y saca las credenciales del .env del despliegue.
+#   bash scripts/verify-deploy.sh [perfil]                 # VPS (dominio + loopback)
+#   BASE_URL=http://localhost:4321 bash scripts/verify-deploy.sh   # Docker local
 #
-#   bash scripts/verify-deploy.sh [perfil]
-#
-#   perfil: id del perfil del dashboard (por defecto `alex`).
-#   ENV_FILE=...   fuerza la ruta del .env (si no, busca en ., /opt/valoia y ..).
+#   perfil:    id del perfil del dashboard (por defecto `alex`).
+#   BASE_URL:  fuerza la URL base (si no, se arma con PERSONAL_DOMAIN del .env
+#              y se resuelve a loopback para no depender del DNS/hairpin).
+#   CONTAINER: nombre del contenedor a inspeccionar (por defecto valo-dash).
+#   ENV_FILE:  fuerza la ruta del .env (si no, busca en ., /opt/valoia y ..).
 #
 set -u
 
 PROFILE="${1:-alex}"
+CONTAINER="${CONTAINER:-valo-dash}"
 
 ENV_FILE="${ENV_FILE:-}"
 if [ -z "$ENV_FILE" ]; then
@@ -33,22 +35,34 @@ fi
 getenv() { grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '\r' | sed 's/^"//; s/"$//'; }
 U=$(getenv AUTH_USER)
 P=$(getenv AUTH_PASSWORD)
-DOMAIN=$(getenv PERSONAL_DOMAIN); [ -z "$DOMAIN" ] && DOMAIN=valoia-personal.duckdns.org
-BASE="https://$DOMAIN"
-CURL="curl -s --resolve $DOMAIN:443:127.0.0.1"
+
+BASE="${BASE_URL:-}"
+if [ -z "$BASE" ]; then
+  DOMAIN=$(getenv PERSONAL_DOMAIN); [ -z "$DOMAIN" ] && DOMAIN=valoia-personal.duckdns.org
+  BASE="https://$DOMAIN"
+  CURL="curl -s --resolve $DOMAIN:443:127.0.0.1"
+else
+  # Instancia local (http://localhost:4321): sin TLS ni resolución forzada.
+  CURL="curl -s"
+fi
 COOKIES=$(mktemp)
 
+echo "== instancia =="
+echo "  $BASE (contenedor $CONTAINER)"
+
+echo
 echo "== contenedores =="
-docker ps --filter name=valo-dash --format '  {{.Names}} | {{.Status}} | {{.Image}}' || true
+docker ps --filter name="$CONTAINER" --format '  {{.Names}} | {{.Status}} | {{.Image}}' || true
 # Fecha de construcción de la imagen: si es anterior al último commit de código,
 # el contenedor no tiene los cambios (los commits de scripts/ no van en la imagen).
-docker inspect valo-dash --format '  imagen construida: {{.Created}}' 2>/dev/null || true
+docker inspect "$CONTAINER" --format '  imagen construida: {{.Created}}' 2>/dev/null || true
+docker inspect "$CONTAINER" --format '  imagen id: {{slice .Image 7 19}}' 2>/dev/null || true
 
 echo
 echo "== commit desplegado =="
 # Ojo: en un worktree `.git` es un archivo, no un directorio (-e, no -d).
 FOUND=0
-for d in /opt/valoia-main . ..; do
+for d in . /opt/valoia-main ..; do
   if [ -e "$d/.git" ]; then
     echo "  $(git -C "$d" log --oneline -1 2>&1)"
     FOUND=1
@@ -59,7 +73,7 @@ done
 
 echo
 echo "== archivos de build con las rutas nuevas =="
-docker exec valo-dash sh -c "ls /app/.next/server/app/api/valorant/ 2>/dev/null | grep -E 'records|mastery|premier' | tr '\n' ' '"; echo
+docker exec "$CONTAINER" sh -c "ls /app/.next/server/app/api/valorant/ 2>/dev/null | grep -E 'records|mastery|premier' | tr '\n' ' '"; echo
 
 if [ -z "$U" ] || [ -z "$P" ]; then
   echo
@@ -71,14 +85,18 @@ echo
 echo "== login =="
 BODY=$(python3 -c "import json,sys; print(json.dumps({'username': sys.argv[1], 'password': sys.argv[2]}))" "$U" "$P" 2>/dev/null) \
   || BODY="{\"username\":\"$U\",\"password\":\"$P\"}"
-CODE=$($CURL -o /tmp/verify-login.json -w '%{http_code}' -c "$COOKIES" \
+# Sin ficheros temporales: las rutas de /tmp de Git Bash no las entiende el
+# Python de Windows, así que todo lo que se parsea va por stdin.
+RESP=$($CURL -c "$COOKIES" -w '\n%{http_code}' \
   -X POST -H 'Content-Type: application/json' --data "$BODY" "$BASE/api/auth/login")
+CODE=$(printf '%s' "$RESP" | tail -n1)
+LOGIN_JSON=$(printf '%s' "$RESP" | sed '$d')
 if [ "$CODE" != "200" ]; then
-  echo "  login HTTP $CODE · $(head -c 160 /tmp/verify-login.json)"
+  echo "  login HTTP $CODE · $(printf '%s' "$LOGIN_JSON" | head -c 160)"
   echo "  (si cambiaste la contraseña del usuario, exporta AUTH_USER/AUTH_PASSWORD actuales)"
   exit 1
 fi
-echo "  OK como $(python3 -c "import json;print(json.load(open('/tmp/verify-login.json'))['user']['username'])")"
+echo "  OK como $(printf '%s' "$LOGIN_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',{}).get('username',''))")"
 
 get_json() { $CURL -b "$COOKIES" "$BASE$1" "${@:2}"; }
 
@@ -117,10 +135,9 @@ print('  roster: ' + ', '.join((m.get('name') or m['puuid'][:8]) + ' (' + m['rol
 
 echo
 echo "== resumen: rango, RR y auditoría de aperturas =="
-get_json "/api/valorant/summary?season=current&limit=40&player=$PROFILE" -o /tmp/verify-summary.json
-python3 -c "
-import json
-d=json.load(open('/tmp/verify-summary.json'))
+get_json "/api/valorant/summary?season=current&limit=40&player=$PROFILE" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
 if d.get('error'): print('  error:', d['error']); raise SystemExit
 r=d.get('rank') or {}
 prot=r.get('protection') or {}
@@ -137,4 +154,4 @@ print('  partidas en la ventana: %d · rondas sin bando: %s' % (len(d.get('match
 
 rm -f "$COOKIES"
 echo
-echo "Listo. Si algún bloque dice «error», revisa: docker logs valo-dash --tail 50"
+echo "Listo. Si algún bloque dice «error», revisa: docker logs $CONTAINER --tail 50"

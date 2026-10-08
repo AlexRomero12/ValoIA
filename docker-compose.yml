@@ -15,8 +15,14 @@ services:
       # Datos persistentes de la app (perfiles, usuarios, favoritas, RSO por
       # usuario, comentarios, historial de auditoría): mismo volumen que el archive.
       DATA_DIR: /app/data
-      # Refresco en background (opcional): mantiene los buckets calientes.
-      # También puedes definirlos en .env (se pasan completo vía env_file).
+      # Refresco en background: APAGADO a propósito en local (ver AGENTS.md).
+      # La key de Henrik es la misma que la del VPS: si las dos instancias hacen
+      # warmup cada 15 min, entre las dos pasan del límite de 30 req/min de la
+      # key y la UI empieza a mostrar «Rate limit alcanzado». El warmup es cosa
+      # del VPS; en local se consulta solo al navegar.
+      VAL_BACKGROUND_REFRESH: "0"
+      # Si algún día quieres warmup en local, comenta la línea de arriba y
+      # descomenta estas (o defínelas en .env, que se pasa completo):
       # VAL_BACKGROUND_REFRESH: "1"
       # VAL_REFRESH_INTERVAL_MIN: "15"
     volumes:
