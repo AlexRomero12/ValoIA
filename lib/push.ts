@@ -100,9 +100,15 @@ interface PushResult {
   failed: number;
 }
 
-/** Envía la notificación a las suscripciones del usuario (o a todas). */
+/**
+ * Envía la notificación a las suscripciones del usuario (o a todas).
+ *
+ * `tag` agrupa/reemplaza avisos del mismo tipo en el sistema operativo
+ * (`public/sw.js` lo usa): sin él, todas las notificaciones comparten el tag
+ * por defecto y se pisan entre sí.
+ */
 export async function sendPush(
-  payload: { title: string; body: string; icon?: string; url?: string },
+  payload: { title: string; body: string; icon?: string; url?: string; tag?: string },
   user?: string,
 ): Promise<PushResult> {
   const cfg = pushConfig();

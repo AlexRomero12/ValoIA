@@ -16,8 +16,11 @@ import { RankedTabs, isRankedTab, type RankedTab } from '@/components/ranked/Ran
 import { StatsTable, type TopAgent } from '@/components/ranked/StatsTable';
 import { AperturasPanel } from '@/components/ranked/AperturasPanel';
 import { AportePanel } from '@/components/ranked/AportePanel';
+import { RankCard } from '@/components/ranked/RankCard';
+import { MasteryPanel } from '@/components/ranked/MasteryPanel';
+import { RecordsPanel } from '@/components/ranked/RecordsPanel';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useProfiles, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
+import { useProfiles, useRecords, useMastery, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { mergeAccountSummaries, type WindowValue } from '@/lib/compare';
 import { memberAccounts } from '@/lib/profileTypes';
 import { tierName } from '@/lib/ranks';
@@ -95,6 +98,11 @@ function RankedPage() {
   const anyLoading = queries.some((q) => q.isLoading);
   const loadedAccounts = queries.filter((q) => q.data).length;
   const anyFailed = queries.some((q) => q.error) && loadedAccounts > 0;
+
+  // Récords y maestría son endpoints aparte (no entran en el warmup): solo se
+  // piden cuando su pestaña está abierta, y el servidor los cachea 6-12 h.
+  const recordsQ = useRecords(activeId, 0, Boolean(activeId) && tab === 'records');
+  const masteryQ = useMastery(activeId, 0, Boolean(activeId) && tab === 'agentes');
 
   const refresh = async () => {
     if (isRefreshing || !activeId || accounts.length === 0) return;
@@ -357,6 +365,8 @@ function RankedPage() {
 
               <KpiGrid kpis={data.kpis} prev={data.prev} accent="#ff4655" />
 
+              <RankCard rank={data.rank} />
+
               <div id="historial">
                 <MatchesTable
                   key={`${[...fMaps].sort().join(',')}|${[...fAgents].sort().join(',')}`}
@@ -401,18 +411,26 @@ function RankedPage() {
           )}
 
           {tab === 'agentes' && (
-            <StatsTable
-              title="Estadísticas · Agentes"
-              firstCol="Agente"
-              noun="agente"
-              rows={agentRows}
-              icons={agentIcons}
-              kind="agent-icon"
-              active={fAgents}
-              onPick={(name) => toggleFilter('agent', name)}
-              filteredCount={filteredMatches.length}
-              onViewHistory={goHistory}
-            />
+            <>
+              <MasteryPanel
+                mastery={masteryQ.data ?? null}
+                icons={agentIcons}
+                loading={masteryQ.isLoading}
+                error={(masteryQ.error as Error | null)?.message ?? null}
+              />
+              <StatsTable
+                title="Estadísticas · Agentes"
+                firstCol="Agente"
+                noun="agente"
+                rows={agentRows}
+                icons={agentIcons}
+                kind="agent-icon"
+                active={fAgents}
+                onPick={(name) => toggleFilter('agent', name)}
+                filteredCount={filteredMatches.length}
+                onViewHistory={goHistory}
+              />
+            </>
           )}
 
           {tab === 'mapas' && (
@@ -438,6 +456,14 @@ function RankedPage() {
           )}
 
           {tab === 'aporte' && <AportePanel matches={filteredMatches} profiles={profiles} />}
+
+          {tab === 'records' && (
+            <RecordsPanel
+              records={recordsQ.data ?? null}
+              loading={recordsQ.isLoading}
+              error={(recordsQ.error as Error | null)?.message ?? null}
+            />
+          )}
         </>
       )}
     </div>

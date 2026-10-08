@@ -3513,3 +3513,156 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
 .aporte-row .aporte-lbl { color: var(--mute); }
 .aporte-row .aporte-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
+/* --- API v4.10: rango enriquecido (MMR v3) --- */
+.rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.rank-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.015);
+}
+.rank-cell.is-good { border-color: rgba(47, 208, 138, 0.35); background: rgba(47, 208, 138, 0.07); }
+.rank-cell-v {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-data);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--bone);
+  font-variant-numeric: tabular-nums;
+}
+.rank-cell-k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+.rank-prestige { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 13px; }
+.rank-prestige-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+.rank-chip {
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--gold);
+  background: rgba(232, 201, 122, 0.12);
+  border: 1px solid rgba(232, 201, 122, 0.25);
+}
+
+/* --- API v4.10: maestría de agentes (Ranked · Agentes) --- */
+.mastery-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mastery-row { display: grid; grid-template-columns: 26px minmax(88px, 140px) 1fr 34px; align-items: center; gap: 10px; }
+.mastery-agent { font-size: 12.5px; font-weight: 600; color: var(--bone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mastery-track { height: 6px; border-radius: 999px; background: rgba(167, 183, 197, 0.14); overflow: hidden; }
+.mastery-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgba(255, 70, 85, 0.85), rgba(232, 201, 122, 0.85)); }
+.mastery-level { font-family: var(--font-data); font-size: 13px; font-weight: 800; color: var(--gold); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- API v4.10: desglose del RR por partida (bono, penalización, escudo) --- */
+.rr-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 5px; vertical-align: middle; }
+.rr-chip { font-family: var(--font-data); font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; padding: 1px 5px; white-space: nowrap; }
+.rr-chip.good { color: var(--win); background: rgba(47, 208, 138, 0.12); }
+.rr-chip.bad { color: var(--loss); background: rgba(255, 92, 105, 0.12); }
+.rr-chip.neutral { color: var(--mute); background: rgba(167, 183, 197, 0.1); }
+
+/* --- API v4.10: auditoría del motor de aperturas contra el dato oficial de Riot --- */
+.ap-verify {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+  padding: 8px 12px;
+  border: 1px solid rgba(232, 201, 122, 0.28);
+  background: rgba(232, 201, 122, 0.06);
+  font-size: 12px;
+  color: var(--mute);
+}
+.ap-verify b { color: var(--gold); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.ap-verify.ok { border-color: rgba(47, 208, 138, 0.28); background: rgba(47, 208, 138, 0.06); }
+.ap-verify.ok b { color: var(--win); }
+
+/* --- API v4.10: récords/PBs (Ranked · Récords) --- */
+.records-table, .premier-roster, .premier-seasons { width: 100%; border-collapse: collapse; }
+.records-table th,
+.records-table td,
+.premier-roster th,
+.premier-roster td,
+.premier-seasons th,
+.premier-seasons td { padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 12.5px; text-align: left; }
+.records-table th,
+.premier-roster th,
+.premier-seasons th { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+.records-table th.num, .records-table td.num { text-align: right; }
+.records-best { font-family: var(--font-data); font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+/* Títulos de sección del panel de récords (el h3 global no está estilizado). */
+.records-body h3 {
+  margin: 18px 0 8px;
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.records-body h3:first-child { margin-top: 4px; }
+.records-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.records-item.is-act { color: var(--gold); }
+.records-item.is-act b { color: var(--gold); }
+.records-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 11.5px;
+  color: var(--bone);
+}
+.records-chip.is-act { border-color: rgba(232, 201, 122, 0.4); background: rgba(232, 201, 122, 0.1); color: var(--gold); }
+.records-recent { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.records-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.records-date { font-family: var(--font-data); font-size: 11px; color: var(--faint); min-width: 76px; }
+.records-item { font-size: 12px; color: var(--mute); }
+
+/* --- API v4.10: Premier (Equipo · Premier) --- */
+.premier-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.premier-crest {
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--line-strong);
+  background: #0a0f16;
+  object-fit: contain;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--bone);
+}
+.premier-meta { display: flex; flex-direction: column; gap: 3px; }
+.premier-meta b { font-family: var(--font-display); font-size: 19px; color: var(--bone); letter-spacing: 0.01em; }
+.premier-meta span { font-size: 11.5px; color: var(--faint); }
+/* El tag del equipo dentro del nombre no debe heredar el tamaño del subtítulo. */
+.premier-meta b .acct-tag { font-size: 9.5px; color: var(--gold); }
+.premier-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 10px; }
+.premier-stat { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); }
+.premier-stat-v { font-family: var(--font-data); font-size: 16px; font-weight: 800; color: var(--bone); font-variant-numeric: tabular-nums; }
+.premier-stat-k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+.premier-chip {
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--gold);
+  background: rgba(232, 201, 122, 0.12);
+  border: 1px solid rgba(232, 201, 122, 0.25);
+}
+
+@media (max-width: 720px) {
+  .mastery-row { grid-template-columns: 24px 1fr 34px; }
+  .mastery-track { display: none; }
+  .rank-grid, .premier-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+

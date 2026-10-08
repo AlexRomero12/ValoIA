@@ -1,6 +1,6 @@
 'use client';
 
-export type EquipoTab = 'comparar' | 'composiciones';
+export type EquipoTab = 'comparar' | 'composiciones' | 'premier';
 
 export interface EquipoTabProps {
   tab: EquipoTab;
@@ -10,6 +10,7 @@ export interface EquipoTabProps {
 const TABS: { key: EquipoTab; label: string }[] = [
   { key: 'comparar', label: 'Comparar' },
   { key: 'composiciones', label: 'Composiciones' },
+  { key: 'premier', label: 'Premier' },
 ];
 
 export function isEquipoTab(value: string | null): value is EquipoTab {

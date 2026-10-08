@@ -4,6 +4,7 @@ import { getArchiveMatches } from './archive';
 import {
   HENRIK_CONFIG,
   getHenrikAccount,
+  getHenrikMmrV3,
   getMatchesBucket,
   getHenrikMmrHistory,
   henrikAccountKey,
@@ -22,11 +23,16 @@ import { requireProfile, type ProfileViewer } from './profiles';
 import { getRrHistory, mergeRrHistory } from './rrHistoryStore';
 import { getRulesHistory } from './rulesHistoryStore';
 import { computeAperturas } from './aperturas';
+import { rrChangeDetail } from './rrDetail';
+import { rankStateFrom } from './rankState';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 import { UNWINNABLE_LIMITS } from './unwinnable';
-import type { MatchRow, ValAccount, ValArsenal, ValSummary } from './types';
+import type { MatchRow, ValAccount, ValArsenal, ValRankState, ValSummary } from './types';
 
-/** Campos del mmr-history que el resumen consume (live y snapshot guardado comparten forma). */
+/**
+ * Campos del mmr-history que el resumen consume (live y snapshot guardado
+ * comparten forma, así que los del detalle nuevo de v4.10 son opcionales).
+ */
 type MmrLike = {
   tier?: { id?: number; name?: string };
   season?: { id?: string; short?: string };
@@ -34,6 +40,18 @@ type MmrLike = {
   last_change?: number;
   elo?: number;
   date?: string;
+  rr_before_update?: number | null;
+  rr_performance_bonus?: number | null;
+  rr_penalty?: number | null;
+  afk_penalty?: number | null;
+  refunded_rr?: number | null;
+  new_map_incentive_rr_forgiven?: number | null;
+  is_placement_match?: boolean | null;
+  was_derank_protected?: boolean | null;
+  was_derank_protection_replenished?: boolean | null;
+  competitive_movement?: string | null;
+  queue_id?: string | null;
+  tier_before_update?: { id?: number; name?: string } | null;
 };
 
 const VAL_CONFIG = {
@@ -555,6 +573,18 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
         last_change: h.last_change,
         elo: h.elo,
         date: h.date,
+        rr_before_update: h.rr_before_update,
+        rr_performance_bonus: h.rr_performance_bonus,
+        rr_penalty: h.rr_penalty,
+        afk_penalty: h.afk_penalty,
+        refunded_rr: h.refunded_rr,
+        new_map_incentive_rr_forgiven: h.new_map_incentive_rr_forgiven,
+        is_placement_match: h.is_placement_match,
+        was_derank_protected: h.was_derank_protected,
+        was_derank_protection_replenished: h.was_derank_protection_replenished,
+        competitive_movement: h.competitive_movement,
+        queue_id: h.queue_id,
+        tier_before_update: h.tier_before_update,
         at: observedAt,
       })),
   );
@@ -632,6 +662,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       durationMin: lengthMin,
       rrDelta: hist?.last_change ?? null,
       rr: hist?.rr ?? null,
+      rrDetail: rrChangeDetail(hist),
       elo,
       eloDelta,
       agentIcon: agentIconByName.get(agent.toLowerCase()) ?? null,
@@ -721,6 +752,16 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   // ---------- Aperturas por ronda (FB/FD y conversión por bando) ----------
   const aperturas = computeAperturas(inWindow, account.puuid);
 
+  // ---------- Estado de rango enriquecido (MMR v3) ----------
+  // Escudos de protección, pico histórico y prestigio. Es opcional: si la API
+  // no lo da (o estamos en modo degradado) el resumen sigue con el mmr-history.
+  let rank: ValRankState | null = null;
+  try {
+    rank = rankStateFrom(await getHenrikMmrV3(acctName, acctTag));
+  } catch {
+    /* MMR v3 opcional: el rango actual ya viene del mmr-history */
+  }
+
   // RR neto por día desde los snapshots persistidos (página /reglas): completa
   // los días que ya salieron de la ventana de ~20 del mmr-history. Solo aplica
   // a la cuenta principal del perfil, porque el snapshot es del perfil, no por
@@ -786,6 +827,7 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     savedDayRR,
     arsenal,
     aperturas,
+    rank,
   };
 }
 

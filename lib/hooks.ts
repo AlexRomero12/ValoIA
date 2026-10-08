@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ValSummary, AgentIconInfo } from './types';
+import type { ValSummary, AgentIconInfo, ValMastery, ValPremier, ValRecords } from './types';
 import type { MatchDetail } from './matchDetail';
 import type { Profile, SessionRules } from './profileTypes';
 
@@ -87,6 +87,39 @@ export function useTierIcons() {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 7 * 24 * 60 * 60 * 1000,
   });
+}
+
+// ---------- Datos de la API v4.10 (récords, maestría, Premier) ----------
+//
+// Los tres se piden on-demand (no en el warmup) y el servidor los cachea 6-12 h,
+// así que abrir la pestaña no gasta cuota de Henrik. Van sin reintentos: si la
+// cuenta no tiene datos (404) no tiene sentido insistir.
+
+function useValExtra<T>(key: string, path: string, playerId: string, account: string, enabled = true) {
+  return useQuery<T & { error?: string; code?: string }>({
+    queryKey: [key, playerId, account],
+    queryFn: async () => {
+      const res = await fetch(`${path}?player=${encodeURIComponent(playerId)}${account}`);
+      const json = await res.json();
+      if (!res.ok || json.error) throw Object.assign(new Error(json.error || 'Error de red'), { code: json.code });
+      return json;
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    enabled,
+  });
+}
+
+export function useRecords(playerId: string, accountIndex = 0, enabled = true) {
+  return useValExtra<ValRecords>('val-records', '/api/valorant/records', playerId, `&account=${accountIndex}`, enabled);
+}
+
+export function useMastery(playerId: string, accountIndex = 0, enabled = true) {
+  return useValExtra<ValMastery>('val-mastery', '/api/valorant/mastery', playerId, `&account=${accountIndex}`, enabled);
+}
+
+export function usePremier(playerId: string, accountIndex = 0, enabled = true) {
+  return useValExtra<ValPremier>('val-premier', '/api/valorant/premier', playerId, `&account=${accountIndex}`, enabled);
 }
 
 // ---------- Perfiles ----------

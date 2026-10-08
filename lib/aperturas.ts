@@ -1,5 +1,17 @@
-import { henrikMatchTimestamp, type HenrikKill, type HenrikMatch, type HenrikMatchPlayer } from './henrik';
-import type { AperturaBucket, AperturaGrupo, AperturaPartida, ValAperturas } from './types';
+import {
+  henrikMatchTimestamp,
+  type HenrikKill,
+  type HenrikMatch,
+  type HenrikMatchPlayer,
+  type HenrikMatchRound,
+} from './henrik';
+import type {
+  AperturaBucket,
+  AperturaGrupo,
+  AperturaPartida,
+  AperturaVerificacion,
+  ValAperturas,
+} from './types';
 
 /**
  * Aperturas por ronda desde el kill feed ya cacheado ($0 requests).
@@ -60,21 +72,51 @@ function roundIdOf(r: { id?: number }, idx: number): number {
 }
 
 /**
- * Bando por ronda: 1 = ATK (mi equipo ataca), 0 = DEF, ausente = sin determinar.
- * Las plantas revelan el bando de su ronda; las mitades completas lo propagan
- * (la 1.ª mitad y la 2.ª son bandos opuestos) y la OT alterna por ronda.
+ * Bando de MI equipo en la ronda según el dato OFICIAL de Riot (match v4
+ * desde v4.10): `winning_team` + `winning_team_role` describen el bando del
+ * equipo ganador, así que si ganó el rival el mío es el contrario.
+ * Devuelve null si la API no publicó el rol (partidas antiguas).
  */
-export function sidesByRound(m: HenrikMatch, myTeam: string): Map<number, 0 | 1> {
+function sideFromOfficial(r: HenrikMatchRound, myTeam: string): 0 | 1 | null {
+  const role = (r.winning_team_role ?? '').toLowerCase();
+  if (!r.winning_team || !role) return null;
+  // Riot publica "Attacker" / "Defender" (ojo: el prefijo es "att", no "atk").
+  const winnerSide: 0 | 1 | null = role.startsWith('att') ? 1 : role.startsWith('def') ? 0 : null;
+  if (winnerSide == null) return null;
+  return r.winning_team === myTeam ? winnerSide : ((winnerSide ^ 1) as 0 | 1);
+}
+
+export interface MatchSides {
+  side: Map<number, 0 | 1>;
+  /** Rondas cuyo bando viene del dato oficial (no inferido). */
+  official: Set<number>;
+}
+
+/**
+ * Bando por ronda: 1 = ATK (mi equipo ataca), 0 = DEF, ausente = sin determinar.
+ * Prioridad de fuentes:
+ *  1. **Oficial** (`winning_team_role`, v4.10): exacto, ronda a ronda.
+ *  2. Plantas: revelan el bando de su ronda (criterio histórico).
+ *  3. Mitades completas (la 1.ª y la 2.ª son bandos opuestos) y OT alterna,
+ *     solo para las rondas que siguen sin dato.
+ */
+export function sidesByRoundDetailed(m: HenrikMatch, myTeam: string): MatchSides {
+  const official = new Set<number>();
   const known = new Map<number, 0 | 1>();
+  for (const [idx, r] of (m.rounds ?? []).entries()) {
+    const side = sideFromOfficial(r, myTeam);
+    if (side == null) continue;
+    const id = roundIdOf(r, idx);
+    official.add(id);
+    known.set(id, side);
+  }
   for (const [idx, r] of (m.rounds ?? []).entries()) {
     const team = r.plant?.player?.team ?? null;
     if (team == null) continue;
     const id = roundIdOf(r, idx);
-    const side: 0 | 1 = team === myTeam ? 1 : 0;
-    const prev = known.get(id);
-    // Planta con equipo inconsistente (dato corrupto): se ignora ese aviso.
-    if (prev != null && prev !== side) continue;
-    known.set(id, side);
+    // El dato oficial de esa ronda manda: no se pisa con la planta.
+    if (known.has(id)) continue;
+    known.set(id, team === myTeam ? 1 : 0);
   }
 
   const half = (base: number, end: number): 0 | 1 | null => {
@@ -88,9 +130,10 @@ export function sidesByRound(m: HenrikMatch, myTeam: string): Map<number, 0 | 1>
   if (first == null && second != null) first = second === 1 ? 0 : 1;
   if (second == null && first != null) second = first === 1 ? 0 : 1;
 
-  const side = new Map<number, 0 | 1>();
-  if (first != null) for (let id = 0; id <= 11; id++) side.set(id, first);
-  if (second != null) for (let id = 12; id <= 23; id++) side.set(id, second);
+  // Se parte de lo conocido (oficial + plantas) y solo se rellenan huecos.
+  const side = new Map<number, 0 | 1>(known);
+  if (first != null) for (let id = 0; id <= 11; id++) if (!side.has(id)) side.set(id, first);
+  if (second != null) for (let id = 12; id <= 23; id++) if (!side.has(id)) side.set(id, second);
 
   const ids = (m.rounds ?? []).map((r, idx) => roundIdOf(r, idx));
   const maxId = ids.length ? Math.max(...ids) : -1;
@@ -105,10 +148,17 @@ export function sidesByRound(m: HenrikMatch, myTeam: string): Map<number, 0 | 1>
       }
     }
     if (seed != null) {
-      for (let id = 24; id <= maxId; id++) side.set(id, (seed ^ ((id - 24) % 2)) as 0 | 1);
+      for (let id = 24; id <= maxId; id++) {
+        if (!side.has(id)) side.set(id, (seed ^ ((id - 24) % 2)) as 0 | 1);
+      }
     }
   }
-  return side;
+  return { side, official };
+}
+
+/** Compat: solo el mapa de bandos (lo usan el detalle de partida y los tests). */
+export function sidesByRound(m: HenrikMatch, myTeam: string): Map<number, 0 | 1> {
+  return sidesByRoundDetailed(m, myTeam).side;
 }
 
 /** Primera kill de cada ronda: menor `time_in_round_in_ms` (fallback: orden del feed). */
@@ -132,22 +182,62 @@ interface RoundFlags {
   fd: boolean;
   fb: boolean;
   side: 0 | 1 | null;
+  /** Bando tomado del dato oficial y no inferido. */
+  sideOfficial: boolean;
+  /** La ronda trae first blood oficial de Riot (`rounds[].first_blood`). */
+  fbOfficial: boolean;
+  /** Hay dato oficial Y kill feed: se puede auditar la inferencia. */
+  fbComparable: boolean;
+  /** El killer oficial coincide con el inferido (solo si `fbComparable`). */
+  fbAgrees: boolean;
 }
 
+/**
+ * Flags por ronda. El FB sale del dato OFICIAL cuando existe (v4.10) y del
+ * kill feed cuando no; la FD sigue saliendo del kill feed (Riot no publica la
+ * víctima en `first_blood`), y cuando hay las dos fuentes se comparan para
+ * auditar el motor.
+ */
 function roundsOf(m: HenrikMatch, puuid: string, myTeam: string): RoundFlags[] {
   const rounds = m.rounds ?? [];
   if (!rounds.length) return [];
-  const sides = sidesByRound(m, myTeam);
+  const sides = sidesByRoundDetailed(m, myTeam);
   const firstKills = firstKillsByRound(m);
   return rounds.map((r, idx) => {
     const id = roundIdOf(r, idx);
     // Sin `winning_team` (ronda corrupta o empate de ronda) no cuenta como ganada.
     const won = r.winning_team != null && r.winning_team === myTeam;
     const first = firstKills.get(id);
+    const inferred = first?.killer?.puuid ?? null;
+    const officialFb = r.first_blood?.puuid ?? null;
+    const fb = officialFb != null ? officialFb === puuid : inferred === puuid;
     const fd = first?.victim?.puuid === puuid;
-    const fb = first?.killer?.puuid === puuid;
-    return { won, fd, fb, side: sides.get(id) ?? null };
+    const comparable = officialFb != null && inferred != null;
+    return {
+      won,
+      fd,
+      fb,
+      side: sides.side.get(id) ?? null,
+      sideOfficial: sides.official.has(id),
+      fbOfficial: officialFb != null,
+      fbComparable: comparable,
+      fbAgrees: comparable && officialFb === inferred,
+    };
   });
+}
+
+function emptyVerificacion(): AperturaVerificacion {
+  return { rounds: 0, official: 0, agree: 0, mismatch: 0, sideOfficial: 0 };
+}
+
+function registerVerificacion(v: AperturaVerificacion, r: RoundFlags): void {
+  v.rounds += 1;
+  if (r.sideOfficial) v.sideOfficial += 1;
+  if (!r.fbOfficial) return;
+  v.official += 1;
+  if (!r.fbComparable) return;
+  if (r.fbAgrees) v.agree += 1;
+  else v.mismatch += 1;
 }
 
 /** FB/FD por bando de una partida (detalle): buckets con el mismo criterio que el resumen. */
@@ -159,6 +249,8 @@ export interface MatchAperturas {
   def: AperturaBucket;
   /** Rondas sin bando inferible: no entran en ATK/DEF. */
   sinLado: number;
+  /** Auditoría contra el first blood / bando oficial de Riot. */
+  verificacion: AperturaVerificacion;
 }
 
 /** Calcula los buckets de una partida; `null` si no hay equipo o rondas utilizables. */
@@ -172,14 +264,16 @@ export function matchAperturas(m: HenrikMatch, puuid: string): MatchAperturas | 
   const total = emptyBucket();
   const atk = emptyBucket();
   const def = emptyBucket();
+  const verificacion = emptyVerificacion();
   let sinLado = 0;
   for (const r of rounds) {
     registerRound(total, r.won, r.fd, r.fb);
+    registerVerificacion(verificacion, r);
     if (r.side === 1) registerRound(atk, r.won, r.fd, r.fb);
     else if (r.side === 0) registerRound(def, r.won, r.fd, r.fb);
     else sinLado += 1;
   }
-  return { rounds: rounds.length, total, atk, def, sinLado };
+  return { rounds: rounds.length, total, atk, def, sinLado, verificacion };
 }
 
 /**
@@ -190,6 +284,7 @@ export function computeAperturas(matches: HenrikMatch[], puuid: string): ValAper
   const total = emptyBucket();
   const atk = emptyBucket();
   const def = emptyBucket();
+  const verificacion = emptyVerificacion();
   const byMap = new Map<string, AperturaGrupo>();
   const byAgent = new Map<string, AperturaGrupo>();
   const partidas: AperturaPartida[] = [];
@@ -219,6 +314,8 @@ export function computeAperturas(matches: HenrikMatch[], puuid: string): ValAper
       fb: 0,
       fbLost: 0,
       sideUnknown: 0,
+      fbOfficial: 0,
+      sideOfficial: 0,
     };
     const gMap = grupoOf(byMap, map);
     const gAgent = grupoOf(byAgent, agent);
@@ -229,6 +326,9 @@ export function computeAperturas(matches: HenrikMatch[], puuid: string): ValAper
       registerRound(total, r.won, r.fd, r.fb);
       registerRound(gMap.total, r.won, r.fd, r.fb);
       registerRound(gAgent.total, r.won, r.fd, r.fb);
+      registerVerificacion(verificacion, r);
+      if (r.fbOfficial) partida.fbOfficial = (partida.fbOfficial ?? 0) + 1;
+      if (r.sideOfficial) partida.sideOfficial = (partida.sideOfficial ?? 0) + 1;
       if (r.side === 1) {
         hasAtk = true;
         registerRound(atk, r.won, r.fd, r.fb);
@@ -274,5 +374,6 @@ export function computeAperturas(matches: HenrikMatch[], puuid: string): ValAper
     byMap: [...byMap.values()].sort(byRounds),
     byAgent: [...byAgent.values()].sort(byRounds),
     matches: partidas.sort((a, b) => (a.date < b.date ? 1 : -1)),
+    verificacion,
   };
 }

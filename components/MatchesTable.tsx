@@ -10,6 +10,8 @@ import { AgentIcon } from './AgentIcon';
 import { MatchDetailModal } from './MatchDetailModal';
 import { DayDetailModal } from './DayDetailModal';
 import { LossBadge } from './LossBadge';
+import { RrBadge } from './RrBadge';
+import { rrTransitionText } from '@/lib/rrDetail';
 
 const DAYS_PER_PAGE = 5;
 
@@ -358,6 +360,7 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
           {isDraw(m) ? 'Empate' : m.won ? 'Victoria' : 'Derrota'}
         </span>
         <LossBadge m={m} />
+        <RrBadge m={m} />
       </td>
       <td className="num score">{m.roundsWon}–{m.roundsLost}</td>
       <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
@@ -365,7 +368,14 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
       <td className={`num${okCls(m.acs, 220)}`}>{m.acs}</td>
       <td className={`num${okCls(m.adr, 150)}`}>{m.adr}</td>
       <td className={`num${okCls(m.hsPct, 25)}`}>{m.hsPct.toFixed(1)}</td>
-      <td className={`num rr-cell${rr == null ? '' : rr > 0 ? ' rr-up' : rr < 0 ? ' rr-down' : ''}`} title={rr != null ? `RR en rango: ${m.rr ?? '—'}` : undefined}>
+      <td
+        className={`num rr-cell${rr == null ? '' : rr > 0 ? ' rr-up' : rr < 0 ? ' rr-down' : ''}`}
+        title={
+          rr == null
+            ? undefined
+            : [`RR en rango: ${m.rr ?? '—'}`, rrTransitionText(m.rrDetail)].filter(Boolean).join(' · ')
+        }
+      >
         {rr == null ? '—' : `${rr > 0 ? '+' : ''}${rr}`}
       </td>
     </tr>
@@ -396,6 +406,7 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
           <span className="mc-dot">·</span>
           KD <b className={parseFloat(kd) >= 1.05 ? 'stat-ok' : ''}>{kd}</b>
           <LossBadge m={m} />
+          <RrBadge m={m} />
         </span>
       </span>
       <span className="mc-side">

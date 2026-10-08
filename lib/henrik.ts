@@ -188,11 +188,45 @@ interface HenrikMatchPlayerStats {
   damage?: { dealt?: number; received?: number };
 }
 
+/**
+ * Puntuación de rendimiento de Riot (match v4, v4.10): un score propio y un
+ * desglose por categoría, más etiquetas cualitativas ("double_up", "pass"...).
+ */
+export interface HenrikPlayerPerformance {
+  score?: number | null;
+  breakdown?: {
+    adjusted_deaths?: number | null;
+    adjusted_kills?: number | null;
+    assists?: number | null;
+    damage?: number | null;
+    defuses?: number | null;
+    plants?: number | null;
+    trades?: number | null;
+    utility_usage?: number | null;
+  } | null;
+  ratings?: {
+    grade?: string | null;
+    combat?: {
+      damage?: string | null;
+      death_impact?: string | null;
+      kill_impact?: string | null;
+      trades?: string | null;
+    } | null;
+    utility?: {
+      assists?: string | null;
+      defuses?: string | null;
+      plants?: string | null;
+      utility_usage?: string | null;
+    } | null;
+  } | null;
+}
+
 export interface HenrikMatchPlayer {
   puuid?: string;
   name?: string;
   tag?: string;
   team_id?: string;
+  team_number?: number | null;
   agent?: { id?: string; name?: string };
   tier?: { id?: number; name?: string };
   stats?: HenrikMatchPlayerStats;
@@ -201,12 +235,36 @@ export interface HenrikMatchPlayer {
     loadout_value?: { overall?: number; average?: number };
   };
   behavior?: { afk_rounds?: number };
+  /** v4.10: score y desglose de rendimiento de Riot. */
+  performance?: HenrikPlayerPerformance | null;
+  /** v4.10: usos por habilidad (grenade/ability1/ability2/ultimate). */
+  ability_casts?: {
+    grenade?: number | null;
+    ability1?: number | null;
+    ability2?: number | null;
+    ultimate?: number | null;
+  } | null;
+}
+
+/** MVP de partida o de equipo (v4.10). */
+export interface HenrikMvp {
+  puuid?: string;
+  name?: string;
+  tag?: string;
+  team?: string;
 }
 
 interface HenrikMatchTeam {
   team_id?: string | null;
   rounds?: { won?: number; lost?: number };
   won?: boolean | null;
+  /** v4.10: MVP del equipo. */
+  mvp?: HenrikMvp | null;
+  /** v4.10: 1 = ganador, 2 = perdedor. */
+  placement?: number | null;
+  /** v4.10: vida restante del equipo (solo donde Riot la publica). */
+  health?: { starting?: number; remaining?: number } | null;
+  team_number?: number | null;
 }
 
 export interface HenrikKill {
@@ -223,6 +281,11 @@ export interface HenrikMatchRound {
   id?: number;
   result?: string;
   winning_team?: string | null;
+  /** v4.10: killer de la primera kill de la ronda (dato OFICIAL de Riot). */
+  first_blood?: HenrikMvp | null;
+  /** v4.10: rol del equipo ganador (Attacker/Defender). */
+  winning_team_role?: string | null;
+  ceremony?: string | null;
   plant?: { site?: string; player?: { name?: string; puuid?: string; team?: string } } | null;
   defuse?: { player?: { name?: string; puuid?: string } } | null;
 }
@@ -239,6 +302,10 @@ export interface HenrikMatch {
     platform?: string;
     region?: string | null;
     cluster?: string | null;
+    /** v4.10: MVP de la partida. */
+    mvp?: HenrikMvp | null;
+    /** v4.10: penalización de RR de cada party (dodge/afk). */
+    party_rr_penaltys?: { party_id?: string; penalty?: number }[] | null;
   };
   players?: HenrikMatchPlayer[];
   teams?: HenrikMatchTeam[];
@@ -267,7 +334,7 @@ export function henrikRoundsPlayed(m: HenrikMatch): number {
 }
 
 
-interface HenrikMmrHistoryEntry {
+export interface HenrikMmrHistoryEntry {
   match_id?: string;
   tier?: { id?: number; name?: string };
   map?: { id?: string; name?: string };
@@ -278,6 +345,29 @@ interface HenrikMmrHistoryEntry {
   refunded_rr?: number;
   was_derank_protected?: boolean;
   date?: string;
+  // --- v4.10: detalle del cambio competitivo (null en registros antiguos) ---
+  /** Cola de la partida ("competitive", "unrated"...). */
+  queue_id?: string | null;
+  /** Duración de la partida en ms. */
+  match_length?: number | null;
+  /** Tier antes de esta partida (para detectar promociones/descensos). */
+  tier_before_update?: { id?: number; name?: string } | null;
+  /** RR antes de esta partida (rr_before_update + last_change = rr). */
+  rr_before_update?: number | null;
+  /** RR extra por rendimiento (MVP, marcador alto...). */
+  rr_performance_bonus?: number | null;
+  /** RR perdonado por el incentivo de mapa nuevo. */
+  new_map_incentive_rr_forgiven?: number | null;
+  /** MOVEMENT_UP / MOVEMENT_DOWN / MOVEMENT_NONE... */
+  competitive_movement?: string | null;
+  /** Penalización por AFK (en RR). */
+  afk_penalty?: number | null;
+  /** Penalización de RR aplicada (dodge, abandono...). */
+  rr_penalty?: number | null;
+  /** Partida de colocación (placement). */
+  is_placement_match?: boolean | null;
+  /** Se repuso el escudo de protección de rango con esta partida. */
+  was_derank_protection_replenished?: boolean | null;
 }
 
 /** Key de caché del historial MMR (compartida con getHenrikMmrHistory). */
@@ -305,6 +395,301 @@ export async function getHenrikMmrHistory(
   tagArg = HENRIK_CONFIG.tag(),
 ): Promise<HenrikMmrHistoryEntry[]> {
   return cached(henrikMmrKey(nameArg, tagArg), MMR_TTL_MS, () => fetchHenrikMmrHistoryRaw(nameArg, tagArg));
+}
+
+// ---------- MMR v3: rango actual, escudos de protección, pico y prestigio ----------
+
+export interface HenrikMmrSeason {
+  season?: { id?: string; short?: string };
+  ranking_schema?: string;
+  wins?: number;
+  wins_with_placements?: number;
+  games?: number;
+  games_needed_for_rating?: number;
+  end_tier?: { id?: number; name?: string };
+  end_rr?: number;
+  act_rank?: { id?: number; name?: string };
+  act_wins?: { id?: number; name?: string }[];
+  leaderboard_placement?: number | null;
+  /** Mapa tier -> { delta, total } de prestigios ganados en esa temporada. */
+  prestige?: Record<string, { delta?: number; total?: number }> | null;
+}
+
+export interface HenrikMmrV3 {
+  account?: { name?: string; tag?: string; puuid?: string };
+  current?: {
+    tier?: { id?: number; name?: string };
+    rr?: number;
+    last_change?: number;
+    elo?: number;
+    games_needed_for_rating?: number;
+    games_needed_for_leaderboard?: number;
+    leaderboard_placement?: number | null;
+    /** Escudos de protección de rango disponibles. */
+    rank_protection_shields?: number;
+    is_at_rank_protected_tier?: boolean | null;
+    /** "Empty" | "Available" | ... */
+    rank_protection_status?: string | null;
+  };
+  peak?: {
+    season?: { id?: string; short?: string };
+    ranking_schema?: string;
+    tier?: { id?: number; name?: string };
+    rr?: number;
+  } | null;
+  seasonal?: HenrikMmrSeason[];
+  /** Mapa tier -> { count }: prestigios de por vida (GOLD, PLATINUM, DIAMOND...). */
+  lifetime_prestige?: Record<string, { count?: number }> | null;
+  ranked_state?: {
+    is_act_rank_badge_hidden?: boolean | null;
+    is_leaderboard_anonymized?: boolean | null;
+  };
+  /** Último cambio competitivo, con el mismo detalle que el historial. */
+  latest_update?: HenrikMmrHistoryEntry | null;
+}
+
+export const MMR_V3_TTL_MS = 20 * 60 * 1000;
+
+export function henrikMmrV3Key(nameArg: string, tagArg: string): string {
+  return `henrik:mmr-v3:${encodeURIComponent(nameArg)}:${encodeURIComponent(tagArg)}`;
+}
+
+export async function fetchHenrikMmrV3Raw(nameArg: string, tagArg: string): Promise<HenrikMmrV3> {
+  const affinity = HENRIK_CONFIG.region();
+  const platform = HENRIK_CONFIG.platform();
+  const json = await henrikFetch<{ data?: HenrikMmrV3 }>(
+    `/valorant/v3/mmr/${affinity}/${platform}/${encodeURIComponent(nameArg)}/${encodeURIComponent(tagArg)}`,
+  );
+  return json?.data ?? {};
+}
+
+export async function getHenrikMmrV3(
+  nameArg = HENRIK_CONFIG.name(),
+  tagArg = HENRIK_CONFIG.tag(),
+): Promise<HenrikMmrV3> {
+  return cached(henrikMmrV3Key(nameArg, tagArg), MMR_V3_TTL_MS, () => fetchHenrikMmrV3Raw(nameArg, tagArg));
+}
+
+// ---------- Historial MMR almacenado (más allá de las ~20 partidas) ----------
+
+export interface HenrikStoredMmrPage {
+  entries: HenrikMmrHistoryEntry[];
+  /** Metadatos de paginación (total/returned del servidor). */
+  results?: { after?: number; before?: number; returned?: number; total?: number } | null;
+}
+
+export function henrikStoredMmrKey(nameArg: string, tagArg: string, size: number, page: number): string {
+  return `henrik:stored-mmr:${encodeURIComponent(nameArg)}:${encodeURIComponent(tagArg)}:${size}:${page}`;
+}
+
+export async function fetchHenrikStoredMmrHistoryRaw(
+  nameArg: string,
+  tagArg: string,
+  size = 100,
+  page = 0,
+): Promise<HenrikStoredMmrPage> {
+  const affinity = HENRIK_CONFIG.region();
+  const platform = HENRIK_CONFIG.platform();
+  const qs = new URLSearchParams({ size: String(size), page: String(page) });
+  const json = await henrikFetch<{ data?: HenrikMmrHistoryEntry[]; results?: HenrikStoredMmrPage['results'] }>(
+    `/valorant/v2/stored-mmr-history/${affinity}/${platform}/${encodeURIComponent(nameArg)}/${encodeURIComponent(tagArg)}?${qs}`,
+  );
+  const data = json?.data;
+  return {
+    entries: Array.isArray(data) ? data : [],
+    results: json?.results ?? null,
+  };
+}
+
+/** El histórico almacenado cambia como mucho al ritmo de las partidas: 6 h. */
+export const STORED_MMR_TTL_MS = 6 * 60 * 60 * 1000;
+
+export async function getHenrikStoredMmrHistory(
+  nameArg = HENRIK_CONFIG.name(),
+  tagArg = HENRIK_CONFIG.tag(),
+  size = 100,
+  page = 0,
+): Promise<HenrikStoredMmrPage> {
+  return cached(henrikStoredMmrKey(nameArg, tagArg, size, page), STORED_MMR_TTL_MS, () =>
+    fetchHenrikStoredMmrHistoryRaw(nameArg, tagArg, size, page),
+  );
+}
+
+// ---------- Accolades (récords y hitos de la cuenta) ----------
+
+export type HenrikAccoladeKind =
+  | 'kills'
+  | 'first_blood'
+  | 'damage_per_round'
+  | 'clutches'
+  | 'aces'
+  | 'trades'
+  | 'headshot_percentage'
+  | 'distinction'
+  | 'assists'
+  | 'top_frag'
+  | 'plants'
+  | 'mvp';
+
+export interface HenrikAccoladeMetric {
+  id?: string;
+  type?: HenrikAccoladeKind | null;
+  /** Nº de veces conseguido. */
+  count?: number;
+  /** Mejor valor histórico de ese hito. */
+  best_value?: number;
+}
+
+export interface HenrikAccolades {
+  account?: { name?: string; tag?: string; puuid?: string };
+  summary?: {
+    all_time?: HenrikAccoladeMetric[];
+    seasons?: { season?: { id?: string; short?: string }; accolades?: HenrikAccoladeMetric[] }[];
+  } | null;
+  matches?: {
+    match_id?: string | null;
+    started_at?: string | null;
+    players?: {
+      puuid?: string;
+      accolades?: { id?: string; type?: HenrikAccoladeKind | null; value?: number; is_act_record?: boolean }[];
+    }[];
+  }[] | null;
+}
+
+export function henrikAccoladesKey(nameArg: string, tagArg: string): string {
+  return `henrik:accolades:${encodeURIComponent(nameArg)}:${encodeURIComponent(tagArg)}`;
+}
+
+export async function fetchHenrikAccoladesRaw(nameArg: string, tagArg: string): Promise<HenrikAccolades> {
+  const affinity = HENRIK_CONFIG.region();
+  const platform = HENRIK_CONFIG.platform();
+  const json = await henrikFetch<{ data?: HenrikAccolades }>(
+    `/valorant/v1/accolades/${affinity}/${platform}/${encodeURIComponent(nameArg)}/${encodeURIComponent(tagArg)}`,
+  );
+  return json?.data ?? {};
+}
+
+/** Los récords se mueven despacio: 6 h de caché. */
+export const ACCOLADES_TTL_MS = 6 * 60 * 60 * 1000;
+
+export async function getHenrikAccolades(
+  nameArg = HENRIK_CONFIG.name(),
+  tagArg = HENRIK_CONFIG.tag(),
+): Promise<HenrikAccolades> {
+  return cached(henrikAccoladesKey(nameArg, tagArg), ACCOLADES_TTL_MS, () => fetchHenrikAccoladesRaw(nameArg, tagArg));
+}
+
+// ---------- Maestría de agentes ----------
+
+export interface HenrikAgentMasteryEntry {
+  agent?: { id?: string; name?: string | null };
+  flourish?: { short_level?: number | null; long_level?: number | null };
+  tracks?: { id?: string; name?: string | null; level?: number | null }[];
+  modules?: { id?: string | null; name?: string | null; stat?: { id?: string; name?: string | null }; value?: number }[] | null;
+}
+
+export interface HenrikAgentMastery {
+  account?: { name?: string; tag?: string; puuid?: string };
+  agents?: HenrikAgentMasteryEntry[];
+}
+
+export function henrikMasteryKey(nameArg: string, tagArg: string): string {
+  return `henrik:mastery:${encodeURIComponent(nameArg)}:${encodeURIComponent(tagArg)}`;
+}
+
+export async function fetchHenrikAgentMasteryRaw(nameArg: string, tagArg: string): Promise<HenrikAgentMastery> {
+  const affinity = HENRIK_CONFIG.region();
+  const platform = HENRIK_CONFIG.platform();
+  const json = await henrikFetch<{ data?: HenrikAgentMastery }>(
+    `/valorant/v1/agent-mastery/${affinity}/${platform}/${encodeURIComponent(nameArg)}/${encodeURIComponent(tagArg)}`,
+  );
+  return json?.data ?? {};
+}
+
+/** La maestría sube jugando: 12 h es de sobra. */
+export const MASTERY_TTL_MS = 12 * 60 * 60 * 1000;
+
+export async function getHenrikAgentMastery(
+  nameArg = HENRIK_CONFIG.name(),
+  tagArg = HENRIK_CONFIG.tag(),
+): Promise<HenrikAgentMastery> {
+  return cached(henrikMasteryKey(nameArg, tagArg), MASTERY_TTL_MS, () => fetchHenrikAgentMasteryRaw(nameArg, tagArg));
+}
+
+// ---------- Premier v2 (equipo, roster y temporadas) ----------
+
+export interface HenrikPremierSeason {
+  id?: string;
+  name?: string | null;
+  enrolled?: boolean;
+  crest?: string;
+  stats?: { wins?: number; losses?: number; matches?: number; rounds?: { won?: number; lost?: number } };
+  placement?: { points?: number; conference?: string; division?: number; is_provisional?: boolean };
+  promotion_applied?: boolean;
+  has_earned_promotion_for_next_season?: boolean;
+  has_earned_prestige?: boolean;
+}
+
+export interface HenrikPremierTeam {
+  id?: string;
+  name?: string;
+  tag?: string;
+  created_at?: string;
+  customization?: { icon?: string; image?: string; primary?: string; secondary?: string; tertiary?: string };
+  member?: { puuid?: string; role?: { id?: number; name?: string }; joined_at?: string }[];
+  current_season?: HenrikPremierSeason | null;
+  seasons?: HenrikPremierSeason[];
+}
+
+export function henrikPremierKey(kind: 'player' | 'team', id: string): string {
+  return `henrik:premier:${kind}:${encodeURIComponent(id)}`;
+}
+
+async function premierFetch(path: string): Promise<HenrikPremierTeam | null> {
+  const json = await henrikFetch<{ data?: HenrikPremierTeam }>(path);
+  const data = json?.data;
+  return data && typeof data === 'object' && !Array.isArray(data) ? data : null;
+}
+
+export async function fetchHenrikPremierPlayerRaw(nameArg: string, tagArg: string): Promise<HenrikPremierTeam | null> {
+  const affinity = HENRIK_CONFIG.region();
+  return premierFetch(`/valorant/v2/premier/players/${affinity}/${encodeURIComponent(nameArg)}/${encodeURIComponent(tagArg)}`);
+}
+
+export async function fetchHenrikPremierTeamRaw(teamId: string): Promise<HenrikPremierTeam | null> {
+  const affinity = HENRIK_CONFIG.region();
+  return premierFetch(`/valorant/v2/premier/teams/${affinity}/${encodeURIComponent(teamId)}`);
+}
+
+/** El equipo Premier cambia poco (roster/resultados): 6 h. */
+export const PREMIER_TTL_MS = 6 * 60 * 60 * 1000;
+
+export async function getHenrikPremierPlayer(
+  nameArg = HENRIK_CONFIG.name(),
+  tagArg = HENRIK_CONFIG.tag(),
+): Promise<HenrikPremierTeam | null> {
+  const id = `${nameArg}#${tagArg}`;
+  return cached(henrikPremierKey('player', id), PREMIER_TTL_MS, () => fetchHenrikPremierPlayerRaw(nameArg, tagArg));
+}
+
+export async function getHenrikPremierTeam(teamId: string): Promise<HenrikPremierTeam | null> {
+  return cached(henrikPremierKey('team', teamId), PREMIER_TTL_MS, () => fetchHenrikPremierTeamRaw(teamId));
+}
+
+/** Nombre#tag de un puuid (para resolver los miembros del roster de Premier). */
+export async function fetchHenrikAccountByPuuidRaw(puuid: string): Promise<HenrikAccountData> {
+  const json = await henrikFetch<{ data?: HenrikAccountData }>(`/valorant/v2/by-puuid/account/${encodeURIComponent(puuid)}`);
+  return json?.data ?? {};
+}
+
+export const ACCOUNT_BY_PUUID_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function henrikAccountByPuuidKey(puuid: string): string {
+  return `henrik:account-puuid:${encodeURIComponent(puuid)}`;
+}
+
+export async function getHenrikAccountByPuuid(puuid: string): Promise<HenrikAccountData> {
+  return cached(henrikAccountByPuuidKey(puuid), ACCOUNT_BY_PUUID_TTL_MS, () => fetchHenrikAccountByPuuidRaw(puuid));
 }
 
 // ---------- Bucket de partidas por jugador (sync incremental) ----------

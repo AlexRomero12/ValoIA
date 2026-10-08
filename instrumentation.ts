@@ -2,6 +2,7 @@ import { env } from './lib/env';
 import { warmAllPlayers } from './lib/warm';
 import { watchStoreAndNotify } from './lib/storeWatch';
 import { watchWeeklyRules } from './lib/rulesWatch';
+import { watchRecords } from './lib/recordsWatch';
 
 /**
  * Mantenimiento en background del dashboard (opcional, opt-in):
@@ -82,4 +83,24 @@ export function register() {
   };
   setTimeout(() => void rulesCycle(), 90_000);
   setInterval(() => void rulesCycle(), 60 * 60 * 1000);
+
+  // Récords (accolades): cada 60 min. La respuesta está cacheada 6 h, así que
+  // en la práctica se consulta la API como mucho 4 veces al día.
+  let recordsRunning = false;
+  const recordsCycle = async () => {
+    if (recordsRunning) return;
+    recordsRunning = true;
+    try {
+      const result = await watchRecords();
+      if (result.sent > 0) {
+        console.log(`[records] ${result.improved} record(s) mejorado(s): ${result.sent} push enviado(s)`);
+      }
+    } catch (e) {
+      console.error(`[records] aviso de records falló: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      recordsRunning = false;
+    }
+  };
+  setTimeout(() => void recordsCycle(), 120_000);
+  setInterval(() => void recordsCycle(), 60 * 60 * 1000);
 }

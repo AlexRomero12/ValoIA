@@ -23,6 +23,21 @@ export interface RrSnapshot {
   last_change?: number;
   elo?: number;
   date?: string;
+  // --- Detalle del cambio competitivo (mmr-history v2 desde v4.10) ---
+  // Se persiste para que la explicación del RR (bono, penalización, escudo)
+  // siga visible cuando la partida salga de la ventana de ~20 de la API.
+  rr_before_update?: number | null;
+  rr_performance_bonus?: number | null;
+  rr_penalty?: number | null;
+  afk_penalty?: number | null;
+  refunded_rr?: number | null;
+  new_map_incentive_rr_forgiven?: number | null;
+  is_placement_match?: boolean | null;
+  was_derank_protected?: boolean | null;
+  was_derank_protection_replenished?: boolean | null;
+  competitive_movement?: string | null;
+  queue_id?: string | null;
+  tier_before_update?: { id?: number; name?: string } | null;
   /** ms epoch de la última vez que se observó (solo para el descarte por techo) */
   at: number;
 }
@@ -60,7 +75,19 @@ function same(a: RrSnapshot | undefined, b: RrSnapshot): boolean {
     a.rr === b.rr &&
     a.last_change === b.last_change &&
     a.elo === b.elo &&
-    a.date === b.date
+    a.date === b.date &&
+    (a.rr_before_update ?? null) === (b.rr_before_update ?? null) &&
+    (a.rr_performance_bonus ?? null) === (b.rr_performance_bonus ?? null) &&
+    (a.rr_penalty ?? null) === (b.rr_penalty ?? null) &&
+    (a.afk_penalty ?? null) === (b.afk_penalty ?? null) &&
+    (a.refunded_rr ?? null) === (b.refunded_rr ?? null) &&
+    (a.new_map_incentive_rr_forgiven ?? null) === (b.new_map_incentive_rr_forgiven ?? null) &&
+    (a.is_placement_match ?? null) === (b.is_placement_match ?? null) &&
+    (a.was_derank_protected ?? null) === (b.was_derank_protected ?? null) &&
+    (a.was_derank_protection_replenished ?? null) === (b.was_derank_protection_replenished ?? null) &&
+    (a.competitive_movement ?? null) === (b.competitive_movement ?? null) &&
+    (a.queue_id ?? null) === (b.queue_id ?? null) &&
+    (a.tier_before_update?.id ?? null) === (b.tier_before_update?.id ?? null)
   );
 }
 

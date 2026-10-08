@@ -1,4 +1,4 @@
-import type { AperturaBucket, AperturaGrupo, AperturaPartida, ArsenalRow, MatchRow, ValAperturas, ValArsenal, ValKpis, ValSummary } from './types';
+import type { AperturaBucket, AperturaGrupo, AperturaPartida, AperturaVerificacion, ArsenalRow, MatchRow, ValAperturas, ValArsenal, ValKpis, ValSummary } from './types';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 import { isoDayLocal, mondayOf } from './dates';
 
@@ -296,6 +296,21 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
   const truncated = ok.some((s) => s.window?.truncated === true);
   const since = ok.reduce((a, s) => ((s.window?.since ?? '') < (a ?? '') ? s.window.since : a), ok[0].window.since);
 
+  // Modo degradado y snapshots: si CUALQUIER cuenta se sirvió de caché, el
+  // combinado lo es (y se conserva la sync más antigua, que es la que manda).
+  const stale = ok.some((s) => s.window?.stale === true);
+  const degradedReason = ok.find((s) => s.window?.degradedReason)?.window?.degradedReason ?? null;
+  const cachedAt = ok.reduce<string | null>((a, s) => {
+    const c = s.window?.cachedAt;
+    if (!c) return a;
+    return a == null || c < a ? c : a;
+  }, null);
+  // Los snapshots de RR diario son del perfil, no de la cuenta: vale el primero.
+  const savedDayRR = ok.find((s) => s.savedDayRR != null)?.savedDayRR;
+  // El estado de rango enriquecido (escudos/pico/prestigio) es de la cuenta que
+  // manda en el combinado (la mejor clasificada).
+  const rank = best.rank ?? ok.find((s) => s.rank != null)?.rank ?? null;
+
   // Agregados por agente/mapa y arsenal: se recalculan sobre las partidas
   // mezcladas para que Ranked (que usa `byAgent`/`byMap`/`arsenal`) muestre
   // las stats combinadas de todas las cuentas.
@@ -329,6 +344,9 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
       syncedAt,
       mmrSyncedAt,
       truncated,
+      stale,
+      cachedAt,
+      degradedReason,
     },
     kpis: {
       matches: st.games,
@@ -351,8 +369,10 @@ export function mergeAccountSummaries(summaries: (ValSummary | undefined)[]): Va
     byAgent,
     byMap,
     matches,
+    savedDayRR,
     arsenal,
     aperturas: mergeAperturas(ok.map((s) => s.aperturas).filter((a): a is ValAperturas => a != null)),
+    rank,
   };
 }
 
@@ -406,6 +426,7 @@ export function mergeAperturas(list: ValAperturas[]): ValAperturas | undefined {
   const total: AperturaBucket = { rounds: 0, fd: 0, fdWon: 0, noFd: 0, noFdWon: 0, fb: 0, fbWon: 0, fbLost: 0 };
   const atk: AperturaBucket = { ...total };
   const def: AperturaBucket = { ...total };
+  const verificacion: AperturaVerificacion = { rounds: 0, official: 0, agree: 0, mismatch: 0, sideOfficial: 0 };
   let sinLado = 0;
   const seen = new Set<string>();
   const matches: AperturaPartida[] = [];
@@ -414,6 +435,15 @@ export function mergeAperturas(list: ValAperturas[]): ValAperturas | undefined {
     sumBucket(atk, a.atk);
     sumBucket(def, a.def);
     sinLado += a.sinLado;
+    // La auditoría contra el dato oficial también se suma entre cuentas.
+    const v = a.verificacion;
+    if (v) {
+      verificacion.rounds += v.rounds;
+      verificacion.official += v.official;
+      verificacion.agree += v.agree;
+      verificacion.mismatch += v.mismatch;
+      verificacion.sideOfficial += v.sideOfficial;
+    }
     for (const p of a.matches) {
       if (p.matchId && seen.has(p.matchId)) continue;
       if (p.matchId) seen.add(p.matchId);
@@ -429,6 +459,7 @@ export function mergeAperturas(list: ValAperturas[]): ValAperturas | undefined {
     byMap: mergeAperturaGrupos(list.map((a) => a.byMap)),
     byAgent: mergeAperturaGrupos(list.map((a) => a.byAgent)),
     matches,
+    verificacion,
   };
 }
 

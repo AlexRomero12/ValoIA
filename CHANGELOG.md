@@ -2,6 +2,30 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.28.0] — 2026-10-07
+
+Aprovecha la API v4.10 de Henrik: first blood **oficial** por ronda (auditoría del motor de aperturas), desglose del cambio de RR, rango con escudos/pico/prestigio, récords de Riot con push, maestría por agente y Premier real del equipo.
+
+### Added
+- **Aperturas con dato oficial de Riot**: `rounds[].first_blood` (killer de la primera kill) y `rounds[].winning_team_role` (bando del equipo ganador) sustituyen a la inferencia cuando existen — el bando ya no depende de las plantas y el FB sale de Riot; la FD sigue saliendo del kill feed (Riot no publica la víctima). Nuevo bloque **«Motor validado / Revisar»** en `AperturasPanel` con el cotejo (`AperturaVerificacion`: rondas oficiales, coincidencias, discrepancias y bandos oficiales). Motor en `lib/aperturas.ts` (`sidesByRoundDetailed`) con prioridad oficial → plantas → mitades/OT
+- **Desglose del RR por partida** (`lib/rrDetail.ts`): bono de rendimiento, RR devuelto, RR perdonado por mapa nuevo, penalización, penalización AFK, escudo de protección, colocación, movimiento competitivo y tier previo. Chips por fila (`components/RrBadge.tsx`, solo los avisos puntuales) y tooltip con la transición «73 → 90 (+17)». El detalle se persiste en `rr-history.json`, así que sobrevive a la ventana de ~20 partidas del mmr-history
+- **Rango enriquecido (MMR v3)** en el Resumen (`components/ranked/RankCard.tsx`): tier/RR, **escudos de protección** + estado, pico histórico con su acto, partidas que faltan para rating/leaderboard, puesto en el leaderboard y **prestigio** por tier. `lib/rankState.ts` normaliza la respuesta y el resumen la trae cacheada 30 min
+- **Récords/PBs de Riot** (`GET /api/valorant/records`, pestaña **Récords**): histórico por tipo (veces + mejor marca), acto en curso, récords del acto (`is_act_record`) y últimas partidas con récord. `lib/records.ts` traduce los 12 tipos de accolade y formatea cada unidad (kills, ADR, % HS, pts)
+- **Aviso push de récord batido** (`lib/recordsWatch.ts` + ciclo propio en `instrumentation.ts`): compara los mejores valores contra la captura guardada en `records-notified.json` (DATA_DIR) y avisa solo cuando SUBEN; la primera pasada guarda la base sin avisar. `sendPush` acepta `tag` (los avisos ya no se pisan entre sí) y el nuevo usa `valoia-records`. `VAL_RECORDS_PUSH=0` lo apaga
+- **Maestría por agente** (`GET /api/valorant/mastery`, panel en Ranked → Agentes): nivel por agente, amplitud del champ pool (nivel total y cuántos al máximo) y módulos de stats cuando Riot los publica. `lib/mastery.ts` + `components/ranked/MasteryPanel.tsx`, cacheado 12 h
+- **Premier real** (`GET /api/valorant/premier`, pestaña **Premier** en Equipo): equipo, escudo y colores, roster con **rol y fecha de alta**, resultados de la temporada (V-D, WR, rondas, puntos, conferencia y división) e historial de temporadas. Los nombres de los miembros se resuelven por puuid (`by-puuid/account`, cacheado 24 h) y los perfiles del dash se marcan como conocidos. `lib/premier.ts` + `components/team/PremierTab.tsx` y `PremierPage.tsx`, cacheado 6 h
+- Hooks `useRecords`/`useMastery`/`usePremier` (on-demand: solo piden datos cuando su pestaña está abierta)
+
+### Changed
+- `lib/henrik.ts`: tipos del match v4 (rendimiento de Riot, MVP de partida y equipo, `team health`, placement, first blood y rol ganador por ronda) y del mmr-history v2 (`queue_id`, `match_length`, `tier_before_update`, `rr_before_update`, bonos y penalizaciones); fetchers nuevos de MMR v3, stored-MMR v2, accolades, maestría, Premier y cuenta por puuid, cada uno con su TTL
+- `mergeAccountSummaries` ahora propaga `stale`, `cachedAt`, `degradedReason`, `savedDayRR`, `rank` y la verificación de aperturas: en perfiles multi-cuenta el banner «de caché» y los datos nuevos ya no desaparecían
+- `lib/hooks.ts`, `RankedTabs` (pestaña Récords) y `EquipoTabs` (pestaña Premier) amplían sus uniones y sus `TABS`
+
+### Notes
+- Todo lo nuevo se apoya en campos que Riot publica **donde están disponibles**: las partidas antiguas (bucket/archivo) no traen first blood oficial ni el detalle de RR, y en ese caso el dash mantiene el comportamiento anterior sin inventar datos
+- Ningún endpoint nuevo entra en el warmup: récords (6 h), maestría (12 h) y Premier (6 h) se piden a demanda para no gastar cuota de Henrik
+- 51 tests nuevos (aperturas oficiales, rrDetail, records, rankState, mastery, premier): 164 en total
+
 ## [1.27.0] — 2026-10-01
 
 Ranked suma la pestaña **Aporte**: en qué puesto del marcador quedas, con quién juegas y tu economía de RR (todo desde datos ya cacheados, $0 requests).

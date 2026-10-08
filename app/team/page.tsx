@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CompareTab } from '@/components/team/CompareTab';
 import { CompositionsTab } from '@/components/team/CompositionsTab';
+import { PremierPage } from '@/components/team/PremierPage';
 import { isEquipoTab, type EquipoTab } from '@/components/team/EquipoTabs';
 
 export default function EquipoPage() {
@@ -29,6 +30,7 @@ function EquipoHub() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
+  if (tab === 'premier') return <PremierPage tab={tab} onTab={goTab} />;
   return tab === 'composiciones'
     ? <CompositionsTab tab={tab} onTab={goTab} />
     : <CompareTab tab={tab} onTab={goTab} />;

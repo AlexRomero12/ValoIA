@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { MatchDetailModal } from '@/components/MatchDetailModal';
+import { InfoTip } from '@/components/InfoTip';
 import { esc, wrColor } from '@/lib/metas';
 import type { AperturaBucket, AperturaGrupo, MatchRow, ValAperturas } from '@/lib/types';
 
@@ -94,7 +95,7 @@ export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelP
     );
   }
 
-  const { total, atk, def, byMap, byAgent, sinLado } = aperturas;
+  const { total, atk, def, byMap, byAgent, sinLado, verificacion } = aperturas;
   const agentRows = byAgent.filter((g) => g.total.rounds >= MIN_AGENT_ROUNDS);
 
   const bandos: { label: string; b: AperturaBucket }[] = [
@@ -114,6 +115,21 @@ export function AperturasPanel({ aperturas, matches, playerId }: AperturasPanelP
           partida jugada en ese bando (ATK/DEF). Referencias del plan (ambos bandos): FD ≤ 2.0/partida ·
           FB ≥ 2.5/partida · conversión ≥ 70%.
         </p>
+        {verificacion && verificacion.official > 0 ? (
+          <div className={`ap-verify${verificacion.mismatch === 0 ? ' ok' : ''}`}>
+            <b>{verificacion.mismatch === 0 ? '✓ Motor validado' : '⚠ Revisar'}</b>
+            <span>
+              Bando oficial de Riot en {verificacion.sideOfficial}/{verificacion.rounds} rondas · primera sangre
+              oficial en {verificacion.official} · el kill feed coincide en {verificacion.agree}/
+              {verificacion.agree + verificacion.mismatch} rondas comparables
+              {verificacion.mismatch > 0
+                ? ` (${verificacion.mismatch} discrepancia${verificacion.mismatch === 1 ? '' : 's'})`
+                : ''}
+              .
+            </span>
+            <InfoTip text="Riot publica el first blood de cada ronda y el bando del equipo ganador (match v4 desde v4.10). Cuando existen, el dash usa el dato oficial y aquí se audita contra el kill feed: 0 discrepancias = el motor de aperturas infiere igual que Riot. Las partidas antiguas no traen estos campos." />
+          </div>
+        ) : null}
         <div className="table-scroll">
           <table className="score-table ap-table">
             <thead>
