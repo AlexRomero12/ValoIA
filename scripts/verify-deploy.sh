@@ -43,12 +43,16 @@ docker ps --filter name=valo-dash --format '  {{.Names}} | {{.Status}} | {{.Imag
 
 echo
 echo "== commit desplegado =="
+# Ojo: en un worktree `.git` es un archivo, no un directorio (-e, no -d).
+FOUND=0
 for d in /opt/valoia-main . ..; do
-  if [ -d "$d/.git" ]; then
-    echo "  $(git -C "$d" log --oneline -1)"
+  if [ -e "$d/.git" ]; then
+    echo "  $(git -C "$d" log --oneline -1 2>&1)"
+    FOUND=1
     break
   fi
 done
+[ "$FOUND" = "0" ] && echo "  (no encuentro un checkout de git cerca)"
 
 echo
 echo "== archivos de build con las rutas nuevas =="
