@@ -6,6 +6,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 Arranca **V26 Act 6** (parche 13.08): **Bind y Corrode** entran a la rotación competitiva y salen **Ascent y Split**. El dash se ajusta al acto nuevo y deja de castigar por «fuera de meta» a los mapas que todavía no tienen snapshot pro.
 
+### Added
+- **Iconos de habilidades en el Arsenal** (`lib/valorant.ts` + `components/ArsenalPanel.tsx`): las kills de habilidad llegan en el kill feed como `weapon` con `type: "Ability"` (`Blade Storm`, `Showstopper`, `Hunter's Fury`, `Paint Shells`, `TURRET`…) y no existen en `/v1/weapons`, así que salían **sin icono y sin tipo**. El diccionario de contenido (`val:content:v5`) indexa ahora las habilidades por el nombre con el que aparecen en el feed, con su icono y una etiqueta corta (**Ulti** / **Hab.**); se arma con la misma respuesta de `/v1/agents` que ya se pedía, sin request extra. En la ventana de un año son 7 filas y 83 kills que estaban mudas (en el archivo completo: 14 nombres y 816 kills)
+- **`ArsenalPanel` ya no escapa el HTML a mano**: `esc()` sobre texto que React ya escapa mostraba entidades literales en los nombres con apóstrofo («Hunter&#39;s Fury»). Se quitó del panel; el resto de los `{esc(...)}` del dash quedan como deuda aparte (React no los necesita)
+
 ### Changed
 - **Rotación de mapas V26A6** (`lib/proneta.ts` → `ROTATION_MAPS`): `Abyss, Bind, Corrode, Haven, Lotus, Summit, Sunset`. Alimenta las tarjetas de **Composiciones**, el selector de **Pool por mapa** de Perfiles/Reglas y la lista de mapas de las reglas de sesión. Las reglas ya guardadas de un mapa que sale de rotación no se pierden: dejan de listarse (el select une la rotación nueva con lo guardado)
 - **Sin datos pro no hay castigo** (`lib/proneta.ts` → `hasProneta()` + `lib/comp.ts`): el «fuera de meta» (−12, y −6 si es signature local) solo se aplica en mapas con snapshot de VCT. Bind y Corrode entran a la rotación sin filas en `PRONETA` (el snapshot es de VCT 2026 Americas Stage 2, que jugaba el pool viejo), así que todos los agentes cobraban la penalización y la «comp esperada» del mapa salía ~12 pts abajo solo por falta de datos

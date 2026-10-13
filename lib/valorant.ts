@@ -220,12 +220,19 @@ interface ContentDicts {
   agents: Record<string, ContentEntry>;
   maps: Record<string, ContentEntry>;
   weapons: Record<string, ContentEntry & { category: string | null }>;
+  /**
+   * Habilidades indexadas por el nombre con el que aparecen en el kill feed
+   * («Blade Storm», «Showstopper», «TURRET»…). Las kills de habilidad llegan
+   * como `weapon` con `type: "Ability"` y no están en /v1/weapons: sin este
+   * diccionario salían sin icono en el Arsenal.
+   */
+  abilities: Record<string, ContentEntry & { category: string | null }>;
 }
 
 let contentPromise: Promise<ContentDicts> | null = null;
 
 async function loadContent(): Promise<ContentDicts> {
-  const fallback: ContentDicts = { agents: {}, maps: {}, weapons: {} };
+  const fallback: ContentDicts = { agents: {}, maps: {}, weapons: {}, abilities: {} };
   try {
     const [agentsRes, mapsRes, weaponsRes] = await Promise.all([
       fetch('https://valorant-api.com/v1/agents?isPlayableCharacter=true', { signal: AbortSignal.timeout(15_000) }),
@@ -233,7 +240,7 @@ async function loadContent(): Promise<ContentDicts> {
       fetch('https://valorant-api.com/v1/weapons', { signal: AbortSignal.timeout(15_000) }),
     ]);
     const agents = agentsRes.ok
-      ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null; killfeedPortrait?: string | null; role?: { displayName?: string } | null }[] }
+      ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null; killfeedPortrait?: string | null; role?: { displayName?: string } | null; abilities?: { displayName?: string | null; displayIcon?: string | null; slot?: string | null }[] }[] }
       : null;
     const maps = mapsRes.ok
       ? (await mapsRes.json()) as { data?: { uuid?: string; displayName?: string; mapUrl?: string; displayIcon?: string | null }[] }
@@ -241,7 +248,7 @@ async function loadContent(): Promise<ContentDicts> {
     const weapons = weaponsRes.ok
       ? (await weaponsRes.json()) as { data?: { displayName?: string; displayIcon?: string | null; category?: string }[] }
       : null;
-    const dict: ContentDicts = { agents: {}, maps: {}, weapons: {} };
+    const dict: ContentDicts = { agents: {}, maps: {}, weapons: {}, abilities: {} };
     for (const a of agents?.data ?? []) {
       if (a.uuid && a.displayName) {
         dict.agents[a.uuid.toLowerCase()] = {
@@ -250,6 +257,21 @@ async function loadContent(): Promise<ContentDicts> {
           // usa a 18–40 px en todo el dash (matches, paneles, pickers, detalle).
           icon: a.killfeedPortrait ?? a.displayIcon ?? null,
           role: a.role?.displayName ?? null,
+        };
+      }
+      // Habilidades (incluida la ultimate): el kill feed las manda como «arma»
+      // con type "Ability" (Blade Storm, Showstopper, Paint Shells, TURRET…),
+      // así que se indexan por su displayName para darles icono y etiqueta.
+      // Sale de la misma respuesta que los agentes: no gasta request extra.
+      for (const ab of a.abilities ?? []) {
+        const name = ab.displayName?.trim();
+        if (!name) continue;
+        dict.abilities[name.toLowerCase()] = {
+          name,
+          icon: ab.displayIcon ?? null,
+          // Etiqueta corta: la columna del Arsenal corta a ~7 caracteres
+          // («SIDEARM» entra, «HABILIDAD» no).
+          category: ab.slot === 'Ultimate' ? 'Ulti' : 'Hab.',
         };
       }
     }
@@ -279,7 +301,17 @@ async function loadContent(): Promise<ContentDicts> {
 export function getContent(): Promise<ContentDicts> {
   // v4: iconos de agente ahora usan killfeedPortrait (~24 KB vs ~555 KB);
   // la clave nueva evita servir del cache los iconos pesados de v3.
-  if (!contentPromise) contentPromise = cached('val:content:v4', 24 * 60 * 60 * 1000, loadContent);
+  // v5: el diccionario suma `abilities` (iconos de las kills de habilidad:
+  // Blade Storm, Showstopper, TURRET…). El validador evita además servir un
+  // cache con la forma vieja (sin `abilities`) aunque la clave no cambiara.
+  if (!contentPromise) {
+    contentPromise = cached(
+      'val:content:v5',
+      24 * 60 * 60 * 1000,
+      loadContent,
+      (v) => !!v && typeof v.abilities === 'object',
+    );
+  }
   return contentPromise;
 }
 
@@ -733,11 +765,15 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
       .map((weapon) => {
         const kills = killsBy.get(weapon) ?? 0;
         const deaths = deathsBy.get(weapon) ?? 0;
-        const info = dicts.weapons?.[weapon.toLowerCase()];
+        const key = weapon.toLowerCase();
+        const gun = dicts.weapons?.[key];
+        // Segunda pasada por habilidades: si no es un arma del catálogo, puede
+        // ser una kill de habilidad/ultimate (Blade Storm, Showstopper, TURRET…).
+        const ability = gun ? undefined : dicts.abilities?.[key];
         return {
           weapon,
-          type: info?.category ?? null,
-          icon: info?.icon ?? null,
+          type: gun?.category ?? ability?.category ?? null,
+          icon: gun?.icon ?? ability?.icon ?? null,
           kills,
           deaths,
           kd: deaths ? kills / deaths : kills,

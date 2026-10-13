@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { esc } from '@/lib/metas';
 import type { ValArsenal } from '@/lib/types';
 
 const TOP_N = 5;
@@ -22,7 +21,8 @@ export function ArsenalPanel({ arsenal }: { arsenal?: ValArsenal }) {
         <>
           <p className="wr-hint">
             Uso = parte de tus kills totales hecha con esa arma. Las kills van en verde cuando tu K/D con esa arma
-            llega a 1.00 y en rojo cuando queda por debajo.
+            llega a 1.00 y en rojo cuando queda por debajo. Las habilidades cuentan aparte, con su propio icono
+            (la ultimate de Jett aparece como «Blade Storm · Ulti»).
           </p>
           <div className="wr-list">
             <div className="wr-head"><span>Arma</span><span>Uso</span><span>Kills · K/D</span></div>
@@ -34,8 +34,8 @@ export function ArsenalPanel({ arsenal }: { arsenal?: ValArsenal }) {
               >
                 <span className="wr-name">
                   {r.icon ? <img className="ars-icon" src={r.icon} alt="" loading="lazy" /> : null}
-                  {esc(r.weapon)}
-                  {r.type ? <small className="ars-type">{esc(r.type)}</small> : null}
+                  {r.weapon}
+                  {r.type ? <small className="ars-type">{r.type}</small> : null}
                 </span>
                 <div className="wr-track">
                   <div
