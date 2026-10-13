@@ -118,7 +118,8 @@ import json,sys
 d=json.load(sys.stdin)
 if d.get('error'): print('  error:', d['error']); raise SystemExit
 ag=d.get('agents') or []
-print('  %d agentes · nivel total %s · al máximo: %s' % (len(ag), d.get('totalLevel'), d.get('maxed')))
+print('  %d agentes · nivel total %s · en nivel %s+: %s (umbral propio, el nivel de Riot no tiene tope)'
+      % (len(ag), d.get('totalLevel'), 5, d.get('worked')))
 print('  top: ' + ', '.join('%s %s' % (a['agent'], a['level']) for a in ag[:4]))
 "
 
