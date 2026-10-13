@@ -3548,15 +3548,18 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
   border: 1px solid rgba(232, 201, 122, 0.25);
 }
 
-/* --- API v4.10: maestría de agentes (Ranked · Agentes) --- */
-.mastery-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.mastery-row { display: grid; grid-template-columns: 26px minmax(88px, 140px) 1fr 34px; align-items: center; gap: 10px; }
-.mastery-agent { font-size: 12.5px; font-weight: 600; color: var(--bone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mastery-track { height: 6px; border-radius: 999px; background: rgba(167, 183, 197, 0.14); overflow: hidden; }
-/* Hueco del icono cuando el agente no tiene retrato disponible: mantiene la rejilla. */
-.mastery-blank { width: 26px; height: 26px; display: block; }
-.mastery-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgba(255, 70, 85, 0.85), rgba(232, 201, 122, 0.85)); }
-.mastery-level { font-family: var(--font-data); font-size: 13px; font-weight: 800; color: var(--gold); text-align: right; font-variant-numeric: tabular-nums; }
+/* --- Maestría de agentes: columna de la tabla (pips 0–5 + nivel) ---
+   Antes era un panel aparte con barras de ancho completo para un rango de 1 a 5
+   (casi todo carril vacío) y duplicaba la lista de agentes de la tabla. */
+.mastery-cell { display: inline-flex; align-items: center; gap: 7px; }
+/* Pegada al nombre (grupo identidad), no alineada a la derecha como los números. */
+.mastery-td { width: 1%; white-space: nowrap; }
+.mastery-pips { display: inline-flex; gap: 3px; }
+.mastery-pip { width: 7px; height: 7px; border-radius: 999px; background: rgba(167, 183, 197, 0.2); }
+.mastery-pip.on { background: linear-gradient(180deg, #f2dcab, var(--gold)); }
+.mastery-lv { font-family: var(--font-data); font-size: 13px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+.mastery-none { color: var(--mute); }
+.mastery-sums b { color: var(--gold); font-family: var(--font-data); font-weight: 800; }
 
 /* --- API v4.10: desglose del RR por partida (bono, penalización, escudo) --- */
 .rr-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 5px; vertical-align: middle; }
@@ -3663,8 +3666,6 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
 }
 
 @media (max-width: 720px) {
-  .mastery-row { grid-template-columns: 24px 1fr 34px; }
-  .mastery-track { display: none; }
   .rank-grid, .premier-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

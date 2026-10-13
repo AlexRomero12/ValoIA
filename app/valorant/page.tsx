@@ -13,15 +13,15 @@ import { TierChart } from '@/components/TierChart';
 import { MatchesTable } from '@/components/MatchesTable';
 import { FormStrip } from '@/components/FormStrip';
 import { RankedTabs, isRankedTab, type RankedTab } from '@/components/ranked/RankedTabs';
-import { StatsTable, type TopAgent } from '@/components/ranked/StatsTable';
+import { StatsTable, type TopAgent, type MasterySummary } from '@/components/ranked/StatsTable';
 import { AperturasPanel } from '@/components/ranked/AperturasPanel';
 import { AportePanel } from '@/components/ranked/AportePanel';
 import { RankCard } from '@/components/ranked/RankCard';
-import { MasteryPanel } from '@/components/ranked/MasteryPanel';
 import { RecordsPanel } from '@/components/ranked/RecordsPanel';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useProfiles, useRecords, useMastery, useAgentIcons, agentIconLookup, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
+import { useProfiles, useRecords, useMastery, nextLimit, DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/hooks';
 import { mergeAccountSummaries, type WindowValue } from '@/lib/compare';
+import { masteryByAgent } from '@/lib/mastery';
 import { memberAccounts } from '@/lib/profileTypes';
 import { tierName } from '@/lib/ranks';
 import type { ValSummary } from '@/lib/types';
@@ -103,10 +103,6 @@ function RankedPage() {
   // piden cuando su pestaña está abierta, y el servidor los cachea 6-12 h.
   const recordsQ = useRecords(activeId, 0, Boolean(activeId) && tab === 'records');
   const masteryQ = useMastery(activeId, 0, Boolean(activeId) && tab === 'agentes');
-  // Maestría puede listar agentes que no se jugaron en esta ventana (su icono no
-  // está en `agentIcons`, que sale de las partidas): el catálogo los tiene todos.
-  const catalogQ = useAgentIcons();
-  const catalogIcons = useMemo(() => agentIconLookup(catalogQ.data), [catalogQ.data]);
 
   const refresh = async () => {
     if (isRefreshing || !activeId || accounts.length === 0) return;
@@ -184,7 +180,43 @@ function RankedPage() {
 
   const agentIcons = new Map<string, string | null>((data?.matches ?? []).map((m) => [m.agent, m.agentIcon ?? null]));
   const mapIcons = new Map<string, string | null>((data?.matches ?? []).map((m) => [m.map, m.mapIcon ?? null]));
-  const agentRows = (data?.byAgent ?? []).map((a) => ({ ...a, name: a.agent }));
+  // Maestría = cuánto jugaste cada agente (Riot), no cómo rendís: entra como
+  // columna de la tabla de agentes en vez de un panel aparte que duplicaba la
+  // lista. Los agentes sin nivel (o sin dato) quedan en 0.
+  const masteryMap = useMemo(() => masteryByAgent(masteryQ.data ?? null), [masteryQ.data]);
+  const agentRows = useMemo(
+    () =>
+      (data?.byAgent ?? []).map((a) => ({
+        ...a,
+        name: a.agent,
+        level: masteryMap.get(a.agent.toLowerCase())?.level ?? 0,
+      })),
+    [data, masteryMap],
+  );
+  // La columna se pinta siempre en esta pestaña (aunque la maestría todavía
+  // esté cargando) para que no aparezca de golpe: mientras no hay dato, las
+  // filas van en «—» y el resumen lo dice.
+  const masterySummary = useMemo<MasterySummary>(() => {
+    const played = data?.byAgent ?? [];
+    const m = masteryQ.data;
+    if (!m) {
+      return {
+        withLevel: 0,
+        total: 0,
+        maxed: 0,
+        noLevel: 0,
+        pending: masteryQ.isLoading,
+        error: (masteryQ.error as Error | null)?.message ?? null,
+      };
+    }
+    const withLevelPlayed = played.filter((a) => (masteryMap.get(a.agent.toLowerCase())?.level ?? 0) > 0).length;
+    return {
+      withLevel: m.agents.filter((a) => a.level > 0).length,
+      total: m.totalLevel,
+      maxed: m.maxed,
+      noLevel: played.length - withLevelPlayed,
+    };
+  }, [masteryQ.data, masteryQ.isLoading, masteryQ.error, masteryMap, data]);
   const mapRows = (data?.byMap ?? []).map((m) => ({ ...m, name: m.map }));
 
   // Agente con más victorias por mapa (desempate: más partidas y luego nombre).
@@ -415,26 +447,19 @@ function RankedPage() {
           )}
 
           {tab === 'agentes' && (
-            <>
-              <MasteryPanel
-                mastery={masteryQ.data ?? null}
-                icons={catalogIcons}
-                loading={masteryQ.isLoading}
-                error={(masteryQ.error as Error | null)?.message ?? null}
-              />
-              <StatsTable
-                title="Estadísticas · Agentes"
-                firstCol="Agente"
-                noun="agente"
-                rows={agentRows}
-                icons={agentIcons}
-                kind="agent-icon"
-                active={fAgents}
-                onPick={(name) => toggleFilter('agent', name)}
-                filteredCount={filteredMatches.length}
-                onViewHistory={goHistory}
-              />
-            </>
+            <StatsTable
+              title="Estadísticas · Agentes"
+              firstCol="Agente"
+              noun="agente"
+              rows={agentRows}
+              icons={agentIcons}
+              kind="agent-icon"
+              active={fAgents}
+              onPick={(name) => toggleFilter('agent', name)}
+              mastery={masterySummary}
+              filteredCount={filteredMatches.length}
+              onViewHistory={goHistory}
+            />
           )}
 
           {tab === 'mapas' && (

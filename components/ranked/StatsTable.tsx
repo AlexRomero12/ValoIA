@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { InfoTip } from '@/components/InfoTip';
 import { esc, wrColor } from '@/lib/metas';
 
 export interface StatsRow {
@@ -13,6 +14,24 @@ export interface StatsRow {
   acs: number;
   adr: number;
   hsPct: number;
+  /** Nivel de maestría que guarda Riot (0–5). Solo lo llena la vista de agentes. */
+  level?: number | null;
+}
+
+/** Cifras del champ pool que acompañan a la columna Maestría. */
+export interface MasterySummary {
+  /** Agentes con nivel ≥ 1 (lo que Riot considera trabajado, no la ventana). */
+  withLevel: number;
+  /** Suma de niveles de todos los agentes. */
+  total: number;
+  /** Agentes al tope (nivel 5). */
+  maxed: number;
+  /** Agentes jugados en la ventana que siguen en nivel 0. */
+  noLevel: number;
+  /** El endpoint todavía no respondió (la columna va en «—»). */
+  pending?: boolean;
+  /** El endpoint falló: se dice en la ayuda en vez de mentir con ceros. */
+  error?: string | null;
 }
 
 export interface TopAgent {
@@ -21,7 +40,7 @@ export interface TopAgent {
   wins: number;
 }
 
-type SortKey = 'matches' | 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct';
+type SortKey = 'matches' | 'wr' | 'kd' | 'acs' | 'adr' | 'hsPct' | 'level';
 
 const COLS: { key: SortKey; label: string }[] = [
   { key: 'matches', label: 'PJ' },
@@ -31,6 +50,40 @@ const COLS: { key: SortKey; label: string }[] = [
   { key: 'adr', label: 'ADR' },
   { key: 'hsPct', label: 'HS%' },
 ];
+
+/** Tope de maestría por agente (Riot publica un nivel de 0 a 5). */
+const MASTERY_MAX = 5;
+
+/**
+ * Nivel de maestría como conteo (pips), no como barra de porcentaje: el rango
+ * real es 0–5 y una barra de ancho completo para un "1" era casi todo carril
+ * vacío. Sin nivel se pinta un guion: cinco círculos huecos serían ruido.
+ */
+function MasteryCell({ level }: { level: number }) {
+  if (!level) return <span className="mastery-none">—</span>;
+  return (
+    <span className="mastery-cell" title={`Maestría ${level} de ${MASTERY_MAX}`}>
+      <span className="mastery-pips" aria-hidden>
+        {Array.from({ length: MASTERY_MAX }, (_, i) => (
+          <i key={i} className={`mastery-pip${i < level ? ' on' : ''}`} />
+        ))}
+      </span>
+      <span className="mastery-lv">{level}</span>
+    </span>
+  );
+}
+
+/** Resumen del champ pool en la línea de ayuda (cargando / error / cifras). */
+function MasteryNote({ m }: { m: MasterySummary }) {
+  if (m.error) return <> Maestría no disponible: {m.error}.</>;
+  if (m.pending) return <> Maestría: cargando…</>;
+  return (
+    <>
+      {' '}Maestría: <b>{m.withLevel}</b> con nivel · <b>{m.total}</b> niveles · <b>{m.maxed}</b> al máximo
+      {m.noLevel > 0 ? <> · <b>{m.noLevel}</b> jugados sin maestría</> : null}.
+    </>
+  );
+}
 
 interface StatsTableProps {
   title: string;
@@ -46,6 +99,11 @@ interface StatsTableProps {
   onPick: (name: string) => void;
   /** Solo vista de mapas: agente con más victorias en cada mapa. */
   topAgents?: Map<string, TopAgent>;
+  /**
+   * Solo vista de agentes: activa la columna Maestría (pips 0–5 + nivel) y
+   * resume el champ pool en la línea de ayuda.
+   */
+  mastery?: MasterySummary | null;
   /** Cuántas partidas quedan con la selección actual (para el botón de ver). */
   filteredCount: number;
   /** Vuelve al historial del Resumen con la selección aplicada. */
@@ -53,18 +111,17 @@ interface StatsTableProps {
 }
 
 /** Tabla completa y ordenable de Agentes/Mapas; click en fila alterna el filtro. */
-export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, onPick, topAgents, filteredCount, onViewHistory }: StatsTableProps) {
+export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, onPick, topAgents, mastery, filteredCount, onViewHistory }: StatsTableProps) {
   const [sort, setSort] = useState<SortKey>('matches');
   const [asc, setAsc] = useState(false);
 
-  const sorted = useMemo(
-    () =>
-      [...rows].sort((a, b) => {
-        const dir = asc ? 1 : -1;
-        return (a[sort] - b[sort]) * dir || b.matches - a.matches;
-      }),
-    [rows, sort, asc],
-  );
+  const sorted = useMemo(() => {
+    const val = (r: StatsRow, k: SortKey): number => (k === 'level' ? r.level ?? 0 : r[k]);
+    return [...rows].sort((a, b) => {
+      const dir = asc ? 1 : -1;
+      return (val(a, sort) - val(b, sort)) * dir || b.matches - a.matches;
+    });
+  }, [rows, sort, asc]);
 
   const toggle = (key: SortKey) => {
     if (key === sort) setAsc((v) => !v);
@@ -79,6 +136,11 @@ export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, o
       <h2>{title}</h2>
       <p className="wr-hint">
         Ordena por cualquier columna; toca filas para añadirlas o quitarlas del filtro del historial.
+        {mastery ? (
+          <span className="mastery-sums">
+            <MasteryNote m={mastery} />
+          </span>
+        ) : null}
       </p>
       {!rows.length ? (
         <p className="empty">Juega competitivas en esta ventana para ver datos aquí.</p>
@@ -88,6 +150,16 @@ export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, o
             <thead>
               <tr>
                 <th>{firstCol}</th>
+                {mastery ? (
+                  <th
+                    className={`sortable${sort === 'level' ? ' on' : ''}`}
+                    onClick={() => toggle('level')}
+                    title="Ordenar por nivel de maestría"
+                  >
+                    Maestría{sort === 'level' ? (asc ? ' ▲' : ' ▼') : ''}
+                    <InfoTip text="Nivel de maestría que Riot guarda por agente (0 a 5): mide cuánto has jugado cada agente, no lo bien que lo juegas. Cada punto es un nivel; — es que Riot todavía no le dio nivel." />
+                  </th>
+                ) : null}
                 {topAgents ? <th className="num">Agente top</th> : null}
                 <th className="num">Récord</th>
                 {COLS.map((c) => (
@@ -121,6 +193,11 @@ export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, o
                         {esc(r.name)}
                       </span>
                     </td>
+                    {mastery ? (
+                      <td className="mastery-td">
+                        <MasteryCell level={r.level ?? 0} />
+                      </td>
+                    ) : null}
                     {topAgents ? (
                       <td className="num">
                         {top ? (

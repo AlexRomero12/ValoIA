@@ -50,7 +50,14 @@ export function InfoTip({ text, label = 'Más información' }: { text: string; l
         className="infotip-btn"
         aria-label={label}
         aria-expanded={pos != null}
-        onClick={() => (pos ? close() : open())}
+        onClick={(e) => {
+          // El tip puede vivir dentro de una celda/fila clicable (p. ej. el
+          // encabezado ordenable de Maestría): abrir la ayuda no debe disparar
+          // la acción de detrás.
+          e.stopPropagation();
+          if (pos) close();
+          else open();
+        }}
       >
         ?
       </button>
