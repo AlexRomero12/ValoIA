@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAXED_LEVEL, masteryByAgent, masteryFrom, topMastery } from './mastery';
+import { WORKED_LEVEL, masteryByAgent, masteryFrom, topMastery } from './mastery';
 import type { HenrikAgentMastery } from './henrik';
 
 /** Respuesta real de /valorant/v1/agent-mastery recortada. */
@@ -26,9 +26,9 @@ describe('masteryFrom', () => {
     expect(m?.totalLevel).toBe(12);
   });
 
-  it('cuenta los agentes trabajados', () => {
-    expect(masteryFrom(MASTERY)?.maxed).toBe(1);
-    expect(MAXED_LEVEL).toBe(5);
+  it('cuenta los agentes por encima del umbral propio (no es el tope del juego)', () => {
+    expect(masteryFrom(MASTERY)?.worked).toBe(1);
+    expect(WORKED_LEVEL).toBe(5);
   });
 
   it('un agente sin nivel no aporta al total', () => {

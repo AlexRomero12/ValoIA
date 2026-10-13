@@ -203,7 +203,6 @@ function RankedPage() {
       return {
         withLevel: 0,
         total: 0,
-        maxed: 0,
         noLevel: 0,
         pending: masteryQ.isLoading,
         error: (masteryQ.error as Error | null)?.message ?? null,
@@ -213,7 +212,6 @@ function RankedPage() {
     return {
       withLevel: m.agents.filter((a) => a.level > 0).length,
       total: m.totalLevel,
-      maxed: m.maxed,
       noLevel: played.length - withLevelPlayed,
     };
   }, [masteryQ.data, masteryQ.isLoading, masteryQ.error, masteryMap, data]);

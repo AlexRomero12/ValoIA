@@ -306,8 +306,11 @@ export interface ValMastery {
   agents: ValMasteryAgent[];
   /** Suma de niveles (amplitud del champ pool). */
   totalLevel: number;
-  /** Agentes a nivel máximo (>= 5 tracks o nivel alto). */
-  maxed: number;
+  /**
+   * Agentes por encima del umbral propio de "trabajado" (`WORKED_LEVEL`).
+   * No es el tope del juego: el nivel de Riot sigue subiendo con el uso.
+   */
+  worked: number;
 }
 
 /** Una temporada de Premier del equipo. */

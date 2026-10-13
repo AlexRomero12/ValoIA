@@ -3548,16 +3548,12 @@ details[open] > summary > .day-chevron { transform: rotate(90deg); }
   border: 1px solid rgba(232, 201, 122, 0.25);
 }
 
-/* --- Maestría de agentes: columna de la tabla (pips 0–5 + nivel) ---
-   Antes era un panel aparte con barras de ancho completo para un rango de 1 a 5
-   (casi todo carril vacío) y duplicaba la lista de agentes de la tabla. */
-.mastery-cell { display: inline-flex; align-items: center; gap: 7px; }
-/* Pegada al nombre (grupo identidad), no alineada a la derecha como los números. */
+/* --- Maestría de agentes: columna de la tabla (número suelto) ---
+   Antes era un panel aparte con barras de ancho completo; el nivel de Riot no
+   tiene tope, así que va como número (sin pips ni barra: cualquier denominador
+   fijo mentiría sobre la escala). */
 .mastery-td { width: 1%; white-space: nowrap; }
-.mastery-pips { display: inline-flex; gap: 3px; }
-.mastery-pip { width: 7px; height: 7px; border-radius: 999px; background: rgba(167, 183, 197, 0.2); }
-.mastery-pip.on { background: linear-gradient(180deg, #f2dcab, var(--gold)); }
-.mastery-lv { font-family: var(--font-data); font-size: 13px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+.mastery-lv { font-family: var(--font-data); font-size: 14px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
 .mastery-none { color: var(--mute); }
 .mastery-sums b { color: var(--gold); font-family: var(--font-data); font-weight: 800; }
 

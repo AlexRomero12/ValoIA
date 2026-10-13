@@ -4,10 +4,12 @@ import type { ValMastery, ValMasteryAgent } from './types';
 /**
  * Maestría de agentes (endpoint /valorant/v1/agent-mastery, v4.10).
  *
- * Riot devuelve un `tracks[]` por agente (las pistas de recompensas) y el
- * nivel de maestría es el del primer track; `flourish` son los niveles de la
- * vitrina. Los `modules` (módulos de stats por agente) solo llegan en algunos
- * casos: si no están, se omiten en vez de inventar métricas.
+ * Riot devuelve un `tracks[]` por agente (las pistas de recompensas) y el nivel
+ * de maestría es el del primer track; `flourish` son los niveles de la vitrina.
+ * Ese nivel **no tiene tope**: sube con el uso del agente (el dash lo muestra
+ * como número suelto, sin barra ni pips). Los `modules` (módulos de stats por
+ * agente) solo llegan en algunos casos: si no están, se omiten en vez de
+ * inventar métricas.
  *
  * Módulo puro: sin red ni disco.
  */
@@ -41,8 +43,13 @@ function agentView(a: HenrikAgentMasteryEntry): ValMasteryAgent | null {
   };
 }
 
-/** Nivel a partir del cual consideramos el agente "trabajado" (5 tracks). */
-export const MAXED_LEVEL = 5;
+/**
+ * Umbral **propio** (no del juego) para contar "agentes trabajados" en el
+ * resumen del champ pool. Ojo: NO es el tope de maestría — Riot publica un
+ * nivel que sigue subiendo con el uso (visto un 6 en la cuenta de Alex), así
+ * que el dash muestra el número suelto y este umbral solo se usa para contar.
+ */
+export const WORKED_LEVEL = 5;
 
 export function masteryFrom(m: HenrikAgentMastery | null | undefined): ValMastery | null {
   if (!m || typeof m !== 'object') return null;
@@ -54,7 +61,7 @@ export function masteryFrom(m: HenrikAgentMastery | null | undefined): ValMaster
   return {
     agents,
     totalLevel: agents.reduce((sum, a) => sum + a.level, 0),
-    maxed: agents.filter((a) => a.level >= MAXED_LEVEL).length,
+    worked: agents.filter((a) => a.level >= WORKED_LEVEL).length,
   };
 }
 

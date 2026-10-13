@@ -24,8 +24,6 @@ export interface MasterySummary {
   withLevel: number;
   /** Suma de niveles de todos los agentes. */
   total: number;
-  /** Agentes al tope (nivel 5). */
-  maxed: number;
   /** Agentes jugados en la ventana que siguen en nivel 0. */
   noLevel: number;
   /** El endpoint todavía no respondió (la columna va en «—»). */
@@ -51,26 +49,15 @@ const COLS: { key: SortKey; label: string }[] = [
   { key: 'hsPct', label: 'HS%' },
 ];
 
-/** Tope de maestría por agente (Riot publica un nivel de 0 a 5). */
-const MASTERY_MAX = 5;
-
 /**
- * Nivel de maestría como conteo (pips), no como barra de porcentaje: el rango
- * real es 0–5 y una barra de ancho completo para un "1" era casi todo carril
- * vacío. Sin nivel se pinta un guion: cinco círculos huecos serían ruido.
+ * Nivel de maestría de Riot, como número suelto. Sin pips ni barra: el nivel
+ * **no tiene tope** (Riot lo sigue subiendo con el uso; comprobado con un 6),
+ * así que cualquier denominador fijo mentiría sobre la escala. Sin nivel se
+ * pinta un guion.
  */
 function MasteryCell({ level }: { level: number }) {
   if (!level) return <span className="mastery-none">—</span>;
-  return (
-    <span className="mastery-cell" title={`Maestría ${level} de ${MASTERY_MAX}`}>
-      <span className="mastery-pips" aria-hidden>
-        {Array.from({ length: MASTERY_MAX }, (_, i) => (
-          <i key={i} className={`mastery-pip${i < level ? ' on' : ''}`} />
-        ))}
-      </span>
-      <span className="mastery-lv">{level}</span>
-    </span>
-  );
+  return <span className="mastery-lv">{level}</span>;
 }
 
 /** Resumen del champ pool en la línea de ayuda (cargando / error / cifras). */
@@ -79,7 +66,7 @@ function MasteryNote({ m }: { m: MasterySummary }) {
   if (m.pending) return <> Maestría: cargando…</>;
   return (
     <>
-      {' '}Maestría: <b>{m.withLevel}</b> con nivel · <b>{m.total}</b> niveles · <b>{m.maxed}</b> al máximo
+      {' '}Maestría: <b>{m.withLevel}</b> con nivel · <b>{m.total}</b> niveles
       {m.noLevel > 0 ? <> · <b>{m.noLevel}</b> jugados sin maestría</> : null}.
     </>
   );
@@ -157,7 +144,7 @@ export function StatsTable({ title, firstCol, noun, rows, icons, kind, active, o
                     title="Ordenar por nivel de maestría"
                   >
                     Maestría{sort === 'level' ? (asc ? ' ▲' : ' ▼') : ''}
-                    <InfoTip text="Nivel de maestría que Riot guarda por agente (0 a 5): mide cuánto has jugado cada agente, no lo bien que lo juegas. Cada punto es un nivel; — es que Riot todavía no le dio nivel." />
+                    <InfoTip text="Nivel de maestría que Riot guarda por agente: sube con las horas que juegas cada agente, no mide lo bien que lo juegas. No tiene tope publicado, así que va como número suelto; — es que Riot todavía no le dio nivel." />
                   </th>
                 ) : null}
                 {topAgents ? <th className="num">Agente top</th> : null}
