@@ -2,6 +2,20 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.29.0] — 2026-10-13
+
+Arranca **V26 Act 6** (parche 13.08): **Bind y Corrode** entran a la rotación competitiva y salen **Ascent y Split**. El dash se ajusta al acto nuevo y deja de castigar por «fuera de meta» a los mapas que todavía no tienen snapshot pro.
+
+### Changed
+- **Rotación de mapas V26A6** (`lib/proneta.ts` → `ROTATION_MAPS`): `Abyss, Bind, Corrode, Haven, Lotus, Summit, Sunset`. Alimenta las tarjetas de **Composiciones**, el selector de **Pool por mapa** de Perfiles/Reglas y la lista de mapas de las reglas de sesión. Las reglas ya guardadas de un mapa que sale de rotación no se pierden: dejan de listarse (el select une la rotación nueva con lo guardado)
+- **Sin datos pro no hay castigo** (`lib/proneta.ts` → `hasProneta()` + `lib/comp.ts`): el «fuera de meta» (−12, y −6 si es signature local) solo se aplica en mapas con snapshot de VCT. Bind y Corrode entran a la rotación sin filas en `PRONETA` (el snapshot es de VCT 2026 Americas Stage 2, que jugaba el pool viejo), así que todos los agentes cobraban la penalización y la «comp esperada» del mapa salía ~12 pts abajo solo por falta de datos
+- **Chip de rango el día 1 del acto** (`lib/valorant.ts`): con la temporada recién empezada el mmr-history filtrado por acto está vacío y el chip del TopBar caía a tier 0 («Unrated», sin RR). Ahora cae al MMR v3 en vivo (tier/RR/elo) cuando no hay partidas ni MMR de la temporada
+
+### Notes
+- Verificado en el Docker local (`valo-dash`, 4321): `tsc --noEmit` y `eslint` OK; con ventana de 1 año Composiciones muestra **7 tarjetas** (Sunset, Haven, Summit, Abyss, Lotus, Corrode, Bind) y ya no Ascent/Split; el editor de pool lista los 7 mapas de la rotación nueva
+- El perfil local quedó con filas propias para Bind y Corrode (**P:** Chamber · **B:** Raze, Sage), apoyadas en el archivo acumulado (Chamber 5-0 entre los dos mapas; muestras de 2 y 3 partidas de oct–nov 2025 → provisional, y el rework de Corrode del 13.08 invalida parte de ese dato). El overlay ya las sirve (`GET /api/overlay/rules`)
+- `PRONETA` sigue siendo el snapshot de VCT 2026 Americas Stage 2: hasta que haya un stage que juegue Bind/Corrode, esos dos mapas no llevan pill de meta
+
 ## [1.28.0] — 2026-10-07
 
 Aprovecha la API v4.10 de Henrik: first blood **oficial** por ronda (auditoría del motor de aperturas), desglose del cambio de RR, rango con escudos/pico/prestigio, récords de Riot con push, maestría por agente y Premier real del equipo.

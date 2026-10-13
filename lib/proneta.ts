@@ -5,15 +5,18 @@ interface ProMetaAgent {
 }
 
 /**
+ * Mapas en rotación de ranked del acto actual — solo se muestran estos.
+ * V26 Act 6 (parche 13.08, 13 oct 2026): entran Bind y Corrode, salen Ascent y Split.
+ */
+export const ROTATION_MAPS: string[] = ['Abyss', 'Bind', 'Corrode', 'Haven', 'Lotus', 'Summit', 'Sunset'];
+
+/**
  * Meta pro por mapa — pick rate de agentes en VCT 2026 Americas Stage 2
  * (fuente: https://www.vlr.gg/event/agents/2977/vct-2026-americas-stage-2, snapshot 28 ago 2026).
  *
  * Sirve para que las composiciones tengan sentido: un agente con +20% de pick
  * en pro es viable en el mapa; sin uso pro, el motor lo penaliza.
  */
-/** Mapas en rotación de ranked del acto actual — solo se muestran estos. */
-export const ROTATION_MAPS: string[] = ['Abyss', 'Ascent', 'Haven', 'Lotus', 'Split', 'Summit', 'Sunset'];
-
 export const PRONETA: Record<string, ProMetaAgent[]> = {
   Sunset: [
     { agent: 'Omen', pick: 100 }, { agent: 'Neon', pick: 89 }, { agent: 'Cypher', pick: 57 },
@@ -67,6 +70,15 @@ export const PRONETA: Record<string, ProMetaAgent[]> = {
 
 function pronetaFor(map: string): ProMetaAgent[] {
   return PRONETA[map] ?? [];
+}
+
+/**
+ * true si hay snapshot pro del mapa. Un mapa recién entrado a la rotación
+ * (p. ej. Bind y Corrode en V26A6) puede no tenerlo: sin datos no hay señal de
+ * meta, así que el motor no debe penalizar a nadie por "fuera de meta".
+ */
+export function hasProneta(map: string): boolean {
+  return pronetaFor(map).length > 0;
 }
 
 export function metaPickOf(map: string, agent: string): number {

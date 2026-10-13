@@ -813,10 +813,14 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
     },
     kpis: { ...toStatBlock(stats), losses: stats.losses, fb: stats.fb, fd: stats.fd },
     prev: prevStats ? { ...toStatBlock(prevStats), losses: prevStats.losses, fb: prevStats.fb, fd: prevStats.fd } : null,
-    currentTier: latestMmr?.tier?.id ?? lastMatch?.tier ?? 0,
+    // Acto recién empezado: hasta la primera ranked de la temporada, el
+    // mmr-history filtrado por temporada está vacío y la ventana también, así que
+    // el chip del TopBar caía a tier 0 ("Unrated") sin RR. El MMR v3 es en vivo y
+    // no se filtra por temporada: es lo único que sabe el rango real en ese hueco.
+    currentTier: latestMmr?.tier?.id ?? lastMatch?.tier ?? rank?.tier?.id ?? 0,
     startTier: firstMatch?.tier ?? 0,
-    currentElo: latestMmr?.elo ?? lastMatch?.elo ?? null,
-    currentRR: latestMmr?.rr ?? lastMatch?.rr ?? null,
+    currentElo: latestMmr?.elo ?? lastMatch?.elo ?? rank?.elo ?? null,
+    currentRR: latestMmr?.rr ?? lastMatch?.rr ?? rank?.rr ?? null,
     byAgent: [...groupMatches(summaries, (m) => m.agent)]
       .map(([agent, list]) => ({ agent, ...toStatBlock(computeStats(list)) }))
       .sort((a, b) => b.matches - a.matches),

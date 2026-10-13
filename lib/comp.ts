@@ -1,6 +1,6 @@
 import type { MatchRow } from './types';
 import { agentRole, ROLES } from './roles';
-import { metaPickOf, ROTATION_MAPS } from './proneta';
+import { hasProneta, metaPickOf, ROTATION_MAPS } from './proneta';
 import { isDraw } from './stats';
 
 /**
@@ -219,7 +219,10 @@ function makePick(player: PlayerModel, agent: string, map: string, roles: Map<st
   // (≥5p y ≥55% en el mapa) — es un "signature" viable aunque pro no lo juegue.
   const localSignature =
     mapAcc != null && mapAcc.games >= 5 && mapAcc.wGames > 0 && (mapAcc.wWins / mapAcc.wGames) >= 0.55;
-  const offMeta = metaPick < META_MIN ? (localSignature ? -6 : -12) : 0;
+  // Mapa sin snapshot pro (Bind y Corrode entran a la rotación de V26A6 antes de
+  // que exista uno): sin señal de meta no se penaliza a nadie — si no, la "comp
+  // esperada" del mapa saldría ~12 pts abajo solo por falta de datos.
+  const offMeta = hasProneta(map) && metaPick < META_MIN ? (localSignature ? -6 : -12) : 0;
   // Agente sin ninguna partida (ni en mapa ni global): solo sujeto de relleno.
   const fillerPenalty = source === 'player' ? -5 : 0;
   // Propiedad: quien más juega el agente del equipo lo conserva (ej. mejor Sova).
