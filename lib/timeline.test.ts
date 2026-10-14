@@ -90,7 +90,12 @@ describe('resolveWeapon · de dónde sale el arma de cada kill', () => {
       ['classic', 'classic.png'],
       ['melee', 'melee.png'],
     ]),
-    abilities: new Map<string, string | null>([['blade storm', 'blade.png']]),
+    abilities: new Map<string, string | null>([
+      ['blade storm', 'blade.png'],
+      ['headhunter', 'headhunter.png'],
+      ['tour de force', 'tdf.png'],
+      ['overdrive', 'overdrive.png'],
+    ]),
   };
 
   it('usa el arma del feed cuando viene', () => {
@@ -123,25 +128,86 @@ describe('resolveWeapon · de dónde sale el arma de cada kill', () => {
     });
   });
 
-  it('sin nombre en el feed, cae al arma que compró esa ronda (marcada como deducida)', () => {
-    // Es el caso de la ráfaga del Classic: Riot la manda con id propio y sin
-    // nombre. Son 1.281 kills del archivo que salían mudas.
+  // Riot manda las armas de habilidad como `type: "Weapon"` y sin nombre. Antes
+  // se caía al arma comprada y salía un «≈Classic» que no era: la kill la hizo
+  // la habilidad.
+  it('la Headhunter de Chamber se resuelve por su id, no por el arma comprada', () => {
     const w = resolveWeapon(
       { weapon: { id: '856d9a7e-4b06-dc37-15dc-9d809c37cb90', type: 'Weapon' }, secondary_fire_mode: true },
       dicts,
       'Classic',
+      'Chamber',
     );
     expect(w).toEqual({
-      name: 'Classic',
-      icon: 'classic.png',
-      kind: 'weapon',
+      name: 'Headhunter',
+      icon: 'headhunter.png',
+      kind: 'ability',
+      secondary: true,
+    });
+  });
+
+  it('la Tour De Force se resuelve por su id', () => {
+    const w = resolveWeapon(
+      { weapon: { id: '39099fb5-4293-def4-1e09-2e9080ce7456', type: 'Weapon' } },
+      dicts,
+      'Operator',
+      'Chamber',
+    );
+    expect(w).toMatchObject({ name: 'Tour De Force', icon: 'tdf.png', kind: 'ability' });
+  });
+
+  it('sin id, el agente delata el arma de habilidad (marcada como deducida)', () => {
+    // 775 kills del archivo sin id son el 100% de Chamber y ninguna cae en
+    // ronda de pistola: es su definitiva, no la Headhunter.
+    const w = resolveWeapon(
+      { weapon: { type: 'Weapon' }, secondary_fire_mode: true },
+      dicts,
+      'Classic',
+      'Chamber',
+    );
+    expect(w).toEqual({
+      name: 'Tour De Force',
+      icon: 'tdf.png',
+      kind: 'ability',
       secondary: true,
       inferred: true,
     });
   });
 
+  it('la Overdrive de Neon se resuelve por su id', () => {
+    const w = resolveWeapon(
+      { weapon: { id: '95336ae4-45d4-1032-cfaf-6bad01910607', type: 'Weapon' } },
+      dicts,
+      'Vandal',
+      'Neon',
+    );
+    expect(w).toMatchObject({ name: 'Overdrive', icon: 'overdrive.png', kind: 'ability' });
+  });
+
+  it('una habilidad sin nombre no se atribuye al arma comprada', () => {
+    // El id genérico `grenadeability`: la mató una habilidad, no la Vandal.
+    const w = resolveWeapon({ weapon: { id: 'grenadeability', type: 'Ability' } }, dicts, 'Vandal', 'Killjoy');
+    expect(w).toEqual({ name: 'Habilidad', icon: null, kind: 'ability', secondary: false });
+  });
+
+  it('un arma normal sin nombre sí cae a lo que compró esa ronda', () => {
+    const w = resolveWeapon(
+      { weapon: { id: 'id-desconocido', type: 'Weapon' } },
+      dicts,
+      'Vandal',
+      'Sova',
+    );
+    expect(w).toEqual({
+      name: 'Vandal',
+      icon: 'vandal.png',
+      kind: 'weapon',
+      secondary: false,
+      inferred: true,
+    });
+  });
+
   it('sin nombre y sin economía no inventa un arma', () => {
-    expect(resolveWeapon({ weapon: { type: 'Weapon' } }, dicts, null)).toEqual({
+    expect(resolveWeapon({ weapon: { type: 'Weapon' } }, dicts, null, 'Sova')).toEqual({
       name: '—',
       icon: null,
       kind: 'weapon',

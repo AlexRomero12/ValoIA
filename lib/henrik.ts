@@ -300,7 +300,7 @@ export interface HenrikKill {
   time_in_match_in_ms?: number;
   /** Dónde cae la víctima (v4). */
   location?: HenrikVec2 | null;
-  /** Disparo secundario (p. ej. la ráfaga del Classic), v4. */
+  /** Disparo secundario (la ráfaga del Classic o el modo alternativo de un arma de habilidad), v4. */
   secondary_fire_mode?: boolean | null;
   /** Los jugadores VIVOS en ese instante, con su ángulo de visión (v4). */
   player_locations?: HenrikPlayerLocation[] | null;

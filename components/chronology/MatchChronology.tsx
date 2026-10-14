@@ -167,6 +167,18 @@ export function MatchChronology({ matchId, playerId }: MatchChronologyProps) {
               ? momentLabel(moment, data.players)
               : 'Esta ronda no tiene eventos con posición.'}
           </p>
+
+          {data.map.calibration ? (
+            <ul className="chrono-legend">
+              <li><i className="lg-ring mine" /> tu equipo</li>
+              <li><i className="lg-ring rival" /> rival</li>
+              <li><i className="lg-ring me" /> tú</li>
+              <li><i className="lg-cone" /> a dónde miraban</li>
+              <li><i className="lg-kill">✕</i> la kill</li>
+              <li><i className="lg-plant">◉</i> planta</li>
+              <li><i className="lg-defuse">✂</i> defuse</li>
+            </ul>
+          ) : null}
         </div>
 
         <div className="chrono-right">
@@ -237,8 +249,8 @@ function KillRow({ kill, players, myTeam }: { kill: TimelineKill; players: Timel
         <AgentIcon name={k?.agent ?? '?'} icon={k?.agentIcon} className="agent-icon sm" />
         <span className={`cr-name${mine ? ' mine' : ''}`}>{k?.name ?? '?'}</span>
       </span>
-      <span className={`cr-weapon${kill.w.inferred ? ' inferred' : ''}`}
-        title={`${kill.w.name}${kill.w.secondary ? ' (disparo secundario)' : ''}${kill.w.inferred ? ' — deducido de su compra en la ronda' : ''}`}>
+      <span className={`cr-weapon${kill.w.inferred ? ' inferred' : ''}${kill.w.kind === 'ability' ? ' ability' : ''}`}
+        title={`${kill.w.name}${kill.w.kind === 'ability' ? ' (habilidad)' : ''}${kill.w.secondary ? ' (disparo secundario)' : ''}${kill.w.inferred ? ' — deducido de su agente en la ronda' : ''}`}>
         {kill.w.icon ? <img src={kill.w.icon} alt="" loading="lazy" /> : null}
         <span className="cr-wname">{kill.w.inferred ? '≈' : ''}{kill.w.name}</span>
       </span>

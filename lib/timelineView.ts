@@ -17,7 +17,7 @@ export interface TimelineWeapon {
   name: string;
   icon: string | null;
   kind: WeaponKind;
-  /** Disparo secundario (p. ej. la ráfaga del Classic). */
+  /** Disparo secundario (la ráfaga del Classic o el modo alternativo de un arma de habilidad). */
   secondary: boolean;
   /**
    * El feed no traía el arma y se dedujo de lo que el asesino compró esa ronda.

@@ -893,7 +893,7 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .chrono-round:hover { border-color: var(--line-strong); }
 .chrono-round.on { border-color: var(--bone); }
 
-.chrono-body { display: grid; grid-template-columns: minmax(280px, 400px) minmax(260px, 1fr); gap: 16px; }
+.chrono-body { display: grid; grid-template-columns: minmax(300px, 460px) minmax(260px, 1fr); gap: 16px; }
 @media (max-width: 820px) { .chrono-body { grid-template-columns: 1fr; } }
 
 .chrono-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -913,10 +913,42 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 
 .chrono-map { display: block; width: 100%; height: auto; border: 1px solid var(--line); background: var(--ink); }
 .chrono-map-bg { fill: #0b1119; }
-.chrono-dot-ghost { fill: rgba(236, 232, 225, 0.22); }
-.chrono-cone { opacity: 0.32; }
+.chrono-dot-ghost { fill: rgba(236, 232, 225, 0.26); }
+.chrono-cone { opacity: 0.38; }
 .chrono-pin { stroke: rgba(10, 15, 22, 0.85); stroke-width: 3; }
-.chrono-map-label { font-family: var(--font-data); font-size: 26px; }
+.chrono-map-label { font-family: var(--font-data); font-size: 30px; font-weight: 700; }
+/* Halo oscuro bajo cada retrato: los separa cuando el equipo va apiñado. */
+.chrono-halo { fill: rgba(8, 12, 18, 0.9); }
+/* La víctima del momento que se está viendo: retrato apagado donde cayó. */
+.chrono-dead { opacity: 0.5; filter: grayscale(1) brightness(0.7); }
+.chrono-dead-x { opacity: 0.9; }
+
+.chrono-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 10.5px;
+  color: var(--mute);
+}
+.chrono-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.chrono-legend i { font-style: normal; line-height: 1; }
+.lg-ring { width: 11px; height: 11px; border-radius: 50%; border: 2px solid; }
+.lg-ring.mine { border-color: #35b6ff; }
+.lg-ring.rival { border-color: #ff4655; }
+.lg-ring.me { border-color: #e8c97a; }
+.lg-cone {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--faint);
+}
+.lg-kill { color: #e8c97a; font-weight: 700; }
+.lg-plant { color: #ff5cf0; }
+.lg-defuse { color: #5cf0ff; }
 
 .chrono-scrub { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .chrono-play {
@@ -970,6 +1002,8 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .cr-weapon { display: inline-flex; align-items: center; gap: 5px; color: var(--mute); }
 .cr-weapon img { width: 30px; height: 15px; object-fit: contain; }
 .cr-weapon.inferred .cr-wname { color: var(--gold); }
+/* Arma de habilidad (Headhunter, Tour De Force, Overdrive): no es una compra. */
+.cr-weapon.ability .cr-wname { color: #c9a7ff; }
 .cr-wname { font-size: 11px; white-space: nowrap; }
 .cr-arrow { color: var(--faint); }
 .cr-tags { display: inline-flex; gap: 4px; margin-left: auto; }
