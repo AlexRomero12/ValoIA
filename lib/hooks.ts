@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ValSummary, AgentIconInfo, ValMastery, ValPremier, ValRecords } from './types';
 import type { MatchDetail } from './matchDetail';
+import type { MatchTimeline } from './timelineView';
 import type { Profile, SessionRules } from './profileTypes';
 
 type ValWindowMode =
@@ -75,8 +76,30 @@ export function useMatchDetail(matchId: string | null, playerId?: string) {
   });
 }
 
-export function useTierIcons() {
-  return useQuery<Record<string, string>>({
+/**
+ * Cronología de la partida (ronda a ronda, kills con arma y posiciones).
+ *
+ * Se pide solo cuando la pestaña está abierta (`enabled`): el payload trae las
+ * posiciones de los 10 jugadores en cada evento, así que no tiene sentido
+ * cargarlo para quien solo mira el resumen.
+ */
+export function useMatchTimeline(matchId: string | null, playerId?: string, enabled = true) {
+  return useQuery<MatchTimeline & { error?: string; code?: string }>({
+    queryKey: ['val-timeline', matchId, playerId ?? ''],
+    queryFn: async () => {
+      const p = playerId ? `&player=${encodeURIComponent(playerId)}` : '';
+      const res = await fetch(`/api/valorant/timeline?id=${encodeURIComponent(matchId!)}${p}`);
+      const json = await res.json();
+      if (!res.ok || json.error) throw Object.assign(new Error(json.error || 'Error de red'), { code: json.code });
+      return json;
+    },
+    enabled: Boolean(matchId) && enabled,
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+  });
+}
+
+export function useTierIcons() {  return useQuery<Record<string, string>>({
     queryKey: ['val-tier-icons'],
     queryFn: async () => {
       const res = await fetch('/api/valorant/tiers');

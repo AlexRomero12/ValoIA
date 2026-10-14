@@ -1,12 +1,10 @@
 import { getContent } from './valorant';
 import { findCachedValues, cacheSet } from './cache';
-import { getArchiveMatchById } from './archive';
-import { getHenrikAccount, henrikMatchTimestamp, henrikRoundsPlayed } from './henrik';
-import { listProfiles, listProfilesFor, type ProfileViewer } from './profiles';
-import { memberAccounts } from './profileTypes';
+import { henrikMatchTimestamp, henrikRoundsPlayed } from './henrik';
+import { findMatch, notCachedError, orderedProfiles } from './matchLookup';
+import type { ProfileViewer } from './profiles';
 import { sidesByRound, matchAperturas, type MatchAperturas } from './aperturas';
 import { roundImpact } from './impact';
-import type { HenrikMatch } from './henrik';
 
 export interface DetailPlayer {
   name: string;
@@ -74,57 +72,18 @@ export interface MatchDetail {
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
 
 export async function getMatchDetail(matchId: string, playerId?: string | null, viewer?: ProfileViewer): Promise<MatchDetail> {
-  const candidates = viewer ? listProfilesFor(viewer) : listProfiles();
-  if (candidates.length === 0) {
-    throw Object.assign(new Error('No tienes perfiles configurados'), { code: 'NOT_CACHED' });
-  }
-  const preferred = candidates.find((m) => m.id === playerId) ?? candidates[0];
+  const orderedMembers = orderedProfiles(playerId, viewer);
   // v5: añade aperturas por bando (los DTO v4 no las traen).
   // v4: añade multikills, víctimas y bando por ronda (los DTO v3 no los traen).
   // v3: los DTO guardan URLs de iconos; la clave nueva evita servir detalles
   // cacheados 7 días con los iconos de agente pesados (~555 KB).
-  const cacheKey = `val:detail:v5:${preferred.id}:${matchId}`;
+  const cacheKey = `val:detail:v5:${orderedMembers[0].id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 
-  const orderedMembers = [
-    preferred,
-    ...candidates.filter((m) => m.id !== preferred.id),
-  ];
-
-  let match: HenrikMatch | undefined;
-  let ownerPuuid = '';
-  outer: for (const member of orderedMembers) {
-    // Un perfil multi-cuenta: la partida puede ser de cualquiera de sus cuentas.
-    for (const acct of memberAccounts(member)) {
-      const acc = await getHenrikAccount(acct.name, acct.tag).catch(() => null);
-      if (!acc?.puuid) continue;
-      // 1) Archivo acumulativo: cubre partidas fuera del bucket de 40 ($0 requests)
-      const archived = getArchiveMatchById(acct.name, acct.tag, matchId);
-      if (archived) {
-        match = archived;
-        ownerPuuid = acc.puuid;
-        break outer;
-      }
-      // 2) Buckets cacheados (ventana fresca)
-      const found = findCachedValues<HenrikMatch[]>(`henrik:matches:${acc.puuid}`)
-        .flat()
-        .find((m) => m.metadata?.match_id === matchId);
-      if (found) {
-        match = found;
-        ownerPuuid = acc.puuid;
-        break outer;
-      }
-    }
-  }
-  if (!match) {
-    throw Object.assign(
-      new Error(
-        'Partida fuera del cache — amplía la ventana o pulsa Actualizar para recargarla. Para partidas muy antiguas, lanza un backfill del historial (POST /api/valorant/backfill).',
-      ),
-      { code: 'NOT_CACHED' },
-    );
-  }
+  const found = await findMatch(matchId, orderedMembers);
+  if (!found) throw notCachedError();
+  const { match, ownerPuuid } = found;
   const account = { puuid: ownerPuuid, name: '', tag: '' };
   const dicts = await getContent();
   const agentIconByName = new Map(Object.values(dicts.agents).map((e) => [e.name.toLowerCase(), e.icon]));

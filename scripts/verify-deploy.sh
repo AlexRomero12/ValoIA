@@ -153,6 +153,47 @@ print('  aperturas: %s rondas oficiales · %s coincidencias · %s discrepancias 
 print('  partidas en la ventana: %d · rondas sin bando: %s' % (len(d.get('matches') or []), (d.get('aperturas') or {}).get('sinLado')))
 "
 
+echo
+echo "== cronología de la última partida (GET /api/valorant/timeline) =="
+MID=$(get_json "/api/valorant/summary?season=current&limit=10&player=$PROFILE" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+ms=d.get('matches') or []
+print(ms[0].get('matchId','') if ms else '')
+")
+if [ -z "$MID" ]; then
+  echo "  (sin partidas en la ventana: no puedo probar la cronología)"
+else
+  echo "  partida: $MID"
+  get_json "/api/valorant/timeline?id=$MID&player=$PROFILE" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+if d.get('error'): print('  error:', d['error']); raise SystemExit
+mp=d.get('map') or {}
+rs=d.get('rounds') or []
+ks=[k for r in rs for k in (r.get('kills') or [])]
+pos=[k for k in ks if k.get('at')]
+vie=[k for k in ks if (k.get('views') or [])]
+infer=[k for k in ks if (k.get('w') or {}).get('inferred')]
+weapons=sorted({(k.get('w') or {}).get('name','?') for k in ks})
+print('  mapa: %s · imagen %s · calibración %s' % (mp.get('name'), 'sí' if mp.get('image') else 'no', 'sí' if mp.get('calibration') else 'NO'))
+print('  %d jugadores · %d rondas · %d kills' % (len(d.get('players') or []), len(rs), len(ks)))
+print('  kills con posición: %d/%d · con foto de jugadores: %d · arma deducida: %d' % (len(pos), len(ks), len(vie), len(infer)))
+print('  armas: ' + ', '.join(weapons[:12]))
+# Las posiciones van en milésimas del minimapa: fuera de 0..1000 sería un fallo de proyección.
+fuera=[(k.get('at') or {}) for k in pos if not (0 <= (k['at'] or {}).get('u',-1) <= 1000 and 0 <= (k['at'] or {}).get('v',-1) <= 1000)]
+print('  posiciones fuera del plano: %d' % len(fuera))
+r0=next((r for r in rs if r.get('kills')), None)
+pl=d.get('players') or []
+if r0:
+    k=r0['kills'][0]
+    print('  ejemplo ronda %d: %s -> %s con %s' % (r0['n'], pl[k['k']].get('name'), pl[k['v']].get('name'), (k.get('w') or {}).get('name')))
+    if r0.get('plant'): print('  planta: sitio %s' % r0['plant'].get('site'))
+    if r0.get('eco'): print('  economía: %d jugadores con compra registrada' % len(r0['eco']))
+for n in (d.get('notes') or []): print('  aviso: ' + n)
+"
+fi
+
 rm -f "$COOKIES"
 echo
 echo "Listo. Si algún bloque dice «error», revisa: docker logs $CONTAINER --tail 50"

@@ -267,14 +267,67 @@ interface HenrikMatchTeam {
   team_number?: number | null;
 }
 
+/** Punto en el plano del mapa (coordenadas de mundo de Riot). */
+export interface HenrikVec2 {
+  x?: number;
+  y?: number;
+}
+
+/** Referencia a un jugador dentro de una kill o de un evento de ronda. */
+export interface HenrikKillPlayerRef {
+  puuid?: string;
+  name?: string;
+  tag?: string;
+  team?: string;
+}
+
+/** Un jugador (vivo) en el instante de una kill, con hacia dónde miraba. */
+export interface HenrikPlayerLocation {
+  player?: HenrikKillPlayerRef;
+  view_radians?: number;
+  location?: HenrikVec2;
+}
+
 export interface HenrikKill {
-  killer?: { puuid?: string; name?: string; team?: string };
-  victim?: { puuid?: string; name?: string; team?: string };
+  killer?: HenrikKillPlayerRef;
+  victim?: HenrikKillPlayerRef;
   assistants?: { name?: string; puuid?: string }[];
   weapon?: { id?: string | null; name?: string | null; type?: string | null };
   round?: number;
   /** ms dentro de la ronda (v4): permite elegir la primera kill real del round. */
   time_in_round_in_ms?: number;
+  /** ms desde el inicio de la partida (v4). */
+  time_in_match_in_ms?: number;
+  /** Dónde cae la víctima (v4). */
+  location?: HenrikVec2 | null;
+  /** Disparo secundario (p. ej. la ráfaga del Classic), v4. */
+  secondary_fire_mode?: boolean | null;
+  /** Los jugadores VIVOS en ese instante, con su ángulo de visión (v4). */
+  player_locations?: HenrikPlayerLocation[] | null;
+}
+
+/** Evento de planta o defuse de una ronda, con su posición en el mapa. */
+export interface HenrikRoundEvent {
+  round_time_in_ms?: number;
+  location?: HenrikVec2 | null;
+  player?: HenrikKillPlayerRef | null;
+  player_locations?: HenrikPlayerLocation[] | null;
+}
+
+/** Economía y stats de un jugador en una ronda concreta (v4). */
+export interface HenrikRoundPlayerStat {
+  player?: HenrikKillPlayerRef;
+  ability_casts?: Record<string, number | null> | null;
+  stats?: { score?: number; kills?: number; headshots?: number; bodyshots?: number; legshots?: number } | null;
+  /** Qué compró esa ronda: arma, armadura, valor del loadout y créditos restantes. */
+  economy?: {
+    loadout_value?: number | null;
+    remaining?: number | null;
+    weapon?: { id?: string | null; name?: string | null; type?: string | null } | null;
+    armor?: { id?: string | null; name?: string | null } | null;
+  } | null;
+  was_afk?: boolean | null;
+  stayed_in_spawn?: boolean | null;
 }
 
 export interface HenrikMatchRound {
@@ -286,8 +339,10 @@ export interface HenrikMatchRound {
   /** v4.10: rol del equipo ganador (Attacker/Defender). */
   winning_team_role?: string | null;
   ceremony?: string | null;
-  plant?: { site?: string; player?: { name?: string; puuid?: string; team?: string } } | null;
-  defuse?: { player?: { name?: string; puuid?: string } } | null;
+  plant?: (HenrikRoundEvent & { site?: string }) | null;
+  defuse?: HenrikRoundEvent | null;
+  /** Desglose por jugador de la ronda (economía incluida), v4. */
+  stats?: HenrikRoundPlayerStat[] | null;
 }
 
 export interface HenrikMatch {

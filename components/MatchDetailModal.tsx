@@ -1,11 +1,13 @@
 'use client';
 
 import { createPortal } from 'react-dom';
+import { useState } from 'react';
 import { useMatchDetail } from '@/lib/hooks';
 import { useModalShell } from '@/lib/useModalShell';
 import { TierIcon } from '@/components/TierIcon';
 import { AgentIcon } from './AgentIcon';
 import { LossBadge } from './LossBadge';
+import { MatchChronology } from './chronology/MatchChronology';
 import type { MatchRow } from '@/lib/types';
 import { isDraw as isDrawMatch } from '@/lib/stats';
 import type { DetailPlayer, RoundCell } from '@/lib/matchDetail';
@@ -20,6 +22,7 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
   const query = useMatchDetail(match.matchId, playerId);
   const detail = query.data;
   const error = query.error as (Error & { code?: string }) | null;
+  const [tab, setTab] = useState<'resumen' | 'cronologia'>('resumen');
   useModalShell(onClose);
 
   // El modal solo se monta tras un click del usuario (client-side): document existe.
@@ -80,6 +83,31 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
           </div>
         </header>
 
+        <div className="md-tabs" role="tablist" aria-label="Vistas del detalle">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'resumen'}
+            className={tab === 'resumen' ? 'on' : ''}
+            onClick={() => setTab('resumen')}
+          >
+            Resumen
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'cronologia'}
+            className={tab === 'cronologia' ? 'on' : ''}
+            onClick={() => setTab('cronologia')}
+          >
+            Cronología
+          </button>
+        </div>
+
+        {tab === 'cronologia' ? (
+          <MatchChronology matchId={match.matchId} playerId={playerId} />
+        ) : (
+          <>
         {query.isLoading && <p className="empty">Cargando detalle…</p>}
         {error && (
           <p className="empty">
@@ -247,6 +275,8 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
                 </div>
               </div>
             </section>
+          </>
+        )}
           </>
         )}
       </div>

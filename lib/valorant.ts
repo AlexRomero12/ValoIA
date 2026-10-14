@@ -214,11 +214,64 @@ interface ContentEntry {
   icon: string | null;
   /** Rol del agente (Duelist/Initiator/Controller/Sentinel) — solo agentes */
   role?: string | null;
+  /** UUID del contenido (solo mapas: la partida identifica el mapa por uuid). */
+  uuid?: string | null;
+}
+
+/**
+ * Calibración mundo→minimapa que publica valorant-api para cada mapa.
+ *
+ * OJO con el orden de los ejes, que no es el que parece: la fórmula publicada
+ * es `u = x*xMultiplier + xScalarToAdd`, pero aplicada tal cual deja ~35% de
+ * las kills en el vacío negro de la imagen. La proyección correcta es la misma
+ * fórmula con los ejes del mundo intercambiados (ver `projectWorld` en
+ * `lib/timeline.ts`), verificada sobre 11 mapas con 99-100% de acierto.
+ */
+export interface MapCalibration {
+  xMultiplier: number;
+  yMultiplier: number;
+  xScalarToAdd: number;
+  yScalarToAdd: number;
+}
+
+export interface MapEntry extends ContentEntry {
+  /** null si el mapa no tiene calibración (mapas de TDM: multiplicadores a 0). */
+  calibration: MapCalibration | null;
+}
+
+/**
+ * Calibración utilizable de un mapa, o null si no sirve para proyectar.
+ *
+ * Los mapas de TDM (District, Drift, Glitch, Kasbah, Piazza) publican los
+ * cuatro valores a 0: proyectar con eso apilaría todas las kills en el origen,
+ * así que se tratan como «sin calibración» y la cronología no dibuja el mapa
+ * (el feed de kills sigue funcionando).
+ */
+function mapCalibration(m: {
+  xMultiplier?: number | null;
+  yMultiplier?: number | null;
+  xScalarToAdd?: number | null;
+  yScalarToAdd?: number | null;
+}): MapCalibration | null {
+  const { xMultiplier, yMultiplier, xScalarToAdd, yScalarToAdd } = m;
+  const nums = [xMultiplier, yMultiplier, xScalarToAdd, yScalarToAdd];
+  if (nums.some((v) => typeof v !== 'number' || !Number.isFinite(v))) return null;
+  // Multiplicador 0 = mapa sin sistema de coordenadas jugable (TDM).
+  if (!xMultiplier || !yMultiplier) return null;
+  return {
+    xMultiplier: xMultiplier as number,
+    yMultiplier: yMultiplier as number,
+    xScalarToAdd: xScalarToAdd as number,
+    yScalarToAdd: yScalarToAdd as number,
+  };
 }
 
 interface ContentDicts {
   agents: Record<string, ContentEntry>;
-  maps: Record<string, ContentEntry>;
+  /** Indexados por `mapUrl` (como los manda el cliente de Riot). */
+  maps: Record<string, MapEntry>;
+  /** Los mismos mapas indexados por uuid: la partida (Henrik) trae el uuid. */
+  mapByUuid: Record<string, MapEntry>;
   weapons: Record<string, ContentEntry & { category: string | null }>;
   /**
    * Habilidades indexadas por el nombre con el que aparecen en el kill feed
@@ -232,7 +285,7 @@ interface ContentDicts {
 let contentPromise: Promise<ContentDicts> | null = null;
 
 async function loadContent(): Promise<ContentDicts> {
-  const fallback: ContentDicts = { agents: {}, maps: {}, weapons: {}, abilities: {} };
+  const fallback: ContentDicts = { agents: {}, maps: {}, mapByUuid: {}, weapons: {}, abilities: {} };
   try {
     const [agentsRes, mapsRes, weaponsRes] = await Promise.all([
       fetch('https://valorant-api.com/v1/agents?isPlayableCharacter=true', { signal: AbortSignal.timeout(15_000) }),
@@ -243,12 +296,12 @@ async function loadContent(): Promise<ContentDicts> {
       ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null; killfeedPortrait?: string | null; role?: { displayName?: string } | null; abilities?: { displayName?: string | null; displayIcon?: string | null; slot?: string | null }[] }[] }
       : null;
     const maps = mapsRes.ok
-      ? (await mapsRes.json()) as { data?: { uuid?: string; displayName?: string; mapUrl?: string; displayIcon?: string | null }[] }
+      ? (await mapsRes.json()) as { data?: { uuid?: string; displayName?: string; mapUrl?: string; displayIcon?: string | null; xMultiplier?: number | null; yMultiplier?: number | null; xScalarToAdd?: number | null; yScalarToAdd?: number | null }[] }
       : null;
     const weapons = weaponsRes.ok
       ? (await weaponsRes.json()) as { data?: { displayName?: string; displayIcon?: string | null; category?: string }[] }
       : null;
-    const dict: ContentDicts = { agents: {}, maps: {}, weapons: {}, abilities: {} };
+    const dict: ContentDicts = { agents: {}, maps: {}, mapByUuid: {}, weapons: {}, abilities: {} };
     for (const a of agents?.data ?? []) {
       if (a.uuid && a.displayName) {
         dict.agents[a.uuid.toLowerCase()] = {
@@ -277,10 +330,16 @@ async function loadContent(): Promise<ContentDicts> {
     }
     for (const m of maps?.data ?? []) {
       if (m.mapUrl && m.displayName) {
-        dict.maps[m.mapUrl.toLowerCase()] = {
+        const entry: MapEntry = {
           name: m.displayName.replace(/^[^_]*_/, '').replace(/_/g, ' '),
           icon: m.displayIcon ?? null,
+          uuid: m.uuid?.toLowerCase() ?? null,
+          calibration: mapCalibration(m),
         };
+        dict.maps[m.mapUrl.toLowerCase()] = entry;
+        // La partida (Henrik) identifica el mapa por uuid, no por mapUrl: sin
+        // este índice la cronología no encontraría la calibración del mapa.
+        if (m.uuid) dict.mapByUuid[m.uuid.toLowerCase()] = entry;
       }
     }
     for (const w of weapons?.data ?? []) {
@@ -304,15 +363,25 @@ export function getContent(): Promise<ContentDicts> {
   // v5: el diccionario suma `abilities` (iconos de las kills de habilidad:
   // Blade Storm, Showstopper, TURRET…). El validador evita además servir un
   // cache con la forma vieja (sin `abilities`) aunque la clave no cambiara.
+  // v6: los mapas suman `uuid` y `calibration` (multiplicadores mundo→minimapa)
+  // y un índice `mapByUuid`, que es lo que necesita la cronología para pintar
+  // las posiciones. El validador exige ese índice.
   if (!contentPromise) {
     contentPromise = cached(
-      'val:content:v5',
+      'val:content:v6',
       24 * 60 * 60 * 1000,
       loadContent,
-      (v) => !!v && typeof v.abilities === 'object',
+      (v) => !!v && typeof v.abilities === 'object' && typeof v.mapByUuid === 'object',
     );
   }
   return contentPromise;
+}
+
+/** Ficha de un mapa por uuid (el que trae la partida), con su calibración. */
+export async function getMapInfo(uuid: string | undefined | null): Promise<MapEntry | null> {
+  if (!uuid) return null;
+  const dicts = await getContent();
+  return dicts.mapByUuid[uuid.toLowerCase()] ?? null;
 }
 
 function mapDisplayName(mapId: string | undefined, dicts: ContentDicts): string {
