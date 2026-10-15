@@ -24,6 +24,7 @@ import { getRrHistory, mergeRrHistory } from './rrHistoryStore';
 import { getRulesHistory } from './rulesHistoryStore';
 import { computeAperturas } from './aperturas';
 import { rrChangeDetail } from './rrDetail';
+import { resolveWeaponIn, weaponContext, weaponDictsFrom } from './weaponResolve';
 import { rankStateFrom } from './rankState';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 import { UNWINNABLE_LIMITS } from './unwinnable';
@@ -809,21 +810,29 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const latestMmr = seasonMmr[0] ?? null;
 
   // ---------- Arsenal: uso de armas desde el kill feed ($0 requests) ----------
+  //
+  // Se resuelve el arma con el mismo motor que la cronología
+  // (`lib/weaponResolve.ts`) en vez de leer `weapon.name` a pelo: Riot manda
+  // las armas de habilidad (Headhunter, Tour De Force, Overdrive) como
+  // `type: "Weapon"` y SIN nombre, y antes esas kills se descartaban en
+  // silencio — las de Chamber no aparecían en el Arsenal.
+  const weaponDicts = weaponDictsFrom(dicts);
   const killsBy = new Map<string, number>();
   const deathsBy = new Map<string, number>();
   const fbBy = new Map<string, number>();
   for (const m of inWindow) {
+    const ctx = weaponContext(m, weaponDicts);
     const seenRounds = new Set<number>();
     for (const k of m.kills ?? []) {
-      const w = k.weapon?.name;
-      if (!w) continue;
-      if (k.killer?.puuid === account.puuid) killsBy.set(w, (killsBy.get(w) ?? 0) + 1);
+      const killer = k.killer?.puuid;
+      const w = resolveWeaponIn(ctx, k).name;
+      if (killer === account.puuid) killsBy.set(w, (killsBy.get(w) ?? 0) + 1);
       if (k.victim?.puuid === account.puuid) deathsBy.set(w, (deathsBy.get(w) ?? 0) + 1);
       // Primera sangre: primer kill del round (mismo patrón que el detalle de partida)
       const r = k.round ?? -1;
       if (!seenRounds.has(r)) {
         seenRounds.add(r);
-        if (k.killer?.puuid === account.puuid) fbBy.set(w, (fbBy.get(w) ?? 0) + 1);
+        if (killer === account.puuid) fbBy.set(w, (fbBy.get(w) ?? 0) + 1);
       }
     }
   }

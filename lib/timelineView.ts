@@ -1,4 +1,5 @@
 import type { MapCalibration } from './valorant';
+import type { ResolvedWeapon } from './weaponResolve';
 
 /**
  * Tipos y utilidades PURAS de la cronología, compartidos por servidor y cliente.
@@ -10,22 +11,6 @@ import type { MapCalibration } from './valorant';
 
 /** Resolución de las posiciones: milésimas de la imagen del minimapa. */
 export const MAP_UNITS = 1000;
-
-export type WeaponKind = 'weapon' | 'ability' | 'spike' | 'fall' | 'melee' | 'other';
-
-export interface TimelineWeapon {
-  name: string;
-  icon: string | null;
-  kind: WeaponKind;
-  /** Disparo secundario (la ráfaga del Classic o el modo alternativo de un arma de habilidad). */
-  secondary: boolean;
-  /**
-   * El feed no traía el arma y se dedujo de lo que el asesino compró esa ronda.
-   * No es una invención: es el arma que tenía, pero puede fallar si la recogió
-   * del suelo a mitad de ronda.
-   */
-  inferred?: boolean;
-}
 
 export interface TimelinePoint {
   u: number;
@@ -48,7 +33,8 @@ export interface TimelineKill {
   v: number;
   /** Índices de los asistentes. */
   a: number[];
-  w: TimelineWeapon;
+  /** Arma resuelta (`lib/weaponResolve.ts`). */
+  w: ResolvedWeapon;
   /** Dónde cae la víctima (null si la kill no trae posición). */
   at: TimelinePoint | null;
   /** Jugadores VIVOS en ese instante, con posición y hacia dónde miraban. */

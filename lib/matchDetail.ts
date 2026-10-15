@@ -5,6 +5,7 @@ import { findMatch, notCachedError, orderedProfiles } from './matchLookup';
 import type { ProfileViewer } from './profiles';
 import { sidesByRound, matchAperturas, type MatchAperturas } from './aperturas';
 import { roundImpact } from './impact';
+import { resolveWeaponIn, weaponContext, weaponDictsFrom } from './weaponResolve';
 
 export interface DetailPlayer {
   name: string;
@@ -125,6 +126,9 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
   });
   players.sort((a, b) => b.acs - a.acs);
 
+  // Con qué te mataron: mismo motor que la cronología y el Arsenal, para que una
+  // Headhunter no salga como «?» (Riot manda las armas de habilidad sin nombre).
+  const weaponCtx = weaponContext(match, weaponDictsFrom(dicts));
   let fb = 0;
   let fd = 0;
   const seenRounds = new Set<number>();
@@ -138,9 +142,10 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     }
     if (k.victim?.puuid === account.puuid && k.killer?.name) {
       const prev = killerCount.get(k.killer.name);
+      const w = resolveWeaponIn(weaponCtx, k).name;
       killerCount.set(k.killer.name, {
         times: (prev?.times ?? 0) + 1,
-        weapon: k.weapon?.name ?? prev?.weapon ?? '?',
+        weapon: w !== '—' ? w : (prev?.weapon ?? '?'),
       });
     }
   }

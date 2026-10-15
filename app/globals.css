@@ -293,7 +293,9 @@ select {
 .wr-list { display: flex; flex-direction: column; }
 .wr-head {
   display: grid;
-  grid-template-columns: 132px 1fr 108px;
+  /* 168px de nombre: «Tour De Force» + su etiqueta ULTI no caben en 132px (los
+     nombres de arma de habilidad son más largos que los de arma normal). */
+  grid-template-columns: 168px 1fr 108px;
   gap: 14px;
   align-items: end;
   padding: 0 10px 7px;
@@ -307,7 +309,7 @@ select {
 .wr-head span:last-child { text-align: right; }
 .wr-row {
   display: grid;
-  grid-template-columns: 132px 1fr 108px;
+  grid-template-columns: 168px 1fr 108px;
   gap: 14px;
   align-items: center;
   padding: 8px 10px;
