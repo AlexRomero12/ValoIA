@@ -238,6 +238,36 @@ export interface MapCalibration {
 export interface MapEntry extends ContentEntry {
   /** null si el mapa no tiene calibración (mapas de TDM: multiplicadores a 0). */
   calibration: MapCalibration | null;
+  /**
+   * Zonas del mapa con su nombre real («Main», «Site», «Lobby»…) y su ancla en
+   * coordenadas de MUNDO. Es lo que permite decir dónde muere alguien
+   * («A Main») en vez de soltar dos números. Ojo: se resuelve por cercanía, así
+   * que en una zona grande la etiqueta puede quedar en la vecina.
+   */
+  callouts: MapCallout[];
+}
+
+export interface MapCallout {
+  /** Nombre de la zona («Main», «Tiles», «Courtyard»). */
+  name: string;
+  /** Zona padre: «A», «B», «Mid», «Attacker Side», «Defender Side». */
+  area: string;
+  x: number;
+  y: number;
+}
+
+/** Callouts utilizables de un mapa (descarta los que no traen ancla). */
+function mapCallouts(
+  list: { regionName?: string; superRegionName?: string; location?: { x?: number; y?: number } }[] | undefined,
+): MapCallout[] {
+  const out: MapCallout[] = [];
+  for (const c of list ?? []) {
+    const { x, y } = c.location ?? {};
+    if (!c.regionName || typeof x !== 'number' || typeof y !== 'number') continue;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    out.push({ name: c.regionName, area: c.superRegionName ?? '', x, y });
+  }
+  return out;
 }
 
 /**
@@ -297,7 +327,7 @@ async function loadContent(): Promise<ContentDicts> {
       ? (await agentsRes.json()) as { data?: { uuid?: string; displayName?: string; displayIcon?: string | null; killfeedPortrait?: string | null; role?: { displayName?: string } | null; abilities?: { displayName?: string | null; displayIcon?: string | null; slot?: string | null }[] }[] }
       : null;
     const maps = mapsRes.ok
-      ? (await mapsRes.json()) as { data?: { uuid?: string; displayName?: string; mapUrl?: string; displayIcon?: string | null; xMultiplier?: number | null; yMultiplier?: number | null; xScalarToAdd?: number | null; yScalarToAdd?: number | null }[] }
+      ? (await mapsRes.json()) as { data?: { uuid?: string; displayName?: string; mapUrl?: string; displayIcon?: string | null; xMultiplier?: number | null; yMultiplier?: number | null; xScalarToAdd?: number | null; yScalarToAdd?: number | null; callouts?: { regionName?: string; superRegionName?: string; location?: { x?: number; y?: number } }[] }[] }
       : null;
     const weapons = weaponsRes.ok
       ? (await weaponsRes.json()) as { data?: { displayName?: string; displayIcon?: string | null; category?: string }[] }
@@ -336,6 +366,7 @@ async function loadContent(): Promise<ContentDicts> {
           icon: m.displayIcon ?? null,
           uuid: m.uuid?.toLowerCase() ?? null,
           calibration: mapCalibration(m),
+          callouts: mapCallouts(m.callouts),
         };
         dict.maps[m.mapUrl.toLowerCase()] = entry;
         // La partida (Henrik) identifica el mapa por uuid, no por mapUrl: sin
@@ -367,9 +398,11 @@ export function getContent(): Promise<ContentDicts> {
   // v6: los mapas suman `uuid` y `calibration` (multiplicadores mundo→minimapa)
   // y un índice `mapByUuid`, que es lo que necesita la cronología para pintar
   // las posiciones. El validador exige ese índice.
+  // v7: los mapas suman `callouts` (zonas con nombre y su ancla en el mundo),
+  // que es lo que permite decir dónde muere alguien.
   if (!contentPromise) {
     contentPromise = cached(
-      'val:content:v6',
+      'val:content:v7',
       24 * 60 * 60 * 1000,
       loadContent,
       (v) => !!v && typeof v.abilities === 'object' && typeof v.mapByUuid === 'object',
