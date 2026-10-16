@@ -50,6 +50,16 @@ export interface MatchRow {
   acs: number;
   adr: number;
   hsPct: number;
+  /**
+   * Rondas con una Operator en mano: la comprada o la Tour De Force de la ult de
+   * Chamber. Si es > 0, el HS% de la partida está diluido por sus bodyshots, que
+   * matan igual que un headshot.
+   */
+  opRounds?: number;
+  /** Kills con Operator (la comprada o la ult). */
+  opKills?: number;
+  /** De las kills con Operator, cuántas fueron con la Tour De Force (la ult). */
+  opUltKills?: number;
   /** Primeras sangres del jugador (primer kill del round). Solo proveedor Henrik. */
   firstBloods?: number;
   /** Primeras muertes del jugador (primera muerte del round). Solo proveedor Henrik. */

@@ -421,6 +421,15 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .res-badge.mine { font-size: 11px; letter-spacing: 0; line-height: 1.1; min-width: 18px; padding: 1px 5px; margin-left: 5px; white-space: nowrap; vertical-align: middle; }
 .res-badge.unw { color: var(--faint); background: rgba(167, 183, 197, 0.1); }
 .res-badge.mine { color: var(--gold); background: rgba(232, 201, 122, 0.12); }
+/* Uso de Operator (comprada o la Tour De Force de la ult): avisa de que el HS%
+   de la partida está diluido por sus bodyshots. */
+.res-badge.op { color: var(--blue); background: rgba(53, 182, 255, 0.12); min-width: 20px; margin-left: 4px; }
+
+/* HS% con Operator: el número no es comparable al de una partida limpia, así que
+   no se juzga con el listón normal (el detalle trae el HS% sin sus impactos).
+   Si aun así pasa la meta, se queda en verde. */
+.matches td.stat-op { color: var(--mute); }
+.matches td.stat-op.stat-ok { color: var(--win); }
 
 /* Leyenda de los iconos de derrota (toggle junto al título del historial). */
 .legend-toggle {
@@ -762,6 +771,22 @@ table.matches { width: 100%; border-collapse: collapse; font-size: 12.5px; table
 .md-rr.down { color: var(--loss); }
 
 .md-section { margin-top: 20px; }
+
+/* Aviso de Operator en el detalle: el HS% de la partida viene diluido por sus
+   bodyshots, así que se enseña también el HS% sin sus impactos. */
+.md-op-note {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(53, 182, 255, 0.28);
+  border-left-width: 3px;
+  border-radius: 4px;
+  background: rgba(53, 182, 255, 0.06);
+  color: var(--mute);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.md-op-note b { color: var(--bone); }
+.md-op-note .res-badge.op { margin-right: 4px; }
 .md-section h4 {
   margin: 0 0 10px;
   font-family: var(--font-display);

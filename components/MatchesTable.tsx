@@ -11,6 +11,8 @@ import { MatchDetailModal } from './MatchDetailModal';
 import { DayDetailModal } from './DayDetailModal';
 import { LossBadge } from './LossBadge';
 import { RrBadge } from './RrBadge';
+import { OpBadge } from './OpBadge';
+import { operatorLabel } from '@/lib/opUsage';
 import { rrTransitionText } from '@/lib/rrDetail';
 
 const DAYS_PER_PAGE = 5;
@@ -331,6 +333,9 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
   const kd = (m.kills / Math.max(1, m.deaths)).toFixed(2);
   const okCls = (v: number, target: number) => (v >= target ? ' stat-ok' : '');
   const rr = m.rrDelta;
+  // Con Operator el HS% está diluido: no se juzga con el listón de 25% (el
+  // detalle trae el HS% sin sus impactos). Si aun así lo pasa, se mantiene verde.
+  const hasOp = (m.opRounds ?? 0) > 0;
   return (
     <tr className="clickable-row" onClick={onSelect} title="Ver detalle de la partida">
       <td className="date">{fecha}</td>
@@ -361,13 +366,23 @@ function MatchRowEl({ m, fMaps, fAgents, onSelect, toggle }: {
         </span>
         <LossBadge m={m} />
         <RrBadge m={m} />
+        <OpBadge m={m} />
       </td>
       <td className="num score">{m.roundsWon}–{m.roundsLost}</td>
       <td className="num">{m.kills}/{m.deaths}/{m.assists}</td>
       <td className={`num${okCls(parseFloat(kd), 1.05)}`}>{kd}</td>
       <td className={`num${okCls(m.acs, 220)}`}>{m.acs}</td>
       <td className={`num${okCls(m.adr, 150)}`}>{m.adr}</td>
-      <td className={`num${okCls(m.hsPct, 25)}`}>{m.hsPct.toFixed(1)}</td>
+      <td
+        className={hasOp ? `num stat-op${m.hsPct >= 25 ? ' stat-ok' : ''}` : `num${okCls(m.hsPct, 25)}`}
+        title={
+          hasOp
+            ? `HS% diluido por la Operator (${operatorLabel({ rounds: m.opRounds ?? 0, kills: m.opKills ?? 0, ultKills: m.opUltKills ?? 0 })}). El detalle de la partida trae el HS% sin sus impactos.`
+            : undefined
+        }
+      >
+        {m.hsPct.toFixed(1)}{hasOp ? '*' : ''}
+      </td>
       <td
         className={`num rr-cell${rr == null ? '' : rr > 0 ? ' rr-up' : rr < 0 ? ' rr-down' : ''}`}
         title={
@@ -389,6 +404,7 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
   const kd = (m.kills / Math.max(1, m.deaths)).toFixed(2);
   const draw = isDraw(m);
   const rr = m.rrDelta;
+  const hasOp = (m.opRounds ?? 0) > 0;
   return (
     <button className="match-card" onClick={onSelect} title="Ver detalle de la partida">
       <span className={`mc-badge ${draw ? 'e' : m.won ? 'w' : 'l'}`}>{draw ? 'E' : m.won ? 'V' : 'D'}</span>
@@ -407,11 +423,14 @@ function MatchCard({ m, onSelect }: { m: MatchRow; onSelect: () => void }) {
           KD <b className={parseFloat(kd) >= 1.05 ? 'stat-ok' : ''}>{kd}</b>
           <LossBadge m={m} />
           <RrBadge m={m} />
+          <OpBadge m={m} />
         </span>
       </span>
       <span className="mc-side">
         <span className={`mc-acs${m.acs >= 220 ? ' stat-ok' : ''}`}>{m.acs} <i>ACS</i></span>
-        <span className="mc-sub">ADR {m.adr} · HS {m.hsPct.toFixed(1)}%</span>
+        <span className="mc-sub">
+          ADR {m.adr} · HS {m.hsPct.toFixed(1)}%{hasOp ? '*' : ''}
+        </span>
         <span className={`mc-rr${rr == null ? '' : rr > 0 ? ' up' : rr < 0 ? ' down' : ''}`}>
           {rr == null ? `${hora} · sin RR` : `${hora} · ${rr > 0 ? '+' : ''}${rr} RR`}
         </span>

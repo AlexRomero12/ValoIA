@@ -143,6 +143,28 @@ export function MatchDetailModal({ match, playerId, onClose }: MatchDetailModalP
               </p>
             </section>
 
+            {detail.operator ? (
+              <p className="md-op-note">
+                <span className="res-badge op" aria-hidden="true">OP</span>
+                Usaste <b>Operator</b> en {detail.operator.rounds}{' '}
+                {detail.operator.rounds === 1 ? 'ronda' : 'rondas'}
+                {detail.operator.kills > 0
+                  ? ` (${detail.operator.kills} ${detail.operator.kills === 1 ? 'kill' : 'kills'}${
+                      detail.operator.ultKills > 0 ? `, ${detail.operator.ultKills} con la ult` : ''
+                    })`
+                  : ''}
+                . Sus bodyshots matan igual que un headshot, así que el HS% de la partida está diluido:{' '}
+                {detail.operator.hsPctWithout != null && me ? (
+                  <>
+                    sin sus {detail.operator.removedHits} impactos tu HS% es{' '}
+                    <b>{detail.operator.hsPctWithout.toFixed(1)}%</b> en vez de {me.hsPct.toFixed(1)}%.
+                  </>
+                ) : (
+                  'hubo rondas con mezcla de armas, así que no se puede aislar.'
+                )}
+              </p>
+            ) : null}
+
             <Scoreboard title={`Tu equipo · ${myPlayers.reduce((a, p) => a + p.kills, 0)} kills`} players={myPlayers} />
             <Scoreboard title={`Equipo rival · ${enemyPlayers.reduce((a, p) => a + p.kills, 0)} kills`} players={enemyPlayers} />
 

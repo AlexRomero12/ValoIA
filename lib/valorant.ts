@@ -24,7 +24,8 @@ import { getRrHistory, mergeRrHistory } from './rrHistoryStore';
 import { getRulesHistory } from './rulesHistoryStore';
 import { computeAperturas } from './aperturas';
 import { rrChangeDetail } from './rrDetail';
-import { resolveWeaponIn, weaponContext, weaponDictsFrom } from './weaponResolve';
+import { resolveWeaponIn, weaponContext, weaponDictsFrom, type WeaponContext } from './weaponResolve';
+import { operatorUsage, type OperatorUsage } from './opUsage';
 import { rankStateFrom } from './rankState';
 import { computeStats, groupMatches, toStatBlock, type PlayerStats } from './stats';
 import { UNWINNABLE_LIMITS } from './unwinnable';
@@ -853,8 +854,12 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   const killsBy = new Map<string, number>();
   const deathsBy = new Map<string, number>();
   const fbBy = new Map<string, number>();
+  // Uso de Operator por partida: la Operator (y la Tour De Force de la ult)
+  // diluye el HS%, así que la tabla necesita saberlo para no juzgarlo igual.
+  const opByMatch = new Map<string, OperatorUsage>();
   for (const m of inWindow) {
     const ctx = weaponContext(m, weaponDicts);
+    opByMatch.set(m.metadata?.match_id ?? '', operatorUsage(m, account.puuid, ctx));
     const seenRounds = new Set<number>();
     for (const k of m.kills ?? []) {
       const killer = k.killer?.puuid;
@@ -871,6 +876,16 @@ async function getValSummaryHenrik(opts: AggregateOptions): Promise<ValSummary> 
   }
   const totalFeedKills = [...killsBy.values()].reduce((a, b) => a + b, 0);
   const totalFirstBloods = [...fbBy.values()].reduce((a, b) => a + b, 0);
+
+  // El uso de Operator viaja en cada fila de partida.
+  for (const row of summaries) {
+    const op = opByMatch.get(row.matchId);
+    if (op) {
+      row.opRounds = op.rounds;
+      row.opKills = op.kills;
+      row.opUltKills = op.ultKills;
+    }
+  }
   const arsenal: ValArsenal = {    rows: [...new Set([...killsBy.keys(), ...deathsBy.keys()])]
       .filter((w) => (killsBy.get(w) ?? 0) > 0)
       .map((weapon) => {

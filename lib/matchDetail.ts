@@ -6,6 +6,7 @@ import type { ProfileViewer } from './profiles';
 import { sidesByRound, matchAperturas, type MatchAperturas } from './aperturas';
 import { roundImpact } from './impact';
 import { resolveWeaponIn, weaponContext, weaponDictsFrom } from './weaponResolve';
+import { hsPctWithoutOperator, operatorUsage, usedOperator, type OperatorUsage } from './opUsage';
 
 export interface DetailPlayer {
   name: string;
@@ -38,6 +39,26 @@ export interface RoundCell {
   side: 0 | 1 | null;
 }
 
+/**
+ * Uso de Operator en la partida. Existe porque sus bodyshots matan igual que un
+ * headshot: sin este dato el HS% de la partida se lee como si fuera limpio.
+ */
+export interface DetailOperator {
+  /** Rondas con una Operator en mano (la comprada o la Tour De Force de la ult). */
+  rounds: number;
+  /** Kills con Operator. */
+  kills: number;
+  /** De esas kills, cuántas fueron con la ult. */
+  ultKills: number;
+  /**
+   * HS% descontando los impactos de las rondas en las que la Operator fue tu
+   * único disparo. null cuando no hay nada que descontar (el HS% bruto ya vale).
+   */
+  hsPctWithout: number | null;
+  /** Impactos de Operator que se descontaron del HS%. */
+  removedHits: number;
+}
+
 export interface MatchDetail {
   matchId: string;
   meta: {
@@ -68,17 +89,21 @@ export interface MatchDetail {
   topVictims: { name: string; times: number }[];
   /** FB/FD de esta partida por bando (null si no hay rondas/equipo). */
   aperturas: MatchAperturas | null;
+  /** Uso de Operator en la partida (null si no la usaste). */
+  operator: DetailOperator | null;
 }
 
 const DETAIL_TTL = 7 * 24 * 60 * 60 * 1000;
 
 export async function getMatchDetail(matchId: string, playerId?: string | null, viewer?: ProfileViewer): Promise<MatchDetail> {
   const orderedMembers = orderedProfiles(playerId, viewer);
+  // v6: añade el uso de Operator (rondas/kills y HS% sin Operator). Sin subir la
+  // clave, un detalle cacheado 7 días seguiría sirviendo el DTO viejo.
   // v5: añade aperturas por bando (los DTO v4 no las traen).
   // v4: añade multikills, víctimas y bando por ronda (los DTO v3 no los traen).
   // v3: los DTO guardan URLs de iconos; la clave nueva evita servir detalles
   // cacheados 7 días con los iconos de agente pesados (~555 KB).
-  const cacheKey = `val:detail:v5:${orderedMembers[0].id}:${matchId}`;
+  const cacheKey = `val:detail:v6:${orderedMembers[0].id}:${matchId}`;
   const cachedDto = await Promise.resolve(findCachedValues<MatchDetail>(cacheKey)[0]);
   if (cachedDto) return cachedDto;
 
@@ -173,6 +198,20 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     };
   });
 
+  // Uso de Operator: sus bodyshots matan igual que un headshot, así que el HS%
+  // bruto no se lee igual que el de una partida limpia.
+  const opUsage: OperatorUsage = operatorUsage(match, account.puuid, weaponCtx);
+  const opSin = hsPctWithoutOperator(me?.stats, opUsage);
+  const operator: DetailOperator | null = usedOperator(opUsage)
+    ? {
+        rounds: opUsage.rounds,
+        kills: opUsage.kills,
+        ultKills: opUsage.ultKills,
+        hsPctWithout: opSin?.hsPct ?? null,
+        removedHits: opSin?.removed ?? 0,
+      }
+    : null;
+
   const dto: MatchDetail = {
     matchId,
     meta: {
@@ -194,6 +233,7 @@ export async function getMatchDetail(matchId: string, playerId?: string | null, 
     multikills: impact.multikills,
     topVictims: impact.victims,
     aperturas,
+    operator,
   };
 
   cacheSet(cacheKey, dto, DETAIL_TTL);
