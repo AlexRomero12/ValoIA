@@ -39,6 +39,9 @@ yarn-error.log*
 data/
 verify-*.mjs
 
+# artefactos de la CLI de Playwright (snapshots y consola de cada corrida)
+/.playwright-cli/
+
 # vercel
 .vercel
 
